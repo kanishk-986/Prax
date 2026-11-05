@@ -168,10 +168,10 @@ export function Home({ c, onTab, onOpenRun, onKeys, onRun, cards }: { c: Ctx; on
   return (
     <div className="flex flex-col gap-4">
       <div id="tour-kpis" className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <button className={cx(s.kpi, s.kpiDark)} onClick={() => onTab("Answers")}><span className={s.label} style={{ color: "#ff8a80" }}>Shashi named</span><span><span className={s.big}>{P.named}</span> <span className="text-[13px] opacity-75">of {P.total} expert prompts</span></span><span className="text-[12.5px] opacity-80">{P.review ? `${P.review} need review` : "full name with context"}</span></button>
+        <button className={s.kpi} onClick={() => onTab("Answers")}><span className={s.label}>Shashi named</span><span><span className={s.big}>{P.named}</span> <span className="text-[13px] text-[#5f5f5f]">of {P.total} expert prompts</span></span><span className={s.small}>{P.review ? `${P.review} need review` : "full name with context"}</span></button>
         <button className={s.kpi} onClick={() => onTab("Company")}><span className={s.label}>Antier named</span><span><span className={s.big}>{C.named}</span> <span className="text-[13px] text-[#5f5f5f]">of {C.total} vendor prompts</span></span><span className={s.small}>linked in {C.linked}</span></button>
         <button className={s.kpi} onClick={() => onTab("Competitors")}><span className={s.label}>Standing</span><span><span className={s.big}>{total ? `#${rank}` : "–"}</span> <span className="text-[13px] text-[#5f5f5f]">of {board.length}</span></span><span className={s.small}>share of voice, branded prompts out</span></button>
-        <button className={cx(s.kpi, s.kpiRed)} onClick={() => onTab("Gaps")}><span className={s.label} style={{ color: "#d64545" }}>Open gaps</span><span className={s.big}>{gaps.length}</span><span className={s.small}>a competitor named, he or Antier not</span></button>
+        <button className={s.kpi} onClick={() => onTab("Gaps")}><span className={s.label}>Open gaps</span><span className={s.big}>{gaps.length}</span><span className={s.small}>a competitor named, he or Antier not</span></button>
       </div>
       <div className="flex flex-wrap gap-4">
         <section id="tour-trend" className={cx(s.box, "min-w-0 flex-[3_1_560px] p-5")}>

@@ -46,7 +46,7 @@ export function HomeTab({ d, today, go, openFinding, sendFast, planDeadline, ope
           );
         })}
       </div>
-      <KpiTiles tour="counts" items={BANDS.map((b, i) => ({ label: b, value: count(b), sub: ["ideas for Content Studio", "for Comment Studio", "kept, not routed", "old, weak or excluded"][i], tone: i === 0 ? "dark" as const : undefined, onClick: () => go("findings", b) }))} />
+      <KpiTiles tour="counts" items={BANDS.map((b, i) => ({ label: b, value: count(b), sub: ["ideas for Content Studio", "for Comment Studio", "kept, not routed", "old, weak or excluded"][i], onClick: () => go("findings", b) }))} />
       <section data-tour="fast" className="flex flex-col gap-2.5 rounded-2xl bg-[#141414] px-[18px] py-4 text-white">
         <span className="flex flex-wrap items-center justify-between gap-2.5"><span className="text-[12px] font-semibold uppercase tracking-[.06em] text-[#ff8a80]">Fast response · regulators, last 72 hours</span><span className="text-[12px] text-[#cfcfcf]">Draft within 48 hours for approval</span></span>
         {fast.map((f) => (

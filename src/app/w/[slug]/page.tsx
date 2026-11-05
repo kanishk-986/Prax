@@ -160,7 +160,7 @@ export default function Dashboard() {
 
       {loading ? <Skeleton /> : (<>
         <KpiTiles tour="kpis" items={[
-          { label: "In pipeline", value: pipe.open, tone: "dark", href: `${base}/pipeline`,
+          { label: "In pipeline", value: pipe.open, href: `${base}/pipeline`,
             delta: pipe.added ? { text: `+${pipe.added}`, dir: "up", label: "added this week" } : null, sub: pipe.added ? undefined : `${pipe.conv} in conversation` },
           { label: "Warm paths", value: warm ?? "None", href: `${base}/network`, sub: warm == null ? "Upload the LinkedIn export" : "prospects with a way in" },
           { label: "Posts this week", value: content.posted.now, of: content.planned ? `of ${content.planned} planned` : undefined, href: `${base}/studio-content?tab=plan`,

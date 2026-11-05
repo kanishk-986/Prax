@@ -255,19 +255,21 @@ export function Spark({ values, w = 84, h = 26, light }: { values: number[]; w?:
 
 // ---------- Home building blocks ----------
 type Go = { href?: string; onClick?: () => void };
-function Hit({ href, onClick, className, children, label, style }: Go & { className: string; children: React.ReactNode; label?: string; style?: React.CSSProperties }) {
-  if (href) return <Link href={href} className={className} aria-label={label} style={style}>{children}</Link>;
+// selected: a link is the current page or view (aria-current); a button is a pressed filter (aria-pressed).
+function Hit({ href, onClick, className, children, label, style, selected }: Go & { className: string; children: React.ReactNode; label?: string; style?: React.CSSProperties; selected?: boolean }) {
+  if (href) return <Link href={href} className={className} aria-label={label} style={style} aria-current={selected ? "page" : undefined}>{children}</Link>;
   if (!onClick) return <div className={className} aria-label={label} style={style}>{children}</div>;
-  return <button type="button" onClick={onClick} className={className} aria-label={label} style={style}>{children}</button>;
+  return <button type="button" onClick={onClick} className={className} aria-label={label} style={style} aria-pressed={selected === undefined ? undefined : selected}>{children}</button>;
 }
 
 /** good says whether the move is good news; it defaults to up being good. */
 export type KpiDelta = { text: string; dir: "up" | "down" | "flat"; good?: boolean; label?: string };
-export type Kpi = Go & { label: string; value: React.ReactNode; of?: string; sub?: string; tone?: "dark" | "red"; delta?: KpiDelta | null; spark?: number[] };
-function DeltaChip({ d, dark }: { d: KpiDelta; dark?: boolean }) {
+/** Every tile looks the same at rest. tone "alert" is only for something genuinely overdue: a red dot and a red number, never a fill.
+ *  selected marks a tile that is the current view (href) or a pressed filter (onClick); set it to false on filter tiles that are off. */
+export type Kpi = Go & { label: string; value: React.ReactNode; of?: string; sub?: string; tone?: "alert"; selected?: boolean; delta?: KpiDelta | null; spark?: number[] };
+function DeltaChip({ d }: { d: KpiDelta }) {
   const good = d.good ?? d.dir === "up";
-  const cls = d.dir === "flat" ? (dark ? "bg-white/10 text-[#d6d6d6]" : "bg-[#f0f0f0] text-[#5f5f5f]")
-    : good ? (dark ? "bg-white/15 text-white" : "bg-[#f0f0f0] text-[#141414]") : (dark ? "bg-[#d64545] text-white" : "bg-[#fbeaea] text-[#9e1c1c]");
+  const cls = d.dir === "flat" ? "bg-[#f0f0f0] text-[#5f5f5f]" : good ? "bg-[#f0f0f0] text-[#141414]" : "bg-[#fbeaea] text-[#9e1c1c]";
   return (
     <span className={`num inline-flex h-5 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-semibold ${cls}`}>
       {d.dir === "up" ? <ArrowUpRight size={11} strokeWidth={2.4} /> : d.dir === "down" ? <ArrowDownRight size={11} strokeWidth={2.4} /> : null}{d.text}
@@ -282,15 +284,15 @@ export function KpiTiles({ items, tour }: { items: Kpi[]; tour?: string }) {
         const r = reveal(i);
         const span = items.length !== 5 ? "" : i === 0 ? " col-span-2 md:col-span-3 xl:col-span-1" : i === 1 ? " md:col-span-3 xl:col-span-1" : " md:col-span-2 xl:col-span-1";
         return (
-          <Hit key={k.label} href={k.href} onClick={k.onClick} className={`tile ${r.className}${span}${k.tone ? " " + k.tone : ""}${k.href || k.onClick ? " hit" : ""}`} style={r.style}>
-            <span className="tile-label">{k.label}</span>
+          <Hit key={k.label} href={k.href} onClick={k.onClick} selected={k.selected} className={`tile ${r.className}${span}${k.tone ? " " + k.tone : ""}${k.href || k.onClick ? " hit" : ""}`} style={r.style}>
+            <span className="tile-label">{k.tone === "alert" && <span className="tile-dot" aria-hidden="true" />}{k.label}{k.tone === "alert" && <span className="sr-only"> (overdue)</span>}</span>
             <span className="flex w-full items-end justify-between gap-2">
               <span className="flex min-w-0 items-baseline gap-1.5"><span className="num tile-num">{typeof k.value === "number" ? <CountUp value={k.value} /> : k.value}</span>{k.of && <span className="num truncate text-[13px] opacity-60">{k.of}</span>}</span>
-              {k.spark && <span className="hidden sm:block"><Spark values={k.spark} light={k.tone === "dark"} /></span>}
+              {k.spark && <span className="hidden sm:block"><Spark values={k.spark} /></span>}
             </span>
             {(k.sub || k.delta) && (
               <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] opacity-80">
-                {k.delta && <DeltaChip d={k.delta} dark={k.tone === "dark"} />}
+                {k.delta && <DeltaChip d={k.delta} />}
                 {k.delta?.label && <span>{k.delta.label}</span>}
                 {k.sub && <span>{k.sub}</span>}
               </span>

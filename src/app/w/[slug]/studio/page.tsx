@@ -70,7 +70,7 @@ export default function StudioPage() {
         : tab === "Home" ? (
           <div className="flex flex-col gap-4">
             <KpiTiles tour="kpis" items={[
-              { label: "Drafts this week", value: stats.week, sub: "written with the extension", tone: "dark" },
+              { label: "Drafts this week", value: stats.week, sub: "written with the extension" },
               { label: "Average Human", value: stats.human ?? "None", sub: stats.human == null ? "no scored drafts yet" : "last 30 days" },
               { label: "Average Impact", value: stats.impact ?? "None", sub: stats.impact == null ? "no scored drafts yet" : "last 30 days" },
               { label: "Saved drafts", value: saved.rows.length, sub: "in the Library", onClick: () => setTab("Library") },

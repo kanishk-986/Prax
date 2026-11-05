@@ -14,7 +14,7 @@ export default function Strategy() {
     <Section id="strategy" title="Strategy" status="The agreed plan for this profile." entryStatus={`${rows.length} sections in the agreed plan.`}
       actions={<AddButton label="Add section" onClick={() => setAdding(true)} />}>
       <KpiTiles items={[
-        { label: "Sections", value: rows.length, sub: "in the plan", tone: "dark" },
+        { label: "Sections", value: rows.length, sub: "in the plan" },
         { label: "Words", value: words, sub: "across all sections" },
         { label: "Latest section", value: rows[0] ? fmtDay(rows[0].created_at.slice(0, 10), { day: "numeric", month: "short" }) : "None", sub: rows[0] ? "added" : "nothing added yet" },
       ]} />

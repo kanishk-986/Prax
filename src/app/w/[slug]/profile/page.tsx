@@ -107,10 +107,10 @@ export default function ProfileStudio() {
       {view === "home" && (home ? (
         <div className="flex flex-col gap-4">
           <KpiTiles tour="kpis" items={[
-            { label: "Profile score", value: home.score, of: "of 100", sub: home.score >= TOP_TIER ? "top tier" : `top tier needs ${TOP_TIER}+`, tone: "dark", onClick: () => pickView("self") },
+            { label: "Profile score", value: home.score, of: "of 100", sub: home.score >= TOP_TIER ? "top tier" : `top tier needs ${TOP_TIER}+`, onClick: () => pickView("self") },
             { label: "Since last review", value: prev ? `${home.score - prev.score >= 0 ? "+" : ""}${home.score - prev.score}` : "None", sub: prev ? `from ${prev.score}` : "first review" },
             { label: "Roadmap", value: home.done, of: `of ${home.total}`, sub: "steps done" },
-            { label: "Fixes open", value: home.fixes.length, sub: "largest first", tone: home.fixes.length ? "red" : undefined, onClick: () => pickView("self") },
+            { label: "Fixes open", value: home.fixes.length, sub: "largest first", onClick: () => pickView("self") },
           ]} />
           <div className="flex flex-wrap gap-4">
             <section data-tour="trend" className="min-w-0 flex-[3_1_480px] rounded-2xl border border-line bg-surface p-[18px]">

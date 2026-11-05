@@ -53,8 +53,8 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
     <div className="flex flex-col gap-5">
       <div><h2 className="m-0 text-[22px] font-semibold tracking-tight">{greet}</h2><p className="m-0 mt-1 text-[13.5px] text-muted">{fmtDay(t, { weekday: "long", day: "numeric", month: "long" })} · {ws.name}</p></div>
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" data-tour="tiles">
-        {tiles.map((x, i) => { const dark = i === 1 && x.v > 0; return <button key={x.k} className="card card-hover flex flex-col items-start gap-1 p-4 text-left" style={dark ? { background: "var(--ink)", color: "#ffffff", borderColor: "var(--ink)" } : undefined} onClick={() => go(x.go)}>
-          <span className="num text-[28px] font-medium leading-none">{x.v}</span><span className={`text-[12.5px] font-semibold ${dark ? "text-[#ff8a80]" : "text-muted"}`}>{x.k}</span></button>; })}
+        {tiles.map((x) => <button key={x.k} type="button" className="card card-hover flex flex-col items-start gap-1 p-4 text-left" onClick={() => go(x.go)}>
+          <span className="num text-[28px] font-medium leading-none">{x.v}</span><span className="text-[12.5px] font-semibold text-muted">{x.k}</span></button>)}
       </div>
 
       <div className="flex flex-wrap items-start gap-5">

@@ -138,10 +138,10 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
   return (
     <div className="flex flex-col gap-4">
       <KpiTiles tour="kpis" items={[
-        { label: "Already connected", value: n(1), of: `of ${rows.length}`, sub: "open prospects", tone: "dark" },
+        { label: "Already connected", value: n(1), of: `of ${rows.length}`, sub: "open prospects" },
         { label: "Talked before", value: n(2), of: `of ${rows.length}`, sub: "messages or replies" },
         { label: "Knows someone there", value: n(3), of: `of ${rows.length}`, sub: "a colleague is a connection" },
-        { label: "No route yet", value: rows.filter((r) => !r.w.level).length, of: `of ${rows.length}`, sub: "comment first", tone: "red" },
+        { label: "No route yet", value: rows.filter((r) => !r.w.level).length, of: `of ${rows.length}`, sub: "comment first" },
       ]} />
       <div data-tour="freshness" className={`flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 text-[13px] ${ageDays != null && ageDays >= 60 ? "bg-[#141414] text-white" : "border border-line bg-surface text-muted"}`}>
         <span className="flex-1">{ageDays == null ? "No import recorded yet." : ageDays >= 60 ? `Re-import due: the last export is ${ageDays} days old, so newer connections are missing.` : `Last import ${ageDays === 0 ? "today" : `${ageDays} days ago`}: ${people.filter((x) => x.is_connection).length.toLocaleString()} connections.`}</span>

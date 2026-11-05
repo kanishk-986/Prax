@@ -23,7 +23,7 @@ export function CrawlTab({ d, running, progress, status, onCrawl, onStop, openUp
           {running ? <button type="button" className="btn btn-dark h-10 px-4" onClick={onStop}>Stop · {progress.done} of {progress.total}</button> : <button type="button" className="btn btn-primary h-10 px-[18px]" disabled={!d.links.length} onClick={onCrawl}>Crawl now</button>}</span>}
       </div>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-        {stats.map(([label, v, dark]) => <div key={label} className={`tile${dark ? " dark col-span-2 sm:col-span-1" : ""}`}><span className="text-[11.5px] font-semibold uppercase tracking-[.05em] opacity-80">{label}</span><span className="num text-[24px] leading-tight">{v}</span></div>)}
+        {stats.map(([label, v], i) => <div key={label} className={`tile${i === 0 ? " col-span-2 sm:col-span-1" : ""}`}><span className="text-[11.5px] font-semibold uppercase tracking-[.05em] opacity-80">{label}</span><span className="num text-[24px] leading-tight">{v}</span></div>)}
       </div>
       {running && <span className="h-1.5 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full bg-[#d64545] transition-[width] duration-200" style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} /></span>}
       <div className="overflow-hidden rounded-2xl border border-line bg-white">

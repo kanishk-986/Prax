@@ -27,7 +27,7 @@ export default function Templates() {
     <Section id="templates" title="Templates" status="Connection notes, first messages, resource replies and call offers." entryStatus={`${rows.length} templates ready to copy.`}
       actions={<AddButton label="Add template" onClick={() => setAdding(true)} />}>
       <KpiTiles items={[
-        { label: "Templates", value: rows.length, sub: "in total", tone: "dark" },
+        { label: "Templates", value: rows.length, sub: "in total" },
         { label: "Connection notes", value: n("Connection notes") },
         { label: "Messages", value: n("Messages"), sub: `${n("Resource replies") + n("Call offers")} resource replies and call offers` },
         { label: "Replies and posts", value: n("Replies and posts") },

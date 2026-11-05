@@ -149,7 +149,7 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - `Section({ id, title, status, entryStatus, actions, tabs, tab, onTab, steps, wide })` renders the entry moment, the header (title, status line, Guide button, actions top right), `UnderlineTabs` and the tour. `id` is the gating key, so keep it stable.
 - Entry moment: blurred veil, Prax mark, title and `entryStatus` (one live sentence). It dissolves after 2.3 s, on Enter or Escape, or on the button. It plays once per section per session (`sessionStorage prax:intro:<id>`) and never with reduced motion.
 - Tour: pass `steps: TourStep[]` (`{ target, title, body, tab? }`). Mark each target with `data-tour="<target>"`; `header` is built in. A step with `tab` switches to that tab through `onTab` first. The tour starts once per person per section after the entry moment (`localStorage prax:tour:<id>:<userId>`), and Guide reopens it. Keep tours at 6 to 10 steps, first step explains what the section is for.
-- Home blocks: `KpiTiles` (`tone` dark or red, `href` or `onClick`), `NeedsYou`, `StartCards`, `Activity`, `DarkCard`. Each takes `tour` to become a tour target. Use real data and an honest empty state; show "None" rather than a dash.
+- Home blocks: `KpiTiles` (`href` or `onClick`, optional `selected` and `tone: "alert"`; see Uniform tiles below), `NeedsYou`, `StartCards`, `Activity`, `DarkCard`. Each takes `tour` to become a tour target. Use real data and an honest empty state; show "None" rather than a dash.
 - Settings and Extension keep `PageHeader`, restyled to the same type, with no entry moment.
 - Palette and tab, pill, tile, entry and tour classes are in `globals.css`. Content Studio and AI citations move onto `Section` after merge; their previews already match this API.
 
@@ -278,3 +278,12 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Q110: fix every extension feature and error: the bar missing on some posts, needing two or three clicks, not reading every post, and the Live tab options (Capture and the rest) not working. No automation; the user clicks.
 - Q111: notes show their author and time.
 - Q112: a deep audit subagent after the fixes, from every angle: design, UI and UX, views, bugs, placement, the LinkedIn workflow end to end; reports bugs, gaps and what to add or remove.
+
+## Uniform tiles (6 Nov 2026, branch `uniform-tiles`)
+
+- Every tile in a row looks the same at rest: white, hairline border. The solid black lead tile and the red-outlined tile are gone everywhere (Dashboard, Network, Notes, Templates, Strategy, Comment Studio, Profile Studio, Discovery home and crawl stats, Content Studio home, AI citations Home). `.tile.dark`, `.tile.red`, `.kpiDark` and `.kpiRed` no longer exist.
+- Interaction only: clickable tiles (`.tile.hit`) lift 1px with a darker border on hover and settle with a grey wash on press; focus-visible draws the red ring; static number tiles have no hover. Under reduced motion there is no lift.
+- Selected: `KpiTiles` item `selected: true` gives `aria-current="page"` on a link tile or `aria-pressed="true"` on a button tile (pass `false` on the other filter tiles so they announce as toggles). It shows an ink border and a grey wash. No section uses it yet; use it when tiles filter in place.
+- Overdue: `tone: "alert"` adds a small red dot before the label and a dark red number (plus "(overdue)" for screen readers). Only for something genuinely past its date; no tile uses it today.
+- Checked in a browser against sample data through a temporary preview route (deleted) at 1440 and 390: rest, hover, keyboard focus and pressed. Not checked signed in against Supabase.
+

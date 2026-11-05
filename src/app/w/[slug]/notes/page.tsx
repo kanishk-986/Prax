@@ -14,7 +14,7 @@ export default function Notes() {
     <Section id="notes" title="Notes" status="A shared scratchpad for the team." entryStatus={`${rows.length} notes shared with the team.`}
       actions={<AddButton label="Add note" onClick={() => setAdding(true)} />}>
       <KpiTiles items={[
-        { label: "Notes", value: rows.length, sub: "in total", tone: "dark" },
+        { label: "Notes", value: rows.length, sub: "in total" },
         { label: "This week", value: rows.filter((r) => r.created_at.slice(0, 10) >= d7).length, sub: "last 7 days" },
         { label: "Latest note", value: rows[0] ? fmtDay(rows[0].created_at.slice(0, 10), { day: "numeric", month: "short" }) : "None", sub: rows[0] ? "added" : "nothing added yet" },
       ]} />
