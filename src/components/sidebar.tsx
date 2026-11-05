@@ -12,7 +12,7 @@ const NAV = [
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
   { href: "/network", label: "Network", icon: Network },
   { href: "/profile", label: "Profile Studio", icon: UserRound },
-  { href: "/content", label: "Content", icon: FileText },
+  { href: "/studio-content", label: "Content Studio", icon: FileText },
   { href: "/studio", label: "Comment Studio", icon: PenLine },
   { href: "/comments", label: "Engagement", icon: MessageSquare },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
