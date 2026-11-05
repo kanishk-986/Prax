@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
-import { Upload, ClipboardPaste, FileText, X, ChevronDown, Check, Circle } from "lucide-react";
+import { Upload, ClipboardPaste, FileText, X, ChevronDown, Check, Circle, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
@@ -20,9 +20,11 @@ export default function ProfileStudio() {
   const [topics, setTopics] = useState<string[]>(ws.topics ?? []);
   const [tab, setTab] = useState<"self" | "prospect">("self");
   const [selId, setSelId] = useState<string | null>(null);
+  // A new review starts from a clean slate: no report shown, no ticks carried over. Old reviews stay in History.
+  const [fresh, setFresh] = useState(false);
 
   const mine = docs.filter((d) => d.subject === tab);
-  const sel = mine.find((d) => d.id === selId) ?? mine[0];
+  const sel = fresh ? undefined : mine.find((d) => d.id === selId) ?? mine[0];
 
   async function saveTopics(next: string[]) {
     setTopics(next);
@@ -32,12 +34,14 @@ export default function ProfileStudio() {
 
   return (
     <div className="mx-auto max-w-[1200px]">
-      <PageHeader title="Profile Studio" sub="Upload a LinkedIn profile, see how it scores for the topics you want to rank for, and fix what fails." />
+      <PageHeader title="Profile Studio" sub="Upload a LinkedIn profile, see how it scores for the topics you want to rank for, and fix what fails.">
+        {editable && mine.length > 0 && !fresh && <button className="btn" onClick={() => { setFresh(true); setSelId(null); haptic(); }}><RotateCcw size={14} /> Start a new review</button>}
+      </PageHeader>
       <TopicEditor topics={topics} editable={can("owner")} onChange={saveTopics} />
 
       <div className="mb-4 mt-6 flex rounded-lg border border-line-strong bg-surface p-0.5 w-fit">
         {(["self", "prospect"] as const).map((t) => (
-          <button key={t} className={`btn h-7 border-0 ${tab === t ? "bg-surface-2" : "bg-transparent"}`} onClick={() => { setTab(t); setSelId(null); }}>
+          <button key={t} className={`btn h-7 border-0 ${tab === t ? "bg-surface-2" : "bg-transparent"}`} onClick={() => { setTab(t); setSelId(null); setFresh(false); }}>
             {t === "self" ? `${ws.name.split(" ")[0]}'s profile` : "Prospects and personas"}
           </button>
         ))}
@@ -45,11 +49,19 @@ export default function ProfileStudio() {
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <div className="flex flex-col gap-4">
-          {editable && <Intake subject={tab} topics={topics} prospects={prospects} prev={mine[0]} onSaved={(id) => setSelId(id)} />}
-          <History docs={mine} loading={loading} sel={sel?.id} onPick={setSelId} prospects={prospects} />
+          {editable && <Intake key={`${tab}${fresh}`} subject={tab} topics={topics} prospects={prospects} prev={fresh ? undefined : mine[0]} onSaved={(id) => { setSelId(id); setFresh(false); }} />}
+          <History docs={mine} loading={loading} sel={sel?.id} onPick={(id) => { setSelId(id); setFresh(false); }} prospects={prospects} />
         </div>
         {sel ? <Report doc={sel} topics={topics} editable={editable} prospect={prospects.find((p) => p.id === sel.prospect_id)} />
-          : <div className="card grid min-h-[320px] place-items-center p-10 text-center text-[13px] text-muted">{loading ? "Loading" : tab === "self" ? "No profile uploaded yet. Save the profile as a PDF from LinkedIn and drop it on the left." : "No prospect profiles yet. Paste a prospect's profile text to build a persona."}</div>}
+          : fresh ? (
+            <div className="card grid min-h-[320px] place-items-center p-10 text-center">
+              <div className="max-w-[360px]">
+                <p className="text-[13px] font-medium">Ready for a new review</p>
+                <p className="mt-1 text-[13px] text-muted">Drop the new PDF or paste the profile text on the left. It is scored from scratch; earlier reviews stay in History so you can compare.</p>
+                <button className="btn btn-ghost mt-3" onClick={() => setFresh(false)}>Back to the last review</button>
+              </div>
+            </div>
+          ) : <div className="card grid min-h-[320px] place-items-center p-10 text-center text-[13px] text-muted">{loading ? "Loading" : tab === "self" ? "No profile uploaded yet. Save the profile as a PDF from LinkedIn and drop it on the left." : "No prospect profiles yet. Paste a prospect's profile text to build a persona."}</div>}
       </div>
     </div>
   );

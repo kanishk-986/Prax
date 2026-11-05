@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import { X, Trash2, ExternalLink } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useWorkspace, STAGES, SEGMENTS } from "@/lib/workspace";
+import Link from "next/link";
+import { useWorkspace, STAGES, SEGMENTS, fmtDay } from "@/lib/workspace";
+import { normCompany, seniority, type Person } from "@/lib/network";
 import { Threads } from "./threads";
 import { useToast, haptic } from "./toaster";
 
@@ -70,6 +72,7 @@ export function ProspectDrawer({ p, onClose }: { p: Prospect | null; onClose: ()
             <div className="col-span-2"><F label="Why they fit"><textarea id="pd-why" rows={3} className="field" value={f.why} onChange={set("why")} /></F></div>
             <div className="col-span-2"><F label="Notes"><textarea id="pd-notes" rows={3} className="field" value={f.notes} onChange={set("notes")} /></F></div>
           </fieldset>
+          {p && <WarmLine p={p} />}
           {p && <div className="mt-6"><Threads refTable="prospects" refId={p.id} /></div>}
         </div>
         <footer className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
@@ -79,6 +82,30 @@ export function ProspectDrawer({ p, onClose }: { p: Prospect | null; onClose: ()
           {editable && <button className="btn btn-primary" onClick={save} disabled={busy || !f.name.trim()}>{p ? "Save changes" : "Add prospect"}</button>}
         </footer>
       </aside>
+    </div>
+  );
+}
+
+/** The warm way in, from the LinkedIn export (Network page). */
+function WarmLine({ p }: { p: Prospect }) {
+  const { ws } = useWorkspace();
+  const [rows, setRows] = useState<Person[] | null>(null);
+  useEffect(() => {
+    const cn = normCompany(p.company);
+    supabase().from("network_people").select("*").eq("workspace_id", ws.id).or(cn ? `prospect_id.eq.${p.id},company_norm.eq.${cn}` : `prospect_id.eq.${p.id}`).limit(200)
+      .then(({ data }: { data: unknown }) => setRows((data as Person[]) ?? []));
+  }, [p.id, p.company, ws.id]);
+  if (!rows) return null;
+  const me = rows.find((r) => r.prospect_id === p.id);
+  const others = rows.filter((r) => r !== me && r.is_connection).sort((a, b) => seniority(a.position) - seniority(b.position)).slice(0, 3);
+  const bits: string[] = [];
+  if (me?.is_connection) bits.push(`1st-degree connection${me.connected_on ? ` since ${fmtDay(me.connected_on, { month: "short", year: "numeric" })}` : ""}`);
+  if (me?.msg_count) bits.push(`${me.msg_count} message${me.msg_count > 1 ? "s" : ""}, ${me.msg_last_from === "us" ? "waiting on them" : "they wrote last"}`);
+  if (others.length) bits.push(`you know ${others.map((o) => o.name).join(", ")}${rows.filter((r) => r !== me && r.is_connection).length > 3 ? " and more" : ""} at ${p.company}`);
+  return (
+    <div className="mt-5 rounded-lg border border-line bg-surface-2/50 px-3 py-2.5">
+      <div className="label mb-1">Warm path</div>
+      <p className="text-[13px] text-ink-2">{bits.length ? bits.join(" · ") : "None found in the LinkedIn export yet."} <Link href={`/w/${ws.slug}/network`} className="text-muted hover:text-ink hover:underline">Network</Link></p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 import { ArrowUpRight, Activity as ActivityIcon } from "lucide-react";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, SEGMENTS, KINDS } from "@/lib/workspace";
@@ -27,6 +28,10 @@ export default function Dashboard() {
   const snaps = useLive<Snap>("snapshots", ws.id, { order: "captured_at", asc: false });
   const acts = useLive<Act>("activity", ws.id, { order: "at", asc: false, filter: (q) => q.limit(25) });
   const posts = useLive<{ id: string; title: string; format: string; publish_date: string | null; status: string }>("posts", ws.id, { order: "publish_date", filter: (q) => q.gte("publish_date", t).lte("publish_date", addDays(t, 7)) });
+
+  // Open prospects with a linked connection or a connection at their company (db/006_network.sql).
+  const [warm, setWarm] = useState<number | null>(null);
+  useEffect(() => { supabase().rpc("network_warm_count", { ws: ws.id }).then(({ data, error }: { data: unknown; error: unknown }) => setWarm(error ? null : (data as number))); }, [ws.id, prospects.rows.length]);
 
   const wk = weekStart(t);
   const stats = useMemo(() => {
@@ -64,13 +69,14 @@ export default function Dashboard() {
         <Link href={`/w/${ws.slug}/today`} className="btn btn-primary">Open today’s checklist <ArrowUpRight size={14} /></Link>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <Kpi label="Today" value={`${stats.today.done}/${stats.today.total || 0}`} foot={stats.today.total ? `${Math.round((stats.today.done / stats.today.total) * 100)}% done` : "Not opened yet"} tone={stats.today.total && stats.today.done >= stats.today.total ? "good" : undefined} />
         <Kpi label="Comments this week" value={stats.comment.done} foot={`target ${q.comment * wkDays}`} />
         <Kpi label="Requests this week" value={stats.request.done} foot={`target ${q.request * wkDays}`} />
         <Kpi label="In conversation" value={pipe.conv} foot={`of ${pipe.total} in pipeline`} />
         <Kpi label="Calls booked" value={pipe.calls} foot="all time" tone={pipe.calls ? "good" : undefined} />
         <Kpi label="Streak" value={`${stats.streak}d`} foot="days at 80%+ of quota" />
+        <Link href={`/w/${ws.slug}/network`} className="contents"><Kpi label="Warm paths" value={warm ?? "–"} foot={warm == null ? "upload the export" : "open prospects"} tone={warm ? "good" : undefined} /></Link>
       </div>
 
       <NextActions slug={ws.slug} todayLeft={stats.today.total - stats.today.done} todayTotal={stats.today.total} due={pipe.due.length}

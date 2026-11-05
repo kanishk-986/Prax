@@ -10,7 +10,8 @@
 | Dashboard | `/w/[slug]` | KPIs, next actions, 14-day execution chart, funnel, LinkedIn reach from snapshots, live activity, follow-ups |
 | Today | `/today` | Daily checklist generated from quotas; J/K/X keys, Undo toasts, live updates |
 | Pipeline | `/pipeline` | Board and table, drag to change stage (optimistic, Undo), prospect drawer with threads |
-| Profile Studio | `/profile` | Upload LinkedIn Save-to-PDF or paste text; score out of 100, keyword map, pros and cons, fixes, 3-month roadmap with ticks, history |
+| Network | `/network` | LinkedIn data export (zip) opened in the browser. Upload, Segments (rules plus hand overrides, seniority, Add to pipeline), Warm paths (connected, talked before, knows someone there; confirm or reject name matches), Topics (own posts and comments by the six pillars) |
+| Profile Studio | `/profile` | Upload LinkedIn Save-to-PDF or paste text; score out of 100, keyword map, pros and cons, fixes, 3-month roadmap with ticks, history; Start a new review |
 | Content | `/content` | Post plan (titles only so far; drafts deliberately left for later) |
 | Engagement | `/comments` | Fills itself from the extension; reply rate, modes that earn replies, segments, waiting for reply |
 | Templates, AI citations, Strategy, Notes | | Record lists; citations is a weekly grid of 4 AI tools |
@@ -31,20 +32,33 @@ Roles: owner, editor, commenter, viewer, enforced by RLS.
 - Logging a comment ticks one of today's comment items. A comment on a prospect's post moves Target to Warming. A reply marks them warm.
 - A note sent moves the prospect to Requested (or creates them) and ticks a request item.
 
+## Network (step 3) details
+
+- `db/006_network.sql`: `network_people` (connections and anyone messaged or invited; message counts and dates only, never text or emails), `network_posts` (own posts and comments), `network_imports`, `network_settings` (segment and topic rules; empty means the defaults in `src/lib/network.ts`). `network_merge` keeps hand-set segments, prospect links and first-seen dates on re-upload and returns the count of new people. `network_wipe` is owner only. `network_warm_count` feeds the Dashboard tile.
+- Segments are computed at display time: hand-set segment, else a prospect's company, else the rules (regional D and B first, then C, A, E). The export has no location, so regional segments come from company names.
+- Warm path levels: 1 already connected, 2 talked before (1:1 messages, or a reply logged by the extension), 3 a connection at the same company. True 2nd-degree paths are not in the export. Reading the mutual-connections line from a profile the user opens is a later extension release.
+- A prospect's LinkedIn URL links them automatically on import; name matches wait for Same person or Not them.
+- `net_norm()` in SQL and `normCompany()` in TS must stay identical.
+
 ## Verified
+
+- Network logic: `node scripts/test-network.ts` passes (18 checks); 25,000 connections read in about 0.5 s, segments and warm paths in under 1 s. Build, types and lint pass.
 
 - Extension API end to end with a temporary token: log, capture, prospect matching, stage move and ticks. Test data was deleted afterwards.
 - The bar and drafts panel on a mock LinkedIn-style page.
 
 ## Not verified yet
 
+- Network page end to end against Supabase: needs `db/006_network.sql` run in the SQL editor, then a real export uploaded by Alok.
+
 - The bar on real LinkedIn pages. Testing it through automation would break rule 1, so Alok tests by hand and sends screenshots.
 - Live AI calls with a real key. No key was used during the build.
 
 ## Next, in the agreed order
 
-1. **Step 3:** LinkedIn data export (zip) upload, then network intelligence: connections by segment, warm paths, topics of past posts and comments.
-2. **Step 4:** Content Studio (post drafts), account map, Inbox view (DMs and follow-ups, also in the extension), weekly report, multi-profile overview, merge Strategy and Notes into a Playbook.
+1. **Step 3 is built** (see Network above); waiting for the SQL, a deploy and a real export.
+2. **Features modelled on the extension Alok named "VoxReply"**: waiting for the extension's name and website from `chrome://extensions`, since the id does not resolve publicly. Build our own versions; no copied code, nothing that posts or clicks.
+3. **Step 4:** Content Studio (post drafts), account map, Inbox view (DMs and follow-ups, also in the extension), weekly report, multi-profile overview, merge Strategy and Notes into a Playbook.
 
 ## Known gaps
 
