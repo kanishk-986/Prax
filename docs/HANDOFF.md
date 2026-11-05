@@ -174,3 +174,12 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - `seed/shashi/workspace_import.sql`: the SQL that loaded Shashi's workspace (prospects, posts, templates, notes). Already applied; keep for rebuilds.
 - `seed/shashi/prospects.json`: the 50 researched prospects behind that import.
 - `docs/reference/shashi-30-day-roadmap.html`: the one-month strategy to execution plan the product grew from.
+
+## Discovery Studio, agreed additions (6 Nov 2026, Q78 to Q83)
+
+- Q78: each finding is tagged with the Antier service it points to (stablecoin infrastructure, tokenisation, payments, custody and so on); filter by service, and the weekly digest shows which services draw the most news.
+- Q79: people named in a finding are checked against Network; "Warm: you know N people here" plus a comment-first suggestion.
+- Q80: Speaking and pitch opportunities as their own band (calls for speakers, panels, awards, consultations open for comment) with deadlines.
+- Q81: journalist and analyst source requests on Antier topics, routed to a quick-reply draft. The user sends it.
+- Q82: public tenders and requests for proposals from GCC and Indian banks and regulators, in a separate Sales band; never turned into posts.
+- Q83: competitor moves suggest a "how we see it" post angle in Content Studio, linked to a matching campaign if there is one.
