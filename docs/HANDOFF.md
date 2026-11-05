@@ -204,3 +204,9 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Q96: a skip counts as cleared on Today and not as done on the Dashboard (keep as built).
 - Q97: once Discovery Studio exists, add it to "This week at a glance" (Digest ready, topics sent) and add new Discovery topics to Needs you now.
 - Q98: AI citations becomes a fifth headline tile: "Shashi named in X% of AI answers", with the week-on-week change.
+
+## Pipeline redesign, agreed (Wave 2; Q36 to Q38, refined)
+
+- Q36: no drag and drop. A list on the left; clicking a lead opens a side panel, and the full lead page opens from it. Lead: profile, warm path, activity timeline, notes. Status: a stage bar showing days in each stage; each move asks for the next action and its date; keyboard shortcuts move stages. The board stays only as a read-only overview.
+- Q37: several pipelines per profile, each with its own stages. Templates: Outreach (today's 9 stages), Bank partners, Investors, Events and speakers, and Blank. Each lead sits in one pipeline.
+- Q38, all ten: (1) activity timeline logged automatically (comments, replies, notes, requests, stage moves); (2) lead heat score from real signals (your comments, their replies, warm path level, recency); (3) next action and due date required on every stage move, feeding Today, overdue in red; (4) touch plan per stage as a task queue: each step appears on Today with the message drafted, the user sends it and ticks it, never automated; (5) draft the DM for this stage with AI, copy it and send it yourself; (6) accounts: leads grouped by company, several contacts per bank (built once here, also serves the step 4 account map); (7) deal value and probability for a simple forecast; (8) saved views and filters (segment, heat, overdue, owner), starting with one main working list; (9) lost reasons on Parked or Lost; (10) import from CSV or from Network.
