@@ -16,6 +16,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 - Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths, sidebar active matching).
 - Text tests: `node scripts/test-text.ts` (Mac Roman mojibake repair, byte order marks, UTF-8, Windows-1252, page charsets).
 - Dashboard tests: `node scripts/test-dashboard.ts` (progress, skips, deltas, week over week, agenda groups, row action, Needs you ranking, settle order, copy).
+- Pipeline tests: `node scripts/test-pipeline.ts` (heat, Do next ranking, the move gate, template stages, days per stage, the migration mapping checked against `db/015_pipelines.sql`).
 - Campaign logic tests: `node scripts/test-campaigns.ts` (plan per objective, date slots, re-plan, time budget, warnings, halfway check, report).
 - Content Studio logic tests: `node scripts/test-content-studio.ts` (fold, formatter round trips, lists, Markdown, claims check, URL safety, AI reply parsing, point of view, newsletter dates, What works, carousel PDF).
 - Discovery Studio logic tests: `node scripts/test-discovery.ts` (seven-dimension scoring and bands, rules scorer, opportunities and deadlines, the crawl URL guard, CSV and Excel lists with hidden hyperlinks, page dates and list pages, AI search replies, topic merge, priority maths, weights total, Digest selection, the post a topic becomes, angles and Library sources).
