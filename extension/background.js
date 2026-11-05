@@ -66,14 +66,40 @@ async function callModel(system, user) {
   return { text: j.choices?.[0]?.message?.content || "", provider, model, input_tokens: j.usage?.prompt_tokens, output_tokens: j.usage?.completion_tokens };
 }
 
-// Draft with the profile's voice plus the task-specific rules the caller sends.
-async function draft({ rules, user, kind }) {
+// Drafts for LinkedIn count against the daily limit set in Comment Studio, Safety (0 = no limit).
+const LIMITED = ["comment", "reply", "note"];
+async function countUse(kind) {
+  if (!LIMITED.includes(kind)) return;
+  const cap = (await me()).studio?.safety?.dailyCap || 0;
+  const day = new Date().toDateString();
+  const u = (await chrome.storage.local.get("uses")).uses || {};
+  const n = u.day === day ? u.n : 0;
+  if (cap && n >= cap) throw new Error(`Daily limit of ${cap} drafts reached. Change it in Prax, Comment Studio, Safety.`);
+  await chrome.storage.local.set({ uses: { day, n: n + 1 } });
+}
+
+// Draft with the profile's locked rules and voice, then the task-specific rules the caller sends.
+async function draft({ rules, user, kind, meta, plain }) {
   const m = await me();
-  const system = `${m.voice || "Write thoughtful, specific LinkedIn comments."}\n\nTarget topics for this profile: ${(m.topics || []).join(", ")}.\n\n${rules || ""}`;
+  await countUse(kind);
+  // Plain requests (Voice Lab analysis) skip the voice and house rules, which would colour the result.
+  const system = plain ? rules || "You analyse writing." : [m.voice || "Write thoughtful, specific LinkedIn comments.", m.rules?.voice, `Target topics for this profile: ${(m.topics || []).join(", ")}.`, m.rules?.locked, rules].filter(Boolean).join("\n\n");
   const r = await callModel(system, user);
-  // Token counts go to Prax for the usage overview; the text does not.
-  prax("usage", { kind: kind || "draft", provider: r.provider, model: r.model, input_tokens: r.input_tokens || 0, output_tokens: r.output_tokens || 0 }).catch(() => {});
+  // Token counts, style, post type and scores go to Prax for the overview; the text does not.
+  prax("usage", { kind: kind || "draft", provider: r.provider, model: r.model, input_tokens: r.input_tokens || 0, output_tokens: r.output_tokens || 0, ...(meta || {}) }).catch(() => {});
   return r.text;
+}
+
+// Scores for the first draft arrive after it is written, so they are reported separately.
+async function scored(meta) {
+  const c = await cfg();
+  prax("usage", { kind: "scores", provider: c.provider || "claude", model: "", input_tokens: 0, output_tokens: 0, ...meta }).catch(() => {});
+}
+
+// Unsaved draft history stays in this browser: the last 200.
+async function remember(items) {
+  const h = (await chrome.storage.local.get("history")).history || [];
+  await chrome.storage.local.set({ history: [...items, ...h].slice(0, 200) });
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -81,6 +107,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     me: () => me(msg.fresh),
     prax: () => prax(msg.action, msg.body),
     draft: () => draft(msg),
+    scored: () => scored(msg.meta),
+    remember: () => remember(msg.items || []),
+    history: async () => (await chrome.storage.local.get("history")).history || [],
+    clearHistory: async () => { await chrome.storage.local.remove("history"); return []; },
   };
   const job = jobs[msg.type];
   if (!job) return false;

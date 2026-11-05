@@ -24,6 +24,14 @@
   const NOTE_RULES = "You are writing a LinkedIn connection note from this profile, 300 characters maximum including spaces. Give value first: one specific, verifiable insight relevant to the person's job or stated interest, taken only from their profile text. Then one specific question they can answer from judgment. No company pitch, no product, no flattery, no 'would value staying connected', no 'I work on', no 'keen to hear'. No dashes, no contractions. These rules override any word count given above.";
   const REPLY_RULES = "You are replying to a comment left on this profile's own post. 25 to 50 words. Answer or extend the commenter's point with something specific, use their first name where natural, and end with a question only if it moves the conversation. No 'thanks for sharing', no flattery. These rules override any word count given above.";
 
+  // Comment Studio settings arrive with the profile (/api/ext/me). MODES above is the fallback.
+  let studio = null, rules = null, vips = [];
+  const styles = () => (studio?.styles?.length ? studio.styles.filter((x) => x.on) : Object.entries(MODES).map(([name, r]) => ({ name, rules: r })));
+  const styleRules = (name) => (styles().find((x) => x.name === name) || studio?.styles?.find((x) => x.name === name))?.rules || MODES[name] || "";
+  const tun = () => studio?.tuning || { drafts: 3, minHuman: 85, humanize: true, repair: true, readComments: true, smartOrder: true, signature: "" };
+  const playbookText = () => (studio?.playbooks || []).map((b) => `${b.type}: ${b.aim} Works: ${b.works.join("; ")}. Reads as filler: ${b.filler.join("; ")}.${b.examples?.length ? ` Examples: ${b.examples.join(" | ")}` : ""}`).join("\n");
+  const isVip = (name) => { const n = (name || "").toLowerCase().trim(); return !!n && vips.some((v) => n.includes(v) || v.includes(n)); };
+
   let cfg = {};
   let pending = null; // { kind, scope, text, ctx } waiting for the user's own Post or Send click
 
@@ -57,7 +65,7 @@
     if (range) { const n = range.chars ? t.length : words(t); if (n < range.lo || n > range.hi) { s -= 15; flags.push(range.chars ? `${n}/300 chars` : `${n} words`); } }
     return { score: Math.max(0, s), flags };
   }
-  const rangeOf = (instr) => { const m = instr.match(/(\d+) to (\d+) words/); return m ? { lo: +m[1], hi: +m[2] } : null; };
+  const rangeOf = (instr) => { const m = instr.match(/(\d+) to (\d+) words/); return m ? { lo: +m[1], hi: +m[2] } : rules?.length ? { lo: rules.length.lo, hi: rules.length.hi } : null; };
 
   // ---------- reading the page ----------
     const COMMENT_SEL = "article.comments-comment-entity, article.comments-comment-item";
@@ -155,21 +163,21 @@
     const p = mount(anchor, host, !job.mode); if (!p) return;
     const state = { mode: job.kind === "comment" ? (job.mode || null) : job.kind, type: "", drafts: [], err: "" };
 
-    const instr = () => job.kind === "note" ? NOTE_RULES : job.kind === "reply" ? REPLY_RULES : `Mode: ${state.mode}. ${MODES[state.mode]}`;
-    const range = () => job.kind === "note" ? { lo: 60, hi: 300, chars: true } : job.kind === "reply" ? { lo: 25, hi: 50 } : rangeOf(MODES[state.mode] || "");
+    const instr = () => job.kind === "note" ? NOTE_RULES + (tun().signature ? ` If it fits within 300 characters, end with: ${tun().signature}` : "") : job.kind === "reply" ? REPLY_RULES : `Style: ${state.mode}. ${styleRules(state.mode)}\n${rules?.tuning || ""}`;
+    const range = () => job.kind === "note" ? { lo: 60, hi: 300, chars: true } : job.kind === "reply" ? { lo: 25, hi: 50 } : rangeOf(styleRules(state.mode));
 
     function render(loading) {
       const title = job.kind === "note" ? "Connection note" : job.kind === "reply" ? "Reply" : "Comment";
       p.innerHTML = `
         <div class="hd"><span class="ttl"><b>✦</b> Prax · ${title}${state.type ? ` <span class="tag">${esc(state.type)}</span>` : ""}</span><button class="x" title="Close">×</button></div>
-        ${job.kind === "comment" ? `<div class="chips">${Object.keys(MODES).map((m) => `<button class="c${m === state.mode ? " on" : ""}" data-m="${m}">${m}</button>`).join("")}</div>` : ""}
+        ${job.kind === "comment" ? `<div class="chips">${styles().map((x) => `<button class="c${x.name === state.mode ? " on" : ""}" data-m="${esc(x.name)}">${esc(x.name)}</button>`).join("")}</div>` : ""}
         ${state.err ? `<div class="err">${esc(state.err)}</div>` : ""}
         ${loading ? '<div class="sk"></div><div class="sk"></div><div class="sk"></div>' : state.drafts.map((d, i) => {
           const h = human(d.text, range());
           return `<div class="d${i === 0 ? " best" : ""}">
             <div class="t" contenteditable="true" data-i="${i}">${esc(d.text)}</div>
-            <div class="meta"><span class="sc ${h.score >= 85 ? "ok" : "bad"}">Human ${h.score}</span>${d.value ? `<span class="sc ${d.value >= 7 ? "ok" : "bad"}">Value ${d.value * 10}</span>` : ""}${h.flags.length ? `<span class="bad">${esc(h.flags.join(" · "))}</span>` : ""}${d.angle ? `<span class="why">${esc(d.angle)}</span>` : ""}</div>
-            <div class="row"><button class="b pri" data-use="${i}">Use</button><button class="b" data-copy="${i}">Copy</button>${Object.keys(REFINE).map((r) => `<button class="b rf" data-rf="${r}" data-i="${i}">${r}</button>`).join("")}</div>
+            <div class="meta"><span class="sc ${h.score >= tun().minHuman ? "ok" : "bad"}">Human ${h.score}</span>${d.impact ? `<span class="sc ${d.impact >= 7 ? "ok" : "bad"}" title="How likely the author is to reply">Impact ${d.impact * 10}</span>` : ""}${d.value ? `<span class="sc ${d.value >= 7 ? "ok" : "bad"}">Value ${d.value * 10}</span>` : ""}${h.flags.length ? `<span class="bad">${esc(h.flags.join(" · "))}</span>` : ""}${d.angle ? `<span class="why">${esc(d.angle)}</span>` : ""}</div>
+            <div class="row"><button class="b pri" data-use="${i}">Use</button><button class="b" data-copy="${i}">Copy</button><button class="b" data-save="${i}" title="Save to the Prax library">Save</button>${Object.keys(REFINE).map((r) => `<button class="b rf" data-rf="${r}" data-i="${i}">${r}</button>`).join("")}</div>
           </div>`;
         }).join("")}`;
     }
@@ -177,18 +185,42 @@
     async function generate() {
       state.err = ""; render(true);
       const ctx = job.context();
-      const auto = job.kind === "comment" && !state.mode;
-      const ask = `${ctx}\n\n${auto ? `First classify the post as one of: ${TYPES.join(", ")}. Then choose the best mode from: ${Object.keys(MODES).join(", ")}, using that mode's rules: ${JSON.stringify(MODES)}.` : `Rules for this draft: ${instr()}`}
-Write 3 different drafts, each taking a different angle, ranked strongest first. Use only facts present in the text above. Score each for value (1 to 10: does it add something the post and comments do not already say).
-Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...", "angle": "five words on the angle", "value": 8}]}`;
+      const comment = job.kind === "comment";
+      const auto = comment && !state.mode;
+      const n = Math.max(1, Math.min(5, tun().drafts || 3));
+      const list = styles();
+      const pick = auto && tun().smartOrder !== false
+        ? `Choose the best style for this post type from: ${list.map((x) => x.name).join(", ")}. Style rules: ${JSON.stringify(Object.fromEntries(list.map((x) => [x.name, x.rules])))}.`
+        : auto ? `Use the style ${list[0]?.name}: ${list[0]?.rules}` : `Rules for this draft: ${instr()}`;
+      const ask = `${ctx}\n\n${comment ? `First classify the post as one of: ${TYPES.join(", ")}. Apply the playbook for that type:\n${playbookText() || "(no playbooks)"}\n\n${pick}\n${rules?.tuning || ""}` : `Rules for this draft: ${instr()}`}
+Write ${n} different draft${n > 1 ? "s" : ""}, each taking a different angle, ranked strongest first. Use only facts present in the text above. Score each for value (1 to 10: does it add something the post and comments do not already say) and impact (1 to 10: how likely the author is to reply to it).
+Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...", "angle": "five words on the angle", "value": 8, "impact": 7}]}`;
       try {
-        const j = parseJSON(await send({ type: "draft", rules: job.kind === "comment" ? "" : instr(), user: ask }));
+        const j = parseJSON(await send({ type: "draft", kind: job.kind, rules: comment ? "" : instr(), user: ask }));
         if (!j?.drafts?.length) throw new Error("The model did not return drafts. Try again.");
-        if (auto) state.mode = MODES[j.mode] ? j.mode : "Agree and add";
-        state.type = job.kind === "comment" ? (j.post_type || state.type) : "";
-        state.drafts = j.drafts.slice(0, 3).map((d) => (typeof d === "string" ? { text: d } : d));
+        if (auto) state.mode = list.some((x) => x.name === j.mode) ? j.mode : list[0]?.name || "Agree and add";
+        state.type = comment ? (j.post_type || state.type) : "";
+        state.drafts = j.drafts.slice(0, n).map((d) => (typeof d === "string" ? { text: d } : d));
+        await repair();
+        const h = human(state.drafts[0].text, range());
+        send({ type: "scored", meta: { style: comment ? state.mode : job.kind, post_type: state.type, human: h.score, impact: state.drafts[0].impact ? state.drafts[0].impact * 10 : null } }).catch(() => {});
+        const pc = job.logCtx(state.mode);
+        send({ type: "remember", items: state.drafts.map((d) => ({ at: new Date().toISOString(), kind: job.kind, text: d.text, author: pc.author || pc.name || "", url: pc.url || "", style: comment ? state.mode : job.kind, post_type: state.type, human: human(d.text, range()).score, impact: d.impact ? d.impact * 10 : null })) }).catch(() => {});
       } catch (e) { state.err = e.message; }
       render(false);
+    }
+
+    // Guardrail repair and auto-humanize: one extra call fixes every draft that trips a house rule
+    // or falls under the minimum Human score.
+    async function repair() {
+      const t = tun();
+      const bad = state.drafts.map((d, i) => ({ i, h: human(d.text, range()) }))
+        .filter(({ h }) => (t.repair && h.flags.some((f) => !/words|chars/.test(f))) || (t.humanize && h.score < (t.minHuman || 0)));
+      if (!bad.length) return;
+      try {
+        const j = parseJSON(await send({ type: "draft", kind: "repair", rules: job.kind === "comment" ? "" : instr(), user: `Rules: ${instr()}\n\nFix these drafts. Keep each one's point and angle; change only what breaks the rules or reads as machine-written.\n${bad.map(({ i, h }) => `${i}. Problems: ${h.flags.join(", ") || "reads as AI"}\n${state.drafts[i].text}`).join("\n\n")}\n\nReturn only JSON: {"drafts": [{"i": 0, "text": "..."}]}` }));
+        (j?.drafts || []).forEach((d) => { if (state.drafts[d.i] && d.text) state.drafts[d.i] = { ...state.drafts[d.i], text: d.text }; });
+      } catch {}
     }
 
     p.addEventListener("click", async (e) => {
@@ -197,10 +229,17 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
       if (el.dataset.m) { state.mode = el.dataset.m; return generate(); }
       const text = (i) => p.querySelector(`.t[data-i="${i}"]`).innerText.trim();
       if (el.dataset.copy != null) { await navigator.clipboard.writeText(text(el.dataset.copy)); return toast("Copied"); }
+      if (el.dataset.save != null) {
+        const i = +el.dataset.save, d = state.drafts[i], pc = job.logCtx(state.mode);
+        el.disabled = true;
+        try { await send({ type: "prax", action: "save", body: { kind: job.kind, text: text(i), author: pc.author || pc.name || "", url: pc.url || "", style: job.kind === "comment" ? state.mode : job.kind, post_type: state.type, human: human(text(i), range()).score, impact: d.impact ? d.impact * 10 : null } }); el.textContent = "Saved"; toast("Saved to the Prax library"); }
+        catch (err) { el.disabled = false; toast(err.message); }
+        return;
+      }
       if (el.dataset.rf) {
         const i = +el.dataset.i; el.disabled = true;
         try {
-          const j = parseJSON(await send({ type: "draft", rules: job.kind === "comment" ? "" : instr(), user: `${job.context()}\n\nRules: ${instr()}\n\nCurrent draft:\n${text(i)}\n\nRevise it: ${REFINE[el.dataset.rf]} Return only JSON: {"text": "...", "value": 8}` }));
+          const j = parseJSON(await send({ type: "draft", kind: "refine", rules: job.kind === "comment" ? "" : instr(), user: `${job.context()}\n\nRules: ${instr()}\n\nCurrent draft:\n${text(i)}\n\nRevise it: ${REFINE[el.dataset.rf]} Return only JSON: {"text": "...", "value": 8}` }));
           if (j?.text) { state.drafts[i] = { ...state.drafts[i], text: j.text, value: j.value ?? state.drafts[i].value }; render(false); }
         } catch (err) { toast(err.message); el.disabled = false; }
         return;
@@ -276,9 +315,11 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     row.dataset.prx = "1";
     const post = postOf(row);
     const bar = document.createElement("div");
-    bar.className = "prx-bar";
-    bar.innerHTML = `<button type="button" class="prx-write"><span class="prx-star">✦</span> Write with Prax</button>
-      <div class="prx-chips">${CHIPS.map((m) => `<button type="button" class="prx-chip" data-m="${m}">${m}</button>`).join("")}</div>
+    const vip = isVip(readPost(post, row).author);
+    bar.className = "prx-bar" + (vip ? " prx-vip" : "");
+    const chipNames = studio ? styles().map((x) => x.name) : CHIPS;
+    bar.innerHTML = `<button type="button" class="prx-write"><span class="prx-star">✦</span> Write with Prax${vip ? ' <span class="prx-viptag">VIP</span>' : ""}</button>
+      <div class="prx-chips">${chipNames.map((m) => `<button type="button" class="prx-chip" data-m="${esc(m)}">${esc(m)}</button>`).join("")}</div>
       <span class="prx-kbd">Alt+P</span>`;
     bar.addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
@@ -295,7 +336,8 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
       kind: "comment", scope: post, mode,
       context: () => {
         const s = readPost(post, row);
-        return `POST by ${s.author || "the author"} (${s.url}):\n${s.text}${s.media.length ? `\n\nATTACHED: ${s.media.join(" | ")}` : ""}\n\nEXISTING COMMENTS (do not repeat their angles):\n${s.comments.map((c, i) => `${i + 1}. ${c.author}: ${c.text}`).join("\n") || "(none loaded)"}`;
+        const others = tun().readComments === false ? "" : `\n\nEXISTING COMMENTS (do not repeat their angles):\n${s.comments.map((c, i) => `${i + 1}. ${c.author}: ${c.text}`).join("\n") || "(none loaded)"}`;
+        return `POST by ${s.author || "the author"} (${s.url}):\n${s.text}${s.media.length ? `\n\nATTACHED: ${s.media.join(" | ")}` : ""}${others}`;
       },
       use: (t) => useInPost(post, t),
       logCtx: (m) => ({ author: d.author, author_url: d.authorUrl, url: d.url, mode: m, post_text: d.text.slice(0, 6000) }),
@@ -364,7 +406,13 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
   async function start() {
     cfg = (await chrome.storage.local.get("cfg")).cfg || {};
     if (cfg.quiet) { document.querySelectorAll(".prx-btn, .prx-host, .prx-bar").forEach((x) => x.remove()); return; }
-    send({ type: "me" }).then((m) => { meName = m.workspace || ""; scan(); }).catch(() => {});
+    send({ type: "me" }).then((m) => {
+      meName = m.workspace || ""; studio = m.studio || null; rules = m.rules || null;
+      const sf = studio?.safety || {};
+      vips = [...(sf.vips || []), ...(sf.vipProspects === false ? [] : (m.prospects || []).map((x) => x.name))].map((x) => String(x).toLowerCase().trim()).filter((x) => x.length > 2);
+      document.querySelectorAll(".prx-bar").forEach((x) => x.remove()); document.querySelectorAll("[data-prx]").forEach((x) => delete x.dataset.prx);
+      scan();
+    }).catch(() => {});
     scan();
     obs.observe(document.body, { childList: true, subtree: true });
   }

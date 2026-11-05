@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseProfile, auditProfile } from "@/lib/profile";
+import { mergeStudio, tuningRules, voiceText, LOCKED_RULES, LENGTHS } from "@/lib/studio";
 
 // The Chrome extension's only door into Prax. Every call carries the user's extension token,
 // which the database checks before it reads or writes anything.
@@ -22,7 +23,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
   };
   try {
     switch (action) {
-      case "me": return json(await rpc("ext_me", {}));
+      case "me": {
+        // The extension gets the studio settings merged with the defaults, plus ready-made rule text.
+        const me = await rpc("ext_me", {});
+        const studio = mergeStudio(me.studio);
+        return json({ ...me, studio, rules: { tuning: tuningRules(studio.tuning), locked: LOCKED_RULES, voice: voiceText(studio.voice_profile), length: LENGTHS[studio.tuning.length] } });
+      }
+      case "save": return json({ id: await rpc("ext_save_draft", { p: body }) });
       case "log": return json(await rpc("ext_log_comment", { p: body }));
       case "request": return json(await rpc("ext_log_request", { p: body }));
       case "usage": return json({ ok: await rpc("ext_log_usage", { p: body }) });

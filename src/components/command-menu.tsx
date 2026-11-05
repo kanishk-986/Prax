@@ -7,7 +7,7 @@ import { useWorkspace } from "@/lib/workspace";
 
 type Item = { id: string; label: string; hint?: string; icon: "page" | "person"; go: string };
 
-const PAGES: [string, string][] = [["", "Dashboard"], ["/today", "Today"], ["/pipeline", "Pipeline"], ["/network", "Network"], ["/profile", "Profile Studio"], ["/content", "Content"], ["/comments", "Engagement"], ["/templates", "Templates"], ["/citations", "AI citations"], ["/strategy", "Strategy"], ["/notes", "Notes"], ["/settings", "Settings"]];
+const PAGES: [string, string][] = [["", "Dashboard"], ["/today", "Today"], ["/pipeline", "Pipeline"], ["/network", "Network"], ["/profile", "Profile Studio"], ["/content", "Content"], ["/studio", "Comment Studio"], ["/comments", "Engagement"], ["/templates", "Templates"], ["/citations", "AI citations"], ["/strategy", "Strategy"], ["/notes", "Notes"], ["/settings", "Settings"]];
 
 /** Cmd+K: jump to any page or person. */
 export function CommandMenu() {

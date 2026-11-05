@@ -13,6 +13,7 @@ export default function CommentLog() {
     <div className="mx-auto max-w-[1100px]">
       <PageHeader title="Engagement" sub="Fills itself from comments logged with the extension. Replies are marked when you check a thread." />
       <Insights />
+      <Drafting />
       <RecordList table="comment_log" order="created_at" asc={false} empty="No comments logged yet. Comments posted with the Prax extension appear here automatically."
         defaults={{ day: new Date().toISOString().slice(0, 10), source: "manual" }}
         cols={[
@@ -37,6 +38,48 @@ export default function CommentLog() {
 }
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+type U = { at: string; kind: string; style: string; human: number | null; impact: number | null };
+
+/** What the extension drafted in the last 30 days: counts and scores only, never the text. */
+function Drafting() {
+  const { ws } = useWorkspace();
+  const d30 = addDays(today(), -30);
+  const use = useLive<U>("ext_usage", ws.id, { filter: (q) => q.gte("at", d30) });
+  const logs = useLive<C>("comment_log", ws.id, { filter: (q) => q.gte("day", d30) });
+  const s = useMemo(() => {
+    const drafts = use.rows.filter((u) => ["comment", "reply", "note"].includes(u.kind));
+    const scored = use.rows.filter((u) => u.kind === "scores");
+    const avg = (k: "human" | "impact") => { const v = scored.map((x) => x[k]).filter((x): x is number => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    const used = logs.rows.filter((r) => r.source === "extension").length;
+    const days = Array.from({ length: 14 }, (_, i) => addDays(today(), i - 13)).map((d) => ({ d, n: drafts.filter((u) => u.at.slice(0, 10) === d).length }));
+    const styles = Object.entries(scored.reduce((m: Record<string, number>, x) => { if (x.style) m[x.style] = (m[x.style] ?? 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    let streak = 0; for (let i = days.length - 1; i >= 0; i--) { if (days[i].n) streak++; else if (i !== days.length - 1) break; }
+    return { drafts: drafts.length, used, human: avg("human"), impact: avg("impact"), days, styles, streak };
+  }, [use.rows, logs.rows]);
+  if (use.loading) return null;
+  const peak = Math.max(1, ...s.days.map((d) => d.n));
+  return (
+    <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="card p-4 md:col-span-2">
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-5 gap-y-2">
+          <span className="label">Drafting, 30 days</span>
+          {[["Drafts written", s.drafts], ["Used and posted", s.used], ["Avg Human", s.human ?? "–"], ["Avg Impact", s.impact ?? "–"], ["Day streak", s.streak]].map(([l, v]) => <span key={l as string} className="text-[12px] text-muted">{l} <b className="num text-[15px] text-ink">{v}</b></span>)}
+        </div>
+        <div className="flex h-16 items-end gap-1.5" role="img" aria-label={`Drafts per day: ${s.days.map((d) => d.n).join(", ")}`}>
+          {s.days.map((d) => <div key={d.d} className="flex flex-1 flex-col items-center gap-1"><div title={`${fmtDay(d.d)}: ${d.n}`} className="w-full rounded-sm" style={{ height: `${Math.max(3, (d.n / peak) * 52)}px`, background: d.n ? "var(--accent)" : "var(--line)" }} /><span className="num text-[10px] text-faint">{d.d.slice(8)}</span></div>)}
+        </div>
+      </div>
+      <div className="card p-4">
+        <div className="label mb-2">Style usage</div>
+        {s.styles.length === 0 ? <p className="text-[13px] text-muted">No drafts yet.</p> : s.styles.map(([k, n]) => (
+          <div key={k} className="mb-2"><div className="flex justify-between text-[12px]"><span className="truncate">{k}</span><span className="num text-muted">{n}</span></div>
+            <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full bg-accent" style={{ width: `${pct(n, s.styles[0][1])}%` }} /></div></div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Insights() {
   const { ws } = useWorkspace();

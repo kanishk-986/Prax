@@ -13,14 +13,15 @@
 | Network | `/network` | LinkedIn data export (zip) opened in the browser. Upload, Segments (rules plus hand overrides, seniority, Add to pipeline), Warm paths (connected, talked before, knows someone there; confirm or reject name matches), Topics (own posts and comments by the six pillars) |
 | Profile Studio | `/profile` | Upload LinkedIn Save-to-PDF or paste text; score out of 100, keyword map, pros and cons, fixes, 3-month roadmap with ticks, history; Start a new review |
 | Content | `/content` | Post plan (titles only so far; drafts deliberately left for later) |
-| Engagement | `/comments` | Fills itself from the extension; reply rate, modes that earn replies, segments, waiting for reply |
+| Comment Studio | `/studio` | Voice Lab (CV, PDF, TXT, DOCX or pasted text to a voice fingerprint, versions kept), Styles (toggle, tweak, custom), Playbooks for 14 post types with Try it, Tuning, Rewrite Lab, Library (saved drafts in Prax, history in the browser), Safety (daily limit, VIPs, export, import, reset) |
+| Engagement | `/comments` | Fills itself from the extension; reply rate, modes that earn replies, segments, waiting for reply; Drafting stats (drafts, used, average Human and Impact, style usage, streak) |
 | Templates, AI citations, Strategy, Notes | | Record lists; citations is a weekly grid of 4 AI tools |
 | Extension | `/extension` | Install steps, one-click connect, AI provider and key, Quiet mode, usage and billing |
 | Settings | `/settings` | Profile, daily quotas, comment voice, team roles and invites |
 
 Roles: owner, editor, commenter, viewer, enforced by RLS.
 
-**Chrome extension v0.3.0** (`extension/`)
+**Chrome extension v0.4.0** (`extension/`)
 
 - `content.js` on linkedin.com: a "Write with Prax" bar under every post's action row with 10 mode chips and Alt+P. It auto-detects post type, shows 3 ranked drafts with Human and Value scores, and offers Shorter, Sharper, Warmer and Push back. Use fills an open box or copies. Reply on comments under the profile's own posts. Prax note in LinkedIn's connection note box (300 characters). Posts are found by their Like, Comment and Repost buttons rather than class names.
 - `background.js`: the only place that calls the AI provider and Prax. It reports token usage, never text.
@@ -31,6 +32,15 @@ Roles: owner, editor, commenter, viewer, enforced by RLS.
 
 - Logging a comment ticks one of today's comment items. A comment on a prospect's post moves Target to Warming. A reply marks them warm.
 - A note sent moves the prospect to Requested (or creates them) and ticks a request item.
+
+## Comment Studio details
+
+- Modelled on the features of VoxReply (seen from Alok's screenshots), rebuilt for C-suite and B2B readers. No VoxReply code or text was used. License and managed AI were left out: Prax uses the user's own key.
+- `db/007_studio.sql`: `studio_settings` (empty fields mean the defaults in `src/lib/studio.ts`), `voice_versions`, `saved_drafts`, scores and style on `ext_usage`, `ext_me` returns studio settings and open prospects (VIPs), `ext_save_draft`.
+- `/api/ext/me` merges the defaults and sends ready-made rule text, so `src/lib/studio.ts` is the single source of defaults.
+- Every draft: workspace voice (locked rules, Settings) + fingerprint + `LOCKED_RULES` + style + playbook + tuning. Guardrail repair and auto-humanize add at most one extra call.
+- Website AI (Voice Lab, Playbooks Try it, Rewrite Lab) goes page → `bridge.js` → background → provider, with the key in the browser. Voice analysis uses `plain` so house rules do not colour it.
+- Daily limit counts comment, reply and note drafts per browser. History is the last 200 drafts in `chrome.storage.local`.
 
 ## Network (step 3) details
 
@@ -49,6 +59,8 @@ Roles: owner, editor, commenter, viewer, enforced by RLS.
 
 ## Not verified yet
 
+- Comment Studio against Supabase: needs `db/007_studio.sql`. The extension flow was checked on a mock page with a fake AI (chips from settings, VIP bar, post type, smart style, 2 drafts, repair, Impact, Save, history).
+
 - Network page end to end against Supabase: needs `db/006_network.sql` run in the SQL editor, then a real export uploaded by Alok.
 
 - The bar on real LinkedIn pages. Testing it through automation would break rule 1, so Alok tests by hand and sends screenshots.
@@ -56,8 +68,8 @@ Roles: owner, editor, commenter, viewer, enforced by RLS.
 
 ## Next, in the agreed order
 
-1. **Step 3 is built** (see Network above); waiting for the SQL, a deploy and a real export.
-2. **Features modelled on the extension Alok named "VoxReply"**: waiting for the extension's name and website from `chrome://extensions`, since the id does not resolve publicly. Build our own versions; no copied code, nothing that posts or clicks.
+1. **Step 3 is live** (Network). Waiting for Shashi's real export.
+2. **Comment Studio and extension v0.4.0 are built**; waiting for `db/007_studio.sql` and a deploy. Then reinstall the extension from the Extension page.
 3. **Step 4:** Content Studio (post drafts), account map, Inbox view (DMs and follow-ups, also in the extension), weekly report, multi-profile overview, merge Strategy and Notes into a Playbook.
 
 ## Known gaps

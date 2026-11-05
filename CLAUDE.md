@@ -12,13 +12,13 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 ## Commands
 
 - `npm run dev` / `npm run build`. Lint and types: `npx tsc --noEmit && npx eslint src`.
-- Network logic tests: `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
+- Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
 - Deploy: `npx vercel deploy --prod --yes`. Production deploys need Alok's explicit go-ahead each time. After every deploy, commit and push to GitHub.
 - After any change in `extension/`: bump `version` in `extension/manifest.json` and `LATEST_EXT` in `src/lib/bridge.ts`, then `npm run ext:zip` before deploying.
 
 ## Database changes
 
-Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/006_*.sql`. New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
+Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/007_*.sql`. New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
 
 The extension never touches tables directly. It calls `/api/ext/[action]` with a per-browser token; the API calls `security definer` functions (`ext_*`) that check the token hash.
 

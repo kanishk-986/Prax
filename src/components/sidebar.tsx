@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flame, UserRound, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, ChevronsUpDown, Menu, X, Search } from "lucide-react";
+import { Flame, UserRound, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search } from "lucide-react";
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/network", label: "Network", icon: Network },
   { href: "/profile", label: "Profile Studio", icon: UserRound },
   { href: "/content", label: "Content", icon: FileText },
+  { href: "/studio", label: "Comment Studio", icon: PenLine },
   { href: "/comments", label: "Engagement", icon: MessageSquare },
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/citations", label: "AI citations", icon: Sparkles },
