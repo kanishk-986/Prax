@@ -23,7 +23,6 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
     done.current = true; setLeaving(true);
     setTimeout(() => { setShow(false); onDone?.(); }, 450);
   }, [onDone]);
-  const started = useRef(false);
   useEffect(() => {
     // Decide once per mount; a second effect run (React strict mode in dev) only re-arms the timer and keys.
     if (!started.current) {
