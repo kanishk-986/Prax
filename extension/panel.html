@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Prax</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="mark"><i></i><i></i></span>Prax</div>
+    <div id="who" class="muted small">Not connected</div>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button data-tab="capture" class="on">Capture</button>
+    <button data-tab="draft">Comment</button>
+  </nav>
+
+  <section id="tab-draft" class="hidden">
+    <div class="row">
+      <button id="read" class="btn primary">Read this post</button>
+      <button id="addsrc" class="btn" title="Add the page in this tab, such as the linked article, as extra source text">Add page as source</button>
+    </div>
+    <p class="hint">Easiest: use the Prax bar under any post on LinkedIn. This tab is for Quiet mode. Open the post (click its timestamp) or select its text first. If it links to an article or PDF, open that too and press Add page as source, so drafts use the long form.</p>
+    <div id="post" class="card hidden"></div>
+    <div id="modes" class="chips hidden"></div>
+    <button id="go" class="btn primary wide hidden">Draft 3 comments</button>
+    <div id="drafts"></div>
+    <div class="row sep">
+      <button id="replies" class="btn">Check replies on this post</button>
+    </div>
+  </section>
+
+  <section id="tab-capture">
+    <div class="card">
+      <div class="label">Profile</div>
+      <p class="hint">Open a LinkedIn profile and capture it. Prax scores it and adds the person to the pipeline as a Target if they are new.</p>
+      <label class="check"><input type="checkbox" id="self" /> This is the Prax profile itself, not a prospect</label>
+      <button id="capprofile" class="btn primary wide">Capture this profile</button>
+    </div>
+    <div class="card">
+      <div class="label">Analytics</div>
+      <p class="hint">Open your own LinkedIn analytics page (Me, then Analytics) and capture the numbers for the dashboard.</p>
+      <button id="capstats" class="btn wide">Read analytics on this page</button>
+      <div id="stats"></div>
+    </div>
+  </section>
+
+  <div id="setup" class="card hidden">
+    <div class="label">Finish setup in Prax</div>
+    <p class="hint">Connection, AI provider and key, Quiet mode and usage all live on the Extension page in Prax.</p>
+    <button id="openprax" class="btn primary wide">Open Prax</button>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="panel.js"></script>
+</body>
+</html>

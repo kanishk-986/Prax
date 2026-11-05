@@ -1,0 +1,481 @@
+<title>Shashi Outreach Sprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: operator console. Left rail of sections, a sticky week strip, and boards that read like a trading desk blotter: dense, columnar, status in colour chips. */
+:root{
+  --bg:#f3f5f9; --panel:#ffffff; --sunk:#e9edf4; --line:#d6dce7; --ink:#101828; --muted:#5a6578; --faint:#8a94a6;
+  --accent:#2347d6; --accent-ink:#ffffff; --accent-soft:#e3e9ff;
+  --good:#127a52; --good-soft:#dcf3e8; --warn:#9a5b00; --warn-soft:#fdf0d9; --bad:#b42318; --bad-soft:#fde4e1;
+  --a:#2347d6; --b:#0f7a8a; --c:#7a3ec8; --d:#b5651d; --e:#5a6578;
+  --font-ui:"Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c111b; --panel:#141b28; --sunk:#0f1521; --line:#253049; --ink:#e7ecf5; --muted:#a3aec2; --faint:#76829a;
+  --accent:#7d97ff; --accent-ink:#0c111b; --accent-soft:#1d2a52;
+  --good:#4fd39b; --good-soft:#123528; --warn:#f1b55a; --warn-soft:#3a2a10; --bad:#ff8a7e; --bad-soft:#3d1714;
+  --a:#7d97ff; --b:#46c7d8; --c:#b893ff; --d:#f0a35e; --e:#a3aec2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c111b; --panel:#141b28; --sunk:#0f1521; --line:#253049; --ink:#e7ecf5; --muted:#a3aec2; --faint:#76829a;
+  --accent:#7d97ff; --accent-ink:#0c111b; --accent-soft:#1d2a52;
+  --good:#4fd39b; --good-soft:#123528; --warn:#f1b55a; --warn-soft:#3a2a10; --bad:#ff8a7e; --bad-soft:#3d1714;
+  --a:#7d97ff; --b:#46c7d8; --c:#b893ff; --d:#f0a35e; --e:#a3aec2; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--font-ui);}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100%}
+.rail{background:var(--panel);border-right:1px solid var(--line);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:18px}
+.brand b{display:block;font-weight:800;font-size:17px;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:12px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{all:unset;cursor:pointer;padding:8px 10px;border-radius:6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;font-weight:500}
+.nav button:hover{background:var(--sunk);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.nav button:focus-visible{outline:2px solid var(--accent)}
+.nav .ct{font:12px var(--font-num);color:var(--faint)}
+.rail .meta{margin-top:auto;font-size:12px;color:var(--faint);display:flex;flex-direction:column;gap:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--faint);margin-right:6px}
+.dot.on{background:var(--good)} .dot.off{background:var(--bad)}
+main{min-width:0;padding-block:20px 60px;padding-left:24px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+h1{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance}
+h2{font-size:16px;font-weight:700;margin:0 0 10px}
+.sub{color:var(--muted);margin:2px 0 0}
+.weekstrip{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--sunk);color:var(--muted);border:1px solid transparent;white-space:nowrap}
+.chip.wk{cursor:pointer}
+.chip.wk[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.chip.good{background:var(--good-soft);color:var(--good)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.acc{background:var(--accent-soft);color:var(--accent)}
+.seg{font:600 11px var(--font-num);padding:1px 6px;border-radius:4px;color:#fff}
+.seg.A{background:var(--a)} .seg.B{background:var(--b)} .seg.C{background:var(--c)} .seg.D{background:var(--d)} .seg.E{background:var(--e)}
+.btn{cursor:pointer;border:1px solid var(--line);background:var(--panel);padding:7px 12px;border-radius:6px;font-weight:600}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.pri:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:4px 8px}
+.btn.ghost:hover{color:var(--bad)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.note{color:var(--muted);font-size:13px}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:18px;color:var(--muted);text-align:center;font-size:13px}
+/* quota */
+.quota{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.q{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--panel);display:flex;flex-direction:column;gap:8px}
+.q .lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.q .val{font:600 26px var(--font-num);font-variant-numeric:tabular-nums}
+.q .val small{font-size:14px;color:var(--faint)}
+.bar{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.full{background:var(--good)}
+.stepper{display:flex;gap:6px}
+.stepper button{flex:1}
+/* board */
+.board{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;overflow-x:auto;padding-bottom:6px}
+.daycol{background:var(--sunk);border-radius:var(--r);padding:8px;min-height:180px;display:flex;flex-direction:column;gap:6px;border:1px solid transparent}
+.daycol.today{border-color:var(--accent)}
+.daycol.over{background:var(--accent-soft)}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted);font-weight:700}
+.dayhead .n{font:600 13px var(--font-num);color:var(--ink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px;cursor:grab;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.card:hover{border-color:var(--faint)}
+.card.dragging{opacity:.4}
+.card.done .t{text-decoration:line-through;color:var(--faint)}
+.card .t{font-weight:600;line-height:1.3}
+.card .m{display:flex;gap:6px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:12px}
+.kind{font:600 10px var(--font-num);text-transform:uppercase;letter-spacing:.05em;padding:1px 5px;border-radius:3px;background:var(--sunk);color:var(--muted)}
+.kind.post{background:var(--accent-soft);color:var(--accent)} .kind.outreach{background:var(--good-soft);color:var(--good)} .kind.comments{background:var(--warn-soft);color:var(--warn)} .kind.review{background:var(--bad-soft);color:var(--bad)}
+.addline{all:unset;cursor:pointer;color:var(--faint);font-size:12px;padding:4px 2px}
+.addline:hover{color:var(--accent)}
+/* kanban */
+.kanban{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:10px;overflow-x:auto;padding-bottom:8px}
+.lane{background:var(--sunk);border-radius:var(--r);padding:8px;display:flex;flex-direction:column;gap:6px;min-height:260px;border:1px solid transparent}
+.lane.over{background:var(--accent-soft)}
+.lanehead{display:flex;justify-content:space-between;font-weight:700;font-size:13px;padding:2px 2px 6px}
+.lanehead .ct{font:12px var(--font-num);color:var(--faint)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filters select,.filters input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+/* table */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--sunk);font-weight:700}
+td.num,th.num{text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td input,td select{width:100%;min-width:60px;padding:4px 6px;border:1px solid transparent;border-radius:4px;background:transparent}
+td input:hover,td input:focus,td select:hover,td select:focus{border-color:var(--line);background:var(--panel)}
+td input[type=number]{text-align:right;font-family:var(--font-num)}
+td.tick{text-align:center}
+/* templates & notes */
+.tpl{display:flex;flex-direction:column;gap:8px}
+.tpl textarea,.sec textarea,.notecard textarea{width:100%;min-height:110px;resize:vertical;border:1px solid var(--line);border-radius:6px;padding:10px;background:var(--panel);line-height:1.5}
+.tpl .row,.sec .row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.tpl input.name,.sec input.h,.notecard input{font-weight:700;border:1px solid transparent;border-radius:4px;padding:4px 6px;background:transparent;min-width:0;flex:1}
+.tpl input.name:hover,.sec input.h:hover,.notecard input:hover{border-color:var(--line)}
+.notes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.notecard{background:var(--warn-soft);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:6px}
+.notecard textarea{background:transparent;border-color:transparent;min-height:140px}
+.sec{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+.sec textarea{min-height:90px}
+.saved{font-size:12px;color:var(--good)}
+/* results */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.kpi .l{font-size:12px;color:var(--muted);font-weight:600}
+.kpi .v{font:600 22px var(--font-num);font-variant-numeric:tabular-nums;margin-top:4px}
+.kpi .s{font-size:12px;color:var(--faint);font-family:var(--font-num)}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font:11px var(--font-num)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:middle}
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(8,12,20,.45);display:flex;align-items:flex-start;justify-content:center;padding:max(40px,env(safe-area-inset-top,0px)) 16px 16px;z-index:50;overflow:auto}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(560px,100%);padding:18px;display:flex;flex-direction:column;gap:12px}
+.modal label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.modal input,.modal select,.modal textarea{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:14px;font-weight:400;color:var(--ink)}
+.modal textarea{min-height:110px;resize:vertical}
+.modal .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal .acts{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.confirm{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--bad)}
+.toast{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;z-index:60}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:13px}
+.mobilenav{display:none}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}
+  .rail{display:none}
+  .mobilenav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px}
+  main{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .modal .two{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside class="rail" aria-label="Sections">
+    <div class="brand"><b>Outreach Sprint</b><span>Shashi Pal · 9 Nov to 6 Dec 2026</span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="meta"><div id="conn"><span class="dot"></span>Connecting</div><div id="who"></div></div>
+  </aside>
+  <main>
+    <div class="mobilenav" id="mnav"></div>
+    <div id="banner"></div>
+    <div id="view"></div>
+  </main>
+</div>
+<div id="modalroot"></div>
+
+<script>
+(function(){
+"use strict";
+// ---------- plan constants (agreed 5 Nov 2026) ----------
+const START = new Date(Date.UTC(2026,10,9)); // Mon 9 Nov 2026
+const DAYS = Array.from({length:28},(_,i)=>{const d=new Date(START);d.setUTCDate(d.getUTCDate()+i);return d.toISOString().slice(0,10)});
+const WEEKS = [0,1,2,3].map(w=>({id:"w"+(w+1),label:"Week "+(w+1),days:DAYS.slice(w*7,w*7+7)}));
+const QUOTA = [{comments:6,requests:10,dms:3,inmail:1},{comments:8,requests:15,dms:5,inmail:1},{comments:8,requests:15,dms:5,inmail:1},{comments:8,requests:15,dms:5,inmail:1}];
+const QLAB = {comments:"Comments",requests:"Connection requests",dms:"Direct messages",inmail:"InMail",replies:"Replies on own posts"};
+const KINDS = ["post","comments","outreach","task","review"];
+const STAGES = ["Target","Warming","Requested","Connected","In conversation","Resource sent","Call booked","Parked"];
+const SEGS = {A:"Fintech & payments operators",B:"MENA & India institutions",C:"Partnerships & growth",D:"Africa",E:"Industry voices"};
+const PSTAT = ["Idea","Drafting","Approved","Scheduled","Published"];
+const FORMATS = ["Article","Image","Video"];
+const TOOLS = [["gpt","ChatGPT"],["ppx","Perplexity"],["gem","Gemini"],["cla","Claude"]];
+const METRICS = [["impressions","Post impressions"],["followers","New followers"],["engagements","Reactions + comments on own posts"],["requests","Connection requests sent"],["accepts","Requests accepted"],["conversations","Conversations started"],["resources","Resource requests"],["calls","Calls booked"],["citations","AI citations (of 40 runs)"]];
+const DEFAULT_MODEL = {
+  reqPerDay:[10,15,15,15], workDays:5, warmStart:4,
+  accept:[0.25,0.35,0.45], reply:[0.15,0.25,0.35], callConv:[0.10,0.15,0.20],
+  resPerPost:[8,15,30], resToCall:[0.02,0.04,0.06],
+  impr:[[1800,2200,2600,3000],[2500,3800,4800,5600],[3500,6000,8500,11000]],
+  foll:[100,150,220], engPerPost:[20,35,60], cites:[[0,0,0,0],[0,0,1,2],[0,1,2,4]]
+};
+const SCEN = ["Conservative","Expected","Stretch"];
+
+// ---------- state ----------
+const S = {db:null,user:null,canWrite:true,live:false,view:"today",week:weekOfToday(),filters:{seg:"",region:"",q:""},
+  cards:{},prospects:{},posts:{},commentlog:{},templates:{},citq:{},notes:{},strategy:{},daily:{},metrics:{},citations:{},plan:{}};
+const COLLS = ["cards","prospects","posts","commentlog","templates","citq","notes","strategy","daily","metrics","citations","plan"];
+const VIEWS = [["today","Today"],["board","Month board"],["pipeline","Pipeline"],["content","Content"],["comments","Comment log"],["templates","Templates"],["citations","AI citations"],["results","Results"],["strategy","Strategy"],["notes","Notes"]];
+
+function todayStr(){return new Date().toISOString().slice(0,10)}
+function weekOfToday(){const i=DAYS.indexOf(todayStr());return i<0?0:Math.floor(i/7)}
+function fmtDay(s){const d=new Date(s+"T00:00:00Z");return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:"UTC"})}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function list(c){return Object.entries(S[c]).map(([id,d])=>({id,...d}))}
+function $(s,r=document){return r.querySelector(s)}
+function toast(t){const el=document.createElement("div");el.className="toast";el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),1800)}
+function model(){return Object.assign({},DEFAULT_MODEL,(S.plan.model||{}))}
+
+// ---------- data layer ----------
+async function save(coll,id,data){
+  if(!S.db){toast("Not connected, change not saved");return}
+  try{ if(id){await S.db.collection(coll).doc(id).set(data)} else {await S.db.collection(coll).add(data)} }
+  catch(e){ if(e&&e.code==="invalid_argument"&&!id){} handleErr(e) }
+}
+async function patch(coll,id,data){
+  if(!S.db)return; const cur=S[coll][id]||{}; try{await S.db.collection(coll).doc(id).set(Object.assign({},cur,data))}catch(e){handleErr(e)}
+}
+async function remove(coll,id){ if(!S.db)return; try{await S.db.collection(coll).doc(id).delete()}catch(e){handleErr(e)} }
+function handleErr(e){
+  if(e&&e.code==="invalid_argument"){S.canWrite=false;banner("You have view access, so changes are not saved. Ask the owner for Contributor access.")}
+  else if(e&&e.code==="quota_exceeded"){toast("Storage is full. Delete old rows to add new ones.")}
+  else {toast("Could not save. Try again in a moment.")}
+}
+function banner(t){$("#banner").innerHTML=t?`<div class="banner">${esc(t)}</div>`:""}
+
+let renderQueued=false;
+function queueRender(){ if(renderQueued)return; renderQueued=true; requestAnimationFrame(()=>{renderQueued=false;render()}) }
+
+async function boot(){
+  renderNav(); render();
+  const timer=setTimeout(()=>{ if(!S.live) banner("The shared workspace can't be reached yet. What you see may be out of date.")},10000);
+  let db=null,user=null;
+  try{ db = window.claude ? await window.claude.use("db") : null }catch(e){db=null}
+  try{ user = window.claude ? await window.claude.use("user") : null }catch(e){user=null}
+  S.user=user;
+  if(!db){clearTimeout(timer);setConn(false);banner("Shared storage is not available in this view. Open the page signed in to claude.ai to edit.");render();return}
+  S.db=db;
+  try{ if(user){ const w=await user.can("data.write"); if(w===false){S.canWrite=false;banner("View-only: you can read the plan but changes are not saved.")}
+      const me=await user.me(); $("#who").textContent = me && me.name ? "Signed in as "+me.name : "" } }catch(e){}
+  let first=0;
+  COLLS.forEach(c=>{
+    db.collection(c).onSnapshot(snap=>{
+      const o={}; snap.docs.forEach(d=>{o[d.id]=d.data()}); S[c]=o;
+      if(!snap.metadata.fromCache && !S.live){first++; if(first>=1){S.live=true;clearTimeout(timer);setConn(true); if($("#banner").textContent.startsWith("The shared"))banner("")}}
+      queueRender();
+    },err=>{clearTimeout(timer);setConn(false);if(err.code!=="revoked")banner("Lost connection to the shared workspace. Reload the page to reconnect.")});
+  });
+}
+function setConn(ok){$("#conn").innerHTML=`<span class="dot ${ok?"on":"off"}"></span>${ok?"Live, saving for everyone":"Offline"}`}
+
+// ---------- nav ----------
+function renderNav(){
+  const counts={pipeline:()=>Object.keys(S.prospects).length,content:()=>Object.keys(S.posts).length,comments:()=>Object.keys(S.commentlog).length,notes:()=>Object.keys(S.notes).length};
+  $("#nav").innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" ${S.view===k?'aria-current="page"':""}><span>${l}</span><span class="ct">${counts[k]?counts[k]():""}</span></button>`).join("");
+  $("#mnav").innerHTML=VIEWS.map(([k,l])=>`<button class="chip wk" data-v="${k}" aria-pressed="${S.view===k}">${l}</button>`).join("");
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-v]");if(b){S.view=b.dataset.v;try{location.hash=S.view}catch(_){};render();window.scrollTo(0,0)}});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(VIEWS.some(v=>v[0]===h)){S.view=h;render()}});
+{const h=location.hash.slice(1);if(VIEWS.some(v=>v[0]===h))S.view=h}
+
+function render(){
+  renderNav();
+  const v={today:vToday,board:vBoard,pipeline:vPipeline,content:vContent,comments:vComments,templates:vTemplates,citations:vCitations,results:vResults,strategy:vStrategy,notes:vNotes}[S.view]||vToday;
+  const focus=document.activeElement; const fid=focus&&focus.id; const sel=focus&&focus.selectionStart;
+  $("#view").innerHTML=v();
+  bindView();
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(sel!=null)el.setSelectionRange(sel,sel)}catch(_){}}}
+}
+function weekStrip(){return `<div class="weekstrip">${WEEKS.map((w,i)=>`<button class="chip wk" data-week="${i}" aria-pressed="${S.week===i}">${w.label} · ${fmtDay(w.days[0]).slice(4)}</button>`).join("")}</div>`}
+
+// ---------- TODAY ----------
+function vToday(){
+  const t=todayStr(); const inPlan=DAYS.includes(t); const day=inPlan?t:DAYS[0]; const w=Math.floor(DAYS.indexOf(day)/7);
+  const q=QUOTA[w]; const d=S.daily[day]||{};
+  const quota=Object.keys(QLAB).map(k=>{const target=q[k]; const val=d[k]||0; const pct=target?Math.min(100,val/target*100):(val?100:0);
+    return `<div class="q"><span class="lbl">${QLAB[k]}</span><span class="val">${val}${target?` <small>/ ${target}</small>`:" <small>all</small>"}</span><div class="bar"><i class="${target&&val>=target?"full":""}" style="width:${pct}%"></i></div><div class="stepper"><button class="btn" data-q="${k}" data-d="-1" aria-label="Minus one ${QLAB[k]}">−1</button><button class="btn pri" data-q="${k}" data-d="1" aria-label="Plus one ${QLAB[k]}">+1</button></div></div>`}).join("");
+  const cards=list("cards").filter(c=>c.day===day).sort((a,b)=>(a.order||0)-(b.order||0));
+  const due=list("prospects").filter(p=>p.nextDate&&p.nextDate<=day&&p.stage!=="Parked"&&p.stage!=="Call booked").sort((a,b)=>a.nextDate.localeCompare(b.nextDate));
+  return `<div class="top"><div><h1>${inPlan?"Today":"Day 1 preview"}</h1><p class="sub">${fmtDay(day)} · ${WEEKS[w].label}${inPlan?"":" (the sprint starts Mon 9 Nov)"}</p></div><button class="btn pri" data-add-card="${day}">Add task for today</button></div>
+  <h2>Daily quota</h2><div class="quota" data-day="${day}">${quota}</div>
+  <div class="grid2" style="margin-top:18px">
+    <section class="panel"><h2>Today's plan</h2>${cards.length?cards.map(cardHTML).join(""):`<div class="empty">No tasks yet for this day. Add one, or plan the week on the Month board.</div>`}</section>
+    <section class="panel"><h2>Follow-ups due</h2>${due.length?`<div style="display:flex;flex-direction:column;gap:6px">${due.map(prospectCard).join("")}</div>`:`<div class="empty">No follow-ups due. Prospects with a next-action date on or before today show here.</div>`}</section>
+  </div>`;
+}
+
+// ---------- BOARD ----------
+function cardHTML(c){
+  return `<div class="card ${c.done?"done":""}" draggable="true" data-card="${c.id}"><span class="t">${esc(c.title)}</span><span class="m"><span class="kind ${esc(c.kind)}">${esc(c.kind||"task")}</span>${c.owner?`<span>${esc(c.owner)}</span>`:""}<label style="margin-left:auto;display:flex;gap:4px;align-items:center"><input type="checkbox" data-done="${c.id}" ${c.done?"checked":""} aria-label="Mark done"> done</label></span></div>`;
+}
+function vBoard(){
+  const w=WEEKS[S.week]; const t=todayStr();
+  const cols=w.days.map(day=>{const cs=list("cards").filter(c=>c.day===day).sort((a,b)=>(a.order||0)-(b.order||0));
+    return `<div class="daycol ${day===t?"today":""}" data-drop-day="${day}"><div class="dayhead"><span>${fmtDay(day).split(" ")[0]}</span><span class="n">${fmtDay(day).split(" ").slice(1).join(" ")}</span></div>${cs.map(cardHTML).join("")}<button class="addline" data-add-card="${day}">+ Add card</button></div>`}).join("");
+  const q=QUOTA[S.week];
+  return `<div class="top"><div><h1>Month board</h1><p class="sub">Drag cards between days. Click a card to edit or delete it. Daily quota this week: ${q.comments} comments, ${q.requests} requests, ${q.dms} messages, ${q.inmail} InMail.</p></div>${weekStrip()}</div><div class="board">${cols}</div>`;
+}
+
+// ---------- PIPELINE ----------
+function prospectCard(p){
+  return `<div class="card" draggable="true" data-prospect="${p.id}"><span class="t">${esc(p.name)}</span><span class="m">${p.segment?`<span class="seg ${esc(p.segment)}">${esc(p.segment)}</span>`:""}<span>${esc(p.role||"")}${p.company?" · "+esc(p.company):""}</span></span>${p.next?`<span class="m">→ ${esc(p.next)}${p.nextDate?` · <b>${esc(fmtDay(p.nextDate))}</b>`:""}</span>`:""}${p.warmth==="warm"?`<span class="m"><span class="chip good">warm</span>${p.region?`<span>${esc(p.region)}</span>`:""}</span>`:(p.region?`<span class="m">${esc(p.region)}</span>`:"")}</div>`;
+}
+function vPipeline(){
+  const f=S.filters; const all=list("prospects");
+  const regions=[...new Set(all.map(p=>p.region).filter(Boolean))].sort();
+  const ps=all.filter(p=>(!f.seg||p.segment===f.seg)&&(!f.region||p.region===f.region)&&(!f.q||(p.name+" "+p.company+" "+p.role).toLowerCase().includes(f.q.toLowerCase())));
+  const lanes=STAGES.map(s=>{const items=ps.filter(p=>(p.stage||"Target")===s);return `<div class="lane" data-drop-stage="${s}"><div class="lanehead"><span>${s}</span><span class="ct">${items.length}</span></div>${items.map(prospectCard).join("")}</div>`}).join("");
+  const segCounts=Object.keys(SEGS).map(k=>`<span class="chip"><span class="seg ${k}">${k}</span>${SEGS[k]} · ${all.filter(p=>p.segment===k).length}</span>`).join("");
+  return `<div class="top"><div><h1>Prospect pipeline</h1><p class="sub">Drag a person to the next stage. Target split: A 35%, B 25%, C 20%, D 10%, E 10%.</p></div><button class="btn pri" data-add-prospect>Add prospect</button></div>
+  <div class="filters"><select id="f-seg" aria-label="Filter by segment"><option value="">All segments</option>${Object.entries(SEGS).map(([k,v])=>`<option value="${k}" ${f.seg===k?"selected":""}>${k} · ${v}</option>`).join("")}</select><select id="f-region" aria-label="Filter by region"><option value="">All regions</option>${regions.map(r=>`<option ${f.region===r?"selected":""}>${esc(r)}</option>`).join("")}</select><input id="f-q" placeholder="Search name or company" value="${esc(f.q)}" aria-label="Search prospects"></div>
+  <div class="filters">${segCounts}</div>
+  ${all.length?`<div class="kanban">${lanes}</div>`:`<div class="empty">No prospects yet. The starting list of about 60 named people is being researched and will appear here. Add one now with "Add prospect".</div>`}`;
+}
+
+// ---------- CONTENT ----------
+function vContent(){
+  const ps=list("posts").sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const lanes=PSTAT.map(s=>{const items=ps.filter(p=>(p.status||"Idea")===s);return `<div class="lane" data-drop-pstat="${s}"><div class="lanehead"><span>${s}</span><span class="ct">${items.length}</span></div>${items.map(p=>`<div class="card" draggable="true" data-post="${p.id}"><span class="t">${esc(p.title)}</span><span class="m"><span class="kind post">${esc(p.format||"")}</span>${p.date?`<span>${esc(fmtDay(p.date))}</span>`:""}</span>${p.resource?`<span class="m">Resource: ${esc(p.resource)}</span>`:""}</div>`).join("")}</div>`}).join("");
+  return `<div class="top"><div><h1>Content board</h1><p class="sub">Three posts a week: Tuesday long-form article, Thursday single-image post with the resource prompt, Friday motion-graphics video.</p></div><button class="btn pri" data-add-post>Add post</button></div>
+  ${ps.length?`<div class="kanban">${lanes}</div>`:`<div class="empty">No posts planned yet. The 12 posts for the month will appear here as drafts.</div>`}`;
+}
+
+// ---------- COMMENT LOG ----------
+function vComments(){
+  const rows=list("commentlog").sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const ws=WEEKS.map(w=>rows.filter(r=>w.days.includes(r.date)));
+  const icp=rows.filter(r=>"ABCD".includes(r.segment||"x")).length;
+  return `<div class="top"><div><h1>Comment log</h1><p class="sub">One row per comment Shashi posts. Aim: about 60% on segments A to D. Logged: ${rows.length} · on target segments: ${rows.length?Math.round(icp/rows.length*100):0}% · replies received: ${rows.filter(r=>r.reply).length}</p></div><button class="btn pri" data-add-comment>Log a comment</button></div>
+  <div class="filters">${ws.map((w,i)=>`<span class="chip">${WEEKS[i].label}: ${w.length}</span>`).join("")}</div>
+  ${rows.length?`<div class="tbl"><table><thead><tr><th>Date</th><th>Author</th><th>Seg</th><th>Our angle</th><th>Reply?</th><th>Link</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date?fmtDay(r.date):"")}</td><td>${esc(r.author)}</td><td>${r.segment?`<span class="seg ${esc(r.segment)}">${esc(r.segment)}</span>`:""}</td><td style="min-width:220px">${esc(r.angle)}</td><td class="tick"><input type="checkbox" data-creply="${r.id}" ${r.reply?"checked":""} aria-label="Reply received"></td><td>${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener">Open</a>`:""}</td><td><button class="btn ghost" data-edit-comment="${r.id}">Edit</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No comments logged yet. After each comment goes live, log it here so the weekly review can see what earned replies.</div>`}`;
+}
+
+// ---------- TEMPLATES ----------
+function vTemplates(){
+  const ts=list("templates").sort((a,b)=>(a.order||0)-(b.order||0));
+  return `<div class="top"><div><h1>Templates</h1><p class="sub">Edit in place; changes save when you click away. Copy puts the text on your clipboard.</p></div><button class="btn pri" data-add-tpl>Add template</button></div>
+  ${ts.length?`<div class="grid2">${ts.map(t=>`<div class="panel tpl"><div class="row"><input class="name" id="tn-${t.id}" data-tname="${t.id}" value="${esc(t.name)}" aria-label="Template name"><span class="chip acc">${esc(t.kind||"")}</span></div><textarea id="tt-${t.id}" data-ttext="${t.id}" aria-label="Template text">${esc(t.text)}</textarea><div class="row"><span class="note">${(t.text||"").length} characters</span><span><button class="btn" data-copy="${t.id}">Copy</button> <button class="btn ghost" data-del="templates:${t.id}">Delete</button></span></div></div>`).join("")}</div>`:`<div class="empty">No templates yet. Connection notes, first messages and resource replies will be added here.</div>`}`;
+}
+
+// ---------- CITATIONS ----------
+function vCitations(){
+  const qs=list("citq").sort((a,b)=>(a.order||0)-(b.order||0));
+  const wk=WEEKS[S.week].id; const res=(S.citations[wk]||{}).r||{};
+  const total=qs.reduce((n,q)=>n+TOOLS.filter(([k])=>res[q.id+"_"+k]).length,0);
+  return `<div class="top"><div><h1>AI citations</h1><p class="sub">Every Friday, run each question in all four tools and tick where Shashi or Antier is cited. ${WEEKS[S.week].label}: <b>${total}</b> of ${qs.length*4} runs cited.</p></div>${weekStrip()}</div>
+  <div style="margin-bottom:10px"><button class="btn" data-add-q>Add question</button></div>
+  ${qs.length?`<div class="tbl"><table><thead><tr><th>Buyer question</th><th>Topic</th><th>Region</th>${TOOLS.map(([,l])=>`<th class="tick">${l}</th>`).join("")}<th></th></tr></thead><tbody>${qs.map(q=>`<tr><td style="min-width:260px"><input id="cq-${q.id}" data-cq="${q.id}" value="${esc(q.q)}" aria-label="Question"></td><td><input id="ct-${q.id}" data-ctopic="${q.id}" value="${esc(q.topic||"")}" aria-label="Topic"></td><td><input id="cr-${q.id}" data-cregion="${q.id}" value="${esc(q.region||"")}" aria-label="Region"></td>${TOOLS.map(([k,l])=>`<td class="tick"><input type="checkbox" data-cite="${q.id}_${k}" ${res[q.id+"_"+k]?"checked":""} aria-label="${l} cites us"></td>`).join("")}<td><button class="btn ghost" data-del="citq:${q.id}">Delete</button></td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No questions yet. Ten buyer questions grouped by topic and region will be added here.</div>`}`;
+}
+
+// ---------- RESULTS ----------
+function project(){
+  const m=model(); const out=[0,1,2].map(()=>({}));
+  for(let s=0;s<3;s++){
+    const wk=[];
+    for(let w=0;w<4;w++){
+      const req=m.reqPerDay[w]*m.workDays; const acc=req*m.accept[s];
+      const conv=(acc+(w===0?m.warmStart:0))*m.reply[s];
+      const res=m.resPerPost[s]; const calls=conv*m.callConv[s]+res*m.resToCall[s];
+      wk.push({impressions:m.impr[s][w],followers:m.foll[s],engagements:m.engPerPost[s]*3,requests:req,accepts:acc,conversations:conv,resources:res,calls,citations:m.cites[s][w]});
+    }
+    out[s]=wk;
+  }
+  return out;
+}
+function vResults(){
+  const P=project(); const sum=(s,k)=>P[s].reduce((n,w)=>n+w[k],0);
+  const act=WEEKS.map(w=>S.metrics[w.id]||{}); const actSum=k=>act.reduce((n,a)=>n+(+a[k]||0),0);
+  const kp=[["calls","Calls booked"],["conversations","Conversations"],["accepts","Requests accepted"],["resources","Resource requests"],["impressions","Impressions"],["citations","AI citations (week 4)"]];
+  const kpis=kp.map(([k,l])=>{const tot=k==="citations"?(+act[3][k]||0):actSum(k);const exp=k==="citations"?P[1][3][k]:sum(1,k);const r=exp?tot/exp:0;const cls=r>=1?"good":r>=.6?"warn":"bad";
+    return `<div class="kpi"><div class="l">${l}</div><div class="v">${Math.round(tot).toLocaleString()}</div><div class="s">expected ${Math.round(exp).toLocaleString()} · <span class="chip ${tot?cls:""}">${tot?Math.round(r*100)+"%":"not logged"}</span></div></div>`}).join("");
+  const projRows=METRICS.map(([k,l])=>`<tr><td>${l}</td>${[0,1,2].map(s=>`<td class="num">${Math.round(k==="citations"?P[s][3][k]:sum(s,k)).toLocaleString()}</td>`).join("")}</tr>`).join("");
+  const actRows=METRICS.map(([k,l])=>`<tr><td>${l}</td>${WEEKS.map((w,i)=>`<td class="num"><input type="number" min="0" id="m-${w.id}-${k}" data-metric="${w.id}:${k}" value="${act[i][k]??""}" placeholder="${Math.round(P[1][i][k])}" aria-label="${l} ${w.label}"></td>`).join("")}</tr>`).join("");
+  return `<div class="top"><div><h1>Results</h1><p class="sub">Month totals against the expected scenario. Enter actuals every Friday; grey placeholders show the expected weekly figure.</p></div></div>
+  <div class="kpis">${kpis}</div>
+  <div class="grid2">
+    <section class="panel"><h2>Weekly calls and conversations</h2>${chart(P,act)}<div class="legend"><span><i style="background:var(--accent)"></i>Expected conversations</span><span><i style="background:var(--good)"></i>Actual conversations</span><span><i style="background:var(--warn)"></i>Expected calls (cumulative)</span></div></section>
+    <section class="panel"><h2>Month projection</h2><div class="tbl"><table><thead><tr><th>Metric</th>${SCEN.map(s=>`<th class="num">${s}</th>`).join("")}</tr></thead><tbody>${projRows}</tbody></table></div><p class="note" style="margin-top:8px">Calls and conversations are the main results. Impressions, followers and AI citations show reach.</p></section>
+  </div>
+  <h2 style="margin-top:20px">Actuals by week</h2><div class="tbl"><table><thead><tr><th>Metric</th>${WEEKS.map(w=>`<th class="num">${w.label}</th>`).join("")}</tr></thead><tbody>${actRows}</tbody></table></div>
+  <h2 style="margin-top:20px">Assumptions behind the projection</h2>
+  <div class="tbl"><table><thead><tr><th>Assumption</th>${SCEN.map(s=>`<th class="num">${s}</th>`).join("")}<th>Why</th></tr></thead><tbody>
+  ${assumpRow("accept","Share of targeted requests accepted",true,"Requests go only to people we have commented on first, each with a note")}
+  ${assumpRow("reply","Share of new connections who reply to the first message",true,"One useful point plus one question, no pitch")}
+  ${assumpRow("callConv","Share of conversations that become a call",true,"Call offered only once a conversation is under way")}
+  ${assumpRow("resPerPost","Resource requests per Thursday post",false,"Comment prompt on the single-image post")}
+  ${assumpRow("resToCall","Share of resource requests that become a call",true,"Only people in our segments are followed up")}
+  </tbody></table></div><p class="note" style="margin-top:8px">Requests per day: ${model().reqPerDay.join(", ")} across weeks 1 to 4, on ${model().workDays} working days. ${model().warmStart} warm conversations carried in (Kenneth O'Friel, Jimena Santillán, Mike Bernard, Craig Borysowich). Edit any assumption and the projection updates for everyone.</p>`;
+}
+function assumpRow(k,l,pct,why){const m=model();return `<tr><td>${l}</td>${[0,1,2].map(s=>`<td class="num"><input type="number" step="${pct?0.01:1}" min="0" id="a-${k}-${s}" data-assume="${k}:${s}" value="${m[k][s]}" aria-label="${l} ${SCEN[s]}"></td>`).join("")}<td class="note">${why}</td></tr>`}
+function chart(P,act){
+  const W=520,H=220,pl=36,pr=12,pt=14,pb=28; const exp=P[1].map(w=>w.conversations); const a=act.map(x=>x.conversations===undefined||x.conversations===""?null:+x.conversations);
+  let cum=0; const calls=P[1].map(w=>cum+=w.calls);
+  const max=Math.max(4,...exp,...a.filter(v=>v!=null),...calls); const top=Math.ceil(max/2)*2;
+  const x=i=>pl+(W-pl-pr)*(i+.5)/4, y=v=>pt+(H-pt-pb)*(1-v/top), bw=(W-pl-pr)/4*0.28;
+  const grid=[0,.5,1].map(f=>{const v=Math.round(top*f);return `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`}).join("");
+  const bars=exp.map((v,i)=>`<rect x="${x(i)-bw-2}" y="${y(v)}" width="${bw}" height="${y(0)-y(v)}" fill="var(--accent)" rx="2"/>`+(a[i]!=null?`<rect x="${x(i)+2}" y="${y(a[i])}" width="${bw}" height="${y(0)-y(a[i])}" fill="var(--good)" rx="2"/>`:"")).join("");
+  const line=`<polyline fill="none" stroke="var(--warn)" stroke-width="2" points="${calls.map((v,i)=>x(i)+","+y(v)).join(" ")}"/>`+calls.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--warn)"/>`).join("");
+  const labels=WEEKS.map((w,i)=>`<text x="${x(i)}" y="${H-8}" text-anchor="middle">W${i+1}</text>`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Expected and actual weekly conversations, and expected cumulative calls">${grid}${bars}${line}${labels}</svg>`;
+}
+
+// ---------- STRATEGY ----------
+function vStrategy(){
+  const ss=list("strategy").sort((a,b)=>(a.order||0)-(b.order||0));
+  return `<div class="top"><div><h1>Strategy</h1><p class="sub">The agreed plan. Edit any section; it saves when you click away.</p></div><button class="btn pri" data-add-sec>Add section</button></div>
+  <div class="panel">${ss.length?ss.map(s=>`<div class="sec"><div class="row"><input class="h" id="sh-${s.id}" data-sh="${s.id}" value="${esc(s.h)}" aria-label="Section title"><button class="btn ghost" data-del="strategy:${s.id}">Delete</button></div><textarea id="sb-${s.id}" data-sb="${s.id}" aria-label="Section text">${esc(s.body)}</textarea></div>`).join(""):`<div class="empty">The strategy sections are being added.</div>`}</div>`;
+}
+
+// ---------- NOTES ----------
+function vNotes(){
+  const ns=list("notes").sort((a,b)=>(b.created||0)-(a.created||0));
+  return `<div class="top"><div><h1>Notes</h1><p class="sub">A shared scratchpad for the team. Everyone sees the same notes.</p></div><button class="btn pri" data-add-note>New note</button></div>
+  ${ns.length?`<div class="notes">${ns.map(n=>`<div class="notecard"><div style="display:flex;gap:6px"><input id="nh-${n.id}" data-nh="${n.id}" value="${esc(n.title)}" aria-label="Note title"><button class="btn ghost" data-del="notes:${n.id}">Delete</button></div><textarea id="nb-${n.id}" data-nb="${n.id}" aria-label="Note text">${esc(n.body)}</textarea></div>`).join("")}</div>`:`<div class="empty">No notes yet. Use "New note" for ideas, call prep or anything that does not fit elsewhere.</div>`}`;
+}
+
+// ---------- modal ----------
+function openModal(title,fields,data,onSave,onDelete){
+  const root=$("#modalroot");
+  const f=fields.map(([k,l,type,opts])=>{const v=data[k]??"";
+    if(type==="select")return `<label>${l}<select id="mf-${k}">${opts.map(o=>Array.isArray(o)?`<option value="${esc(o[0])}" ${String(v)===String(o[0])?"selected":""}>${esc(o[1])}</option>`:`<option ${String(v)===String(o)?"selected":""}>${esc(o)}</option>`).join("")}</select></label>`;
+    if(type==="textarea")return `<label>${l}<textarea id="mf-${k}">${esc(v)}</textarea></label>`;
+    if(type==="check")return `<label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="mf-${k}" ${v?"checked":""}> ${l}</label>`;
+    return `<label>${l}<input id="mf-${k}" type="${type||"text"}" value="${esc(v)}"></label>`}).join("");
+  root.innerHTML=`<div class="scrim" id="scrim"><form class="modal" id="mform" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h2>${esc(title)}</h2>${f}<div class="acts"><span id="delzone">${onDelete?`<button type="button" class="btn ghost" id="mdel">Delete</button>`:""}</span><span><button type="button" class="btn" id="mcancel">Cancel</button> <button class="btn pri" type="submit">Save</button></span></div></form></div>`;
+  const first=root.querySelector("input,select,textarea"); if(first)first.focus();
+  const close=()=>{root.innerHTML=""};
+  $("#mcancel").onclick=close; $("#scrim").addEventListener("mousedown",e=>{if(e.target.id==="scrim")close()});
+  root.addEventListener("keydown",e=>{if(e.key==="Escape")close()},{once:true});
+  $("#mform").onsubmit=e=>{e.preventDefault();const out={};fields.forEach(([k,,type])=>{const el=$("#mf-"+k);out[k]=type==="check"?el.checked:type==="number"?(el.value===""?"":+el.value):el.value.trim()});onSave(out);close()};
+  if(onDelete)$("#mdel").onclick=()=>{$("#delzone").innerHTML=`<span class="confirm">Delete for everyone? <button type="button" class="btn" id="myes">Delete</button></span>`;$("#myes").onclick=()=>{onDelete();close()}};
+}
+const CARD_F=[["title","Title"],["kind","Type","select",KINDS],["day","Day","select",DAYS.map(d=>[d,fmtDay(d)])],["owner","Owner"],["notes","Notes","textarea"],["done","Done","check"]];
+const PROS_F=[["name","Name"],["role","Role"],["company","Company"],["segment","Segment","select",[["",""],...Object.entries(SEGS).map(([k,v])=>[k,k+" · "+v])]],["region","Region"],["stage","Stage","select",STAGES],["warmth","Warmth","select",["cold","warm"]],["next","Next action"],["nextDate","Next action date","date"],["linkedin","LinkedIn URL","url"],["why","Why they fit","textarea"],["notes","Notes","textarea"]];
+const POST_F=[["title","Title or hook"],["format","Format","select",FORMATS],["date","Publish date","select",[["",""],...DAYS.map(d=>[d,fmtDay(d)])]],["status","Status","select",PSTAT],["topic","Topic"],["resource","Free resource offered"],["draft","Draft","textarea"],["url","Live URL","url"],["notes","Notes","textarea"]];
+const COM_F=[["date","Date","select",DAYS.map(d=>[d,fmtDay(d)])],["author","Post author"],["segment","Segment","select",[["",""],...Object.entries(SEGS).map(([k,v])=>[k,k+" · "+v])]],["url","Post URL","url"],["angle","Our angle (one line)"],["reply","Reply received","check"],["notes","Notes","textarea"]];
+
+// ---------- bindings ----------
+function guard(){if(!S.canWrite){toast("View-only: changes are not saved");return false}return true}
+function bindView(){
+  const v=$("#view");
+  v.querySelectorAll("[data-week]").forEach(b=>b.onclick=()=>{S.week=+b.dataset.week;render()});
+  v.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{if(!guard())return;const day=b.closest("[data-day]").dataset.day;const k=b.dataset.q;const cur=S.daily[day]||{};const val=Math.max(0,(cur[k]||0)+(+b.dataset.d));save("daily",day,Object.assign({},cur,{[k]:val}))});
+  v.querySelectorAll("[data-add-card]").forEach(b=>b.onclick=()=>{if(!guard())return;openModal("New card",CARD_F,{day:b.dataset.addCard,kind:"task"},d=>save("cards",null,Object.assign(d,{order:Date.now()})))});
+  v.querySelectorAll("[data-card]").forEach(el=>{el.addEventListener("click",e=>{if(e.target.closest("[data-done]")||e.target.tagName==="LABEL")return;const c=S.cards[el.dataset.card];openModal("Edit card",CARD_F,c,d=>save("cards",el.dataset.card,Object.assign({},c,d)),()=>remove("cards",el.dataset.card))});dragSrc(el,"card")});
+  v.querySelectorAll("[data-done]").forEach(cb=>cb.onchange=()=>{if(!guard())return;patch("cards",cb.dataset.done,{done:cb.checked})});
+  v.querySelectorAll("[data-drop-day]").forEach(col=>dropTarget(col,(type,id)=>{if(type==="card")patch("cards",id,{day:col.dataset.dropDay,order:Date.now()})}));
+  v.querySelectorAll("[data-prospect]").forEach(el=>{el.addEventListener("click",()=>{const p=S.prospects[el.dataset.prospect];openModal("Edit prospect",PROS_F,p,d=>save("prospects",el.dataset.prospect,Object.assign({},p,d,{updated:todayStr()})),()=>remove("prospects",el.dataset.prospect))});dragSrc(el,"prospect")});
+  v.querySelectorAll("[data-drop-stage]").forEach(l=>dropTarget(l,(type,id)=>{if(type==="prospect")patch("prospects",id,{stage:l.dataset.dropStage,updated:todayStr()})}));
+  const ab=v.querySelector("[data-add-prospect]");if(ab)ab.onclick=()=>{if(!guard())return;openModal("New prospect",PROS_F,{stage:"Target",warmth:"cold"},d=>save("prospects",null,Object.assign(d,{updated:todayStr()})))};
+  ["seg","region","q"].forEach(k=>{const el=$("#f-"+k);if(el)el.oninput=()=>{S.filters[k]=el.value;render()}});
+  v.querySelectorAll("[data-post]").forEach(el=>{el.addEventListener("click",()=>{const p=S.posts[el.dataset.post];openModal("Edit post",POST_F,p,d=>save("posts",el.dataset.post,Object.assign({},p,d)),()=>remove("posts",el.dataset.post))});dragSrc(el,"post")});
+  v.querySelectorAll("[data-drop-pstat]").forEach(l=>dropTarget(l,(type,id)=>{if(type==="post")patch("posts",id,{status:l.dataset.dropPstat})}));
+  const ap=v.querySelector("[data-add-post]");if(ap)ap.onclick=()=>{if(!guard())return;openModal("New post",POST_F,{status:"Idea",format:"Article"},d=>save("posts",null,d))};
+  const ac=v.querySelector("[data-add-comment]");if(ac)ac.onclick=()=>{if(!guard())return;openModal("Log a comment",COM_F,{date:DAYS.includes(todayStr())?todayStr():DAYS[0]},d=>save("commentlog",null,d))};
+  v.querySelectorAll("[data-edit-comment]").forEach(b=>b.onclick=()=>{const r=S.commentlog[b.dataset.editComment];openModal("Edit comment",COM_F,r,d=>save("commentlog",b.dataset.editComment,Object.assign({},r,d)),()=>remove("commentlog",b.dataset.editComment))});
+  v.querySelectorAll("[data-creply]").forEach(cb=>cb.onchange=()=>{if(!guard())return;patch("commentlog",cb.dataset.creply,{reply:cb.checked})});
+  const at=v.querySelector("[data-add-tpl]");if(at)at.onclick=()=>{if(!guard())return;save("templates",null,{name:"New template",kind:"note",text:"",order:Date.now()})};
+  blurSave(v,"[data-tname]","templates","tname","name"); blurSave(v,"[data-ttext]","templates","ttext","text");
+  v.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{const t=(S.templates[b.dataset.copy]||{}).text||"";const ta=$("#tt-"+b.dataset.copy);try{navigator.clipboard.writeText(t).then(()=>toast("Copied"),()=>{ta.select();toast("Press Cmd+C to copy")})}catch(_){ta.select();toast("Press Cmd+C to copy")}});
+  v.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{if(!guard())return;const [c,id]=b.dataset.del.split(":");if(b.dataset.armed){remove(c,id)}else{b.dataset.armed="1";b.textContent="Confirm delete";b.style.color="var(--bad)";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete";b.style.color=""}},3000)}});
+  const aq=v.querySelector("[data-add-q]");if(aq)aq.onclick=()=>{if(!guard())return;save("citq",null,{q:"New buyer question",topic:"",region:"",order:Date.now()})};
+  blurSave(v,"[data-cq]","citq","cq","q"); blurSave(v,"[data-ctopic]","citq","ctopic","topic"); blurSave(v,"[data-cregion]","citq","cregion","region");
+  v.querySelectorAll("[data-cite]").forEach(cb=>cb.onchange=()=>{if(!guard())return;const wk=WEEKS[S.week].id;const cur=S.citations[wk]||{r:{}};const r=Object.assign({},cur.r,{[cb.dataset.cite]:cb.checked});save("citations",wk,{r})});
+  v.querySelectorAll("[data-metric]").forEach(inp=>inp.onchange=()=>{if(!guard())return;const [wk,k]=inp.dataset.metric.split(":");const cur=S.metrics[wk]||{};save("metrics",wk,Object.assign({},cur,{[k]:inp.value===""?"":+inp.value}))});
+  v.querySelectorAll("[data-assume]").forEach(inp=>inp.onchange=()=>{if(!guard())return;const [k,s]=inp.dataset.assume.split(":");const m=model();const arr=m[k].slice();arr[+s]=+inp.value;const cur=S.plan.model||{};save("plan","model",Object.assign({},cur,{[k]:arr}))});
+  const asec=v.querySelector("[data-add-sec]");if(asec)asec.onclick=()=>{if(!guard())return;save("strategy",null,{h:"New section",body:"",order:Date.now()})};
+  blurSave(v,"[data-sh]","strategy","sh","h"); blurSave(v,"[data-sb]","strategy","sb","body");
+  const an=v.querySelector("[data-add-note]");if(an)an.onclick=()=>{if(!guard())return;save("notes",null,{title:"Untitled note",body:"",created:Date.now()})};
+  blurSave(v,"[data-nh]","notes","nh","title"); blurSave(v,"[data-nb]","notes","nb","body");
+}
+function blurSave(v,sel,coll,attr,field){v.querySelectorAll(sel).forEach(el=>el.addEventListener("change",()=>{if(!guard())return;const id=el.dataset[attr];if((S[coll][id]||{})[field]===el.value)return;patch(coll,id,{[field]:el.value}).then(()=>toast("Saved"))}))}
+// drag and drop (desktop); on touch, open the card and change its day or stage
+let drag=null;
+function dragSrc(el,type){el.addEventListener("dragstart",e=>{drag={type,id:el.dataset[type]};el.classList.add("dragging");try{e.dataTransfer.setData("text/plain",drag.id);e.dataTransfer.effectAllowed="move"}catch(_){}});el.addEventListener("dragend",()=>{el.classList.remove("dragging");drag=null})}
+function dropTarget(el,fn){el.addEventListener("dragover",e=>{if(drag){e.preventDefault();el.classList.add("over")}});el.addEventListener("dragleave",()=>el.classList.remove("over"));el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("over");if(drag&&guard())fn(drag.type,drag.id)})}
+
+boot();
+})();
+</script>

@@ -1,0 +1,28 @@
+/* Prax button and toast on LinkedIn. The drafting panel itself lives in a shadow root. */
+.prx-btn { display: inline-flex; align-items: center; gap: 4px; height: 32px; margin: 4px; padding: 0 10px; border: 1px solid rgba(214,69,69,.35); border-radius: 16px;
+  background: rgba(214,69,69,.06); color: #d64545; font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; transition: transform .08s ease, background .12s ease; }
+.prx-btn:hover { background: rgba(214,69,69,.12); }
+.prx-btn:active { transform: translateY(1px) scale(.97); }
+.prx-btn span { font-size: 12px; }
+.prx-btn.prx-inline { margin: 0 0 8px; }
+.theme--dark .prx-btn { color: #ff9d94; border-color: rgba(255,157,148,.4); background: rgba(255,157,148,.08); }
+.comments-comment-social-bar .prx-btn, .comments-comment-item__social-actions .prx-btn { height: 24px; font-size: 12px; margin-left: 6px; }
+.prx-toast { position: fixed; left: 50%; bottom: 24px; z-index: 99999; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; max-width: 80vw; padding: 9px 16px; border-radius: 999px;
+  background: #2a1312; color: #fff; font: 500 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow: 0 8px 28px rgba(0,0,0,.25); transition: opacity .18s ease, transform .18s ease; }
+.prx-toast.prx-show { opacity: 1; transform: translate(-50%, 0); }
+
+/* The Prax bar under every post's action row. */
+.prx-bar { display: flex; align-items: center; gap: 8px; margin: 4px 12px 8px; padding: 6px 6px 6px 10px; border: 1px solid rgba(214,69,69,.35); border-radius: 12px;
+  background: linear-gradient(0deg, rgba(214,69,69,.06), rgba(214,69,69,.06)), #fff; font: 500 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.prx-write { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: #d64545; color: #fff;
+  font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); transition: transform .08s ease, filter .12s ease; }
+.prx-write:hover { filter: brightness(1.06); }
+.prx-write:active, .prx-chip:active { transform: translateY(1px) scale(.97); }
+.prx-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.prx-chips::-webkit-scrollbar { display: none; }
+.prx-chip { flex-shrink: 0; height: 28px; padding: 0 11px; border: 1px solid rgba(0,0,0,.18); border-radius: 999px; background: #fff; color: #1d2226; font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; transition: transform .08s ease, background .12s ease; }
+.prx-chip:hover { background: rgba(214,69,69,.10); border-color: rgba(214,69,69,.5); }
+.prx-kbd { flex-shrink: 0; margin-left: auto; padding: 4px 7px; border-radius: 6px; background: rgba(214,69,69,.14); color: #a3231c; font: 600 11px/1 ui-monospace, monospace; }
+.theme--dark .prx-bar { background: linear-gradient(0deg, rgba(214,69,69,.12), rgba(214,69,69,.12)), #1b1f23; border-color: rgba(255,138,128,.4); }
+.theme--dark .prx-chip { background: #1b1f23; color: #e9e6df; border-color: rgba(255,255,255,.2); }
+.theme--dark .prx-kbd { color: #ff9d94; }

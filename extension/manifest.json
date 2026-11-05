@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Prax for LinkedIn",
+  "version": "0.3.0",
+  "description": "Draft comments, replies and connection notes in your profile's voice right on LinkedIn, and log what you post to Prax. Acts only when you click.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://prax-gamma.vercel.app/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://api.x.ai/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "Open Prax"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://prax-gamma.vercel.app/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
