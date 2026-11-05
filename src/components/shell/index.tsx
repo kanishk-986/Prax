@@ -46,7 +46,7 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
         <span className="l3 mt-1.5 flex flex-col items-center gap-3">
           <button type="button" className="btn btn-primary h-11 px-6 text-[14.5px]" onClick={(e) => { e.stopPropagation(); leave(); }}>Enter</button>
           <span className="h-[2px] w-[140px] overflow-hidden rounded-sm bg-[#e3e3e3]"><span className="bar block h-full w-full bg-[#141414]" /></span>
-          <span className="text-[12px] text-[#8c8c8c]">or press Enter</span>
+          <span className="text-[12px] text-faint">or press Enter</span>
         </span>
       </div>
     </div>
@@ -119,7 +119,7 @@ export function UnderlineTabs({ tabs, value, onChange, label }: { tabs: TabDef[]
     const t = tabs[(n + tabs.length) % tabs.length]; onChange(t.id); refs.current[t.id]?.focus();
   };
   return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap gap-[26px] border-b border-[#e3e3e3]">
+    <div role="tablist" aria-label={label} className="tabs-row">
       {tabs.map((t, i) => (
         <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} type="button" role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1}
           className="tab" onClick={() => onChange(t.id)} onKeyDown={(e) => key(e, i)}>
@@ -244,7 +244,7 @@ export function Spark({ values, w = 84, h = 26, light }: { values: number[]; w?:
   const last = pts[pts.length - 1];
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" className="shrink-0">
-      <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke={light ? "rgba(255,255,255,.45)" : "#c4c4c4"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={pts.map((p) => p.join(",")).join(" ")} fill="none" stroke={light ? "rgba(255,255,255,.45)" : "var(--stroke)"} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={last[0]} cy={last[1]} r="2.5" fill="#d64545" />
     </svg>
   );
@@ -309,7 +309,7 @@ export function NeedsYou({ items, empty = "Nothing waiting.", title = "Needs you
         const r = reveal(i);
         return (
           <Hit key={i} href={x.href} onClick={x.onClick} className={`row-hit group ${r.className}`} style={r.style}>
-            <span className="h-8 w-[3px] shrink-0 rounded-full" style={{ background: x.tone === "dark" ? "#141414" : x.tone === "dim" ? "#d4d4d4" : "#d64545" }} />
+            <span aria-hidden="true" className={`h-[7px] w-[7px] shrink-0 self-start rounded-full mt-[6px] ${x.tone === "dark" ? "bg-ink" : x.tone === "dim" ? "border-[1.5px] border-stroke" : "bg-accent"}`} />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{x.title}</span>{x.sub && <span className="line-clamp-2 text-[12px] text-muted">{x.sub}</span>}</span>
             {x.when && <span className={`num hidden shrink-0 text-[11.5px] sm:block ${/overdue/.test(x.when) ? "font-semibold text-[#9e1c1c]" : "text-faint"}`}>{x.when}</span>}
             {x.cta && <span className="flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold text-ink">{x.cta}<ChevronRight size={14} className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" /></span>}
@@ -321,23 +321,24 @@ export function NeedsYou({ items, empty = "Nothing waiting.", title = "Needs you
 }
 
 export type Start = Go & { title: string; sub: string; icon: React.ElementType; primary?: boolean };
-export function StartCards({ items, tour, title = "Start something" }: { items: Start[]; tour?: string; title?: string }) {
+/** A compact list of actions: icon, name and one line, with a chevron. The primary action's icon is red. */
+export function StartCards({ items, tour, title = "Start something", className = "" }: { items: Start[]; tour?: string; title?: string; className?: string }) {
   return (
-    <section data-tour={tour} className="flex flex-col gap-2.5 rounded-2xl">
-      <span className="label text-ink">{title}</span>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((s, i) => { const r = reveal(i); return (
-          <Hit key={s.title} href={s.href} onClick={s.onClick} className={`hover-lift flex items-start gap-3.5 rounded-2xl border border-line bg-surface p-[18px] text-left ${r.className}`} style={r.style}>
-            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white ${s.primary ? "bg-accent" : "bg-[#141414]"}`}><s.icon size={18} strokeWidth={1.8} /></span>
-            <span className="flex flex-col gap-1"><span className="text-[15px] font-semibold">{s.title}</span><span className="text-[13px] leading-relaxed text-muted">{s.sub}</span></span>
-          </Hit>
-        ); })}
-      </div>
+    <section data-tour={tour} className={`panel ${className}`}>
+      <div className="panel-head">{title}</div>
+      {items.map((s, i) => { const r = reveal(i); return (
+        <Hit key={s.title} href={s.href} onClick={s.onClick} className={`row-hit group ${r.className}`} style={r.style}>
+          <s.icon size={16} strokeWidth={1.9} className={`shrink-0 ${s.primary ? "text-accent" : "text-ink"}`} aria-hidden="true" />
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-[13.5px] font-semibold">{s.title}</span><span className="text-[12.5px] leading-snug text-muted">{s.sub}</span></span>
+          <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" aria-hidden="true" />
+        </Hit>
+      ); })}
     </section>
   );
 }
 
-export type ActivityRow = Go & { when: string; text: React.ReactNode; tag?: string };
+/** count and detail come from collapsing repeats (collapseActivity in lib/dashboard): one row, how many, and what they were. */
+export type ActivityRow = Go & { when: string; text: React.ReactNode; tag?: string; count?: number; detail?: string };
 export function Activity({ items, title = "Recent activity", empty = "No activity yet.", tour, action }: { items: ActivityRow[]; title?: string; empty?: string; tour?: string; action?: { label: string; href: string } }) {
   return (
     <section data-tour={tour} className="panel">
@@ -348,7 +349,8 @@ export function Activity({ items, title = "Recent activity", empty = "No activit
             <li key={i} className={r.className} style={r.style}>
               <Hit href={a.href} onClick={a.onClick} className="flex w-full items-start gap-3 px-[18px] py-2 text-left hover:bg-[#fafafa]">
                 <span className="mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full border-[1.5px] border-[#141414] bg-white" />
-                <span className="min-w-0 flex-1 text-[13px] leading-snug text-ink-2">{a.text}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-[13px] leading-snug text-ink-2">{a.text}{a.count && a.count > 1 ? <span className="num ml-1.5 text-[11.5px] font-semibold text-muted">×{a.count}</span> : null}</span>
+                  {a.detail && <span className="truncate text-[12px] text-muted">{a.detail}</span>}</span>
                 {a.tag && <span className="hidden sm:contents"><span className="count-badge muted shrink-0">{a.tag}</span></span>}
                 <span className="num w-[68px] shrink-0 pt-px text-right text-[11.5px] text-faint">{a.when}</span>
               </Hit>
@@ -378,7 +380,7 @@ export function Panel({ title, meta, action, tour, children, className = "" }: {
 export function DarkCard({ kicker, children, tour }: { kicker: string; children: React.ReactNode; tour?: string }) {
   return (
     <section data-tour={tour} className="flex flex-col gap-3 rounded-2xl bg-[#141414] p-[18px] text-white">
-      <span className="text-[12px] font-semibold uppercase tracking-[.06em] text-[#ff8a80]">{kicker}</span>
+      <span className="text-[13px] font-semibold text-[#ff8a80]">{kicker}</span>
       {children}
     </section>
   );

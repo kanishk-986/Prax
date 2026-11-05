@@ -136,11 +136,12 @@ export type ParsedExport = { people: PersonRow[]; posts: PostRow[]; files: strin
 const keyOf = (url: string, name: string) => (url ? normUrl(url) : `name:${normName(name)}`);
 const WANTED = ["connections.csv", "messages.csv", "invitations.csv", "shares.csv", "comments.csv"];
 
-/** Opens the zip in memory. Only the five files Prax uses are decompressed; everything else is skipped. */
-export function readExport(zip: Uint8Array, fileName = "", todayYmd = ""): ParsedExport {
+/** Opens the zip in memory. Only the five files Prax uses are decompressed; everything else is skipped.
+ *  The page passes decodeText (lib/text) so a byte order mark, UTF-16 or an old Excel save never turns names into mojibake. */
+export function readExport(zip: Uint8Array, fileName = "", todayYmd = "", decode: (b: Uint8Array) => string = strFromU8): ParsedExport {
   const all = unzipSync(zip, { filter: (f) => WANTED.includes(f.name.split("/").pop()!.toLowerCase()) });
   const byName: Record<string, string> = {};
-  for (const [path, data] of Object.entries(all)) byName[path.split("/").pop()!.toLowerCase()] = strFromU8(data);
+  for (const [path, data] of Object.entries(all)) byName[path.split("/").pop()!.toLowerCase()] = decode(data);
   return parseExportFiles(byName, fileName, todayYmd);
 }
 

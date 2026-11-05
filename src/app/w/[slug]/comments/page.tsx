@@ -119,7 +119,7 @@ function Insights() {
     ["Logged by extension", `${s.ext}%`, "of the last 30 days"],
   ];
   const Bars = ({ title, data, color }: { title: string; data: [string, { n: number; r: number }][]; color?: (k: string) => string }) => (
-    <div className="card p-4">
+    <div className="card flex-1 p-4">
       <div className="label mb-2">{title}</div>
       {data.length === 0 ? <p className="text-[13px] text-muted">No data yet.</p> : data.slice(0, 7).map(([k, v]) => (
         <div key={k} className="mb-2">
@@ -134,17 +134,20 @@ function Insights() {
       <div data-tour="kpis" className="grid grid-cols-2 gap-3 rounded-2xl md:grid-cols-4">
         {kpi.map(([l, v, h]) => <div key={l} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-[20px] font-semibold">{v}</div><div className="text-[11px] text-muted">{h}</div></div>)}
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <div data-tour="modes" className="rounded-2xl"><Bars title="Which modes earn replies" data={s.modes} /></div>
-        <Bars title="By segment" data={s.segs} color={(k) => SEGMENTS[k]?.color ?? "var(--faint)"} />
-        <div data-tour="waiting" className="card p-4">
+      {/* Two stacked columns: modes over segments on the left, the waiting list on the right, so heights never leave gaps. */}
+      <div className="grid items-stretch gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          <div data-tour="modes" className="flex flex-col rounded-2xl"><Bars title="Which modes earn replies" data={s.modes} /></div>
+          <Bars title="By segment" data={s.segs} color={(k) => SEGMENTS[k]?.color ?? "var(--stroke)"} />
+        </div>
+        <div data-tour="waiting" className="card flex flex-col p-4">
           <div className="label mb-2">Waiting for a reply (7 days)</div>
           {s.waiting.length === 0 ? <p className="text-[13px] text-muted">Nothing waiting.</p> : s.waiting.map((r) => (
             <a key={r.id} href={r.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 rounded-md py-1.5 text-[13px] hover:text-accent">
               <span className="truncate">{r.author || "Post"}</span><span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">{fmtDay(r.day, { day: "numeric", month: "short" })}<ExternalLink size={11} /></span>
             </a>
           ))}
-          <p className="mt-2 text-[11px] text-muted">Open the post, then press Check replies in the extension.</p>
+          <p className="mt-auto pt-2 text-[12px] text-muted">Open the post, then press Check replies in the extension.</p>
         </div>
       </div>
       {s.authors.length > 0 && (

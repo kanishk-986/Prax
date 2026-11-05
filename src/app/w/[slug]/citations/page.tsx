@@ -4,7 +4,8 @@ import { X, MoreHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { ActionMenu } from "@/components/content/shared";
 import { AlertsCard, NextMoves, ProfileCard, QuickSetup, Suggested, SetsBar, Actions, DraftTest, AskPanel, FactsDrawer, ShareDialog, CommentTargets, buildSnapshot, judgeRun, type RecRow, type SetRow } from "./extras";
-import { Intro, KeysModal, Home, Gaps, Company, Report, KeywordsPanel, Tour, TOUR, type Ctx } from "./studio";
+import { KeysModal, Home, Gaps, Company, Report, KeywordsPanel, Tour, TOUR, type Ctx } from "./studio";
+import { EntryMoment, useTour, type TourStep } from "@/components/shell";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
@@ -27,6 +28,12 @@ const engineName = (e: string) => ENGINES.find((x) => x.id === e)?.name ?? e;
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 const list = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 const when = (t: string) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+// First run, before anything is tracked: the shell's guided tour over the setup page (the full tour needs tracking set up).
+const SETUP_TOUR: TourStep[] = [
+  { target: "header", title: "What AI citations does", body: "It asks AI tools the questions buyers ask, then checks whether the answers name and link Shashi and Antier." },
+  { target: "setup", title: "Who should the AI name", body: "Confirm his full name, his LinkedIn profile, the company and the names and domains that count. All of it can be changed later." },
+  { target: "next", title: "What happens next", body: "Pick the prompts, connect an AI key in your browser, then run. Every number comes from your own runs." },
+];
 
 export default function Citations() {
   const { ws, can, userId } = useWorkspace();
@@ -100,14 +107,17 @@ export default function Citations() {
     setTab(TOUR[Math.max(0, i)].tab as Tab); setTour({ step: Math.max(0, i), done });
   }
 
+  const firstRun = !ents.loading && !self;
+  const setupTour = useTour("citations-setup", SETUP_TOUR);
   return (
     <div className={cx("mx-auto max-w-[1180px]", s.root)}>
-      <Intro line="Whether AI tools name Shashi and Antier when buyers ask, and what to publish next." />
-      <header className="flex flex-wrap items-center justify-between gap-3 pl-10 md:pl-0">
-        <div>
+      <EntryMoment section="citations" title="AI citations" status="Whether AI tools name Shashi and Antier when buyers ask, and what to publish next." onDone={firstRun ? setupTour.autoStart : undefined} />
+      <header data-tour="header" className="flex flex-wrap items-center justify-between gap-3 pl-10 md:pl-0">
+        <div className="min-w-0 flex-[1_1_360px]">
           <h1 className="text-[26px] font-semibold tracking-tight">AI citations</h1>
           <p className={s.sub}>Whether AI tools name and link Shashi and Antier when buyers ask. Every result is the tool&apos;s API with web search on: close to, not the same as, what someone sees in the app.</p>
         </div>
+        {firstRun && <div className="flex flex-wrap items-center gap-2"><button className={s.btn} onClick={setupTour.start}>Guide</button></div>}
         {self && (
           <div id="tour-run" className="flex flex-wrap items-center gap-2">
             <button className={s.btn} onClick={() => { setTab(TOUR[0].tab as Tab); setTour({ step: 0, done: new Set() }); }}>Guide</button>
@@ -156,6 +166,7 @@ export default function Citations() {
       {panel === "facts" && <FactsDrawer facts={facts} onClose={() => { setPanel(""); loadFacts(); }} />}
       {panel === "share" && self && <ShareDialog snap={buildSnapshot(runs, qs.rows, self, rivals, recs.rows, ws.name)} onClose={() => setPanel("")} />}
       {tour && <Tour step={tour.step} done={tour.done.size} onStep={tourStep} onClose={() => { setTour(null); toast("Tour closed. Guide opens it again."); }} />}
+      {setupTour.node}
     </div>
   );
 }
@@ -174,7 +185,8 @@ function Setup({ editable }: { editable: boolean }) {
     if (error) toast(error.message); else { haptic(); toast("Tracking set up"); }
   }
   return (
-    <div className={cx(s.box, "max-w-[720px] p-5")}>
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <div data-tour="setup" className={cx(s.box, "min-w-0 p-5")}>
       <h2 className="text-[18px] font-semibold">Who should the AI name?</h2>
       <p className={s.small}>Names are matched as whole words, so &quot;Antier&quot; never matches &quot;Antiers&quot;. Domains count as linked when an answer cites them; a LinkedIn profile path also covers his posts and articles. All of this can be changed later under Competitors.</p>
       <div className="mt-4 grid gap-3">
@@ -185,6 +197,15 @@ function Setup({ editable }: { editable: boolean }) {
         <label className="grid gap-1.5"><span className={s.label}>Owned domains and profiles</span><input className={s.field} value={f.domains} onChange={(e) => setF({ ...f, domains: e.target.value })} /></label>
         {editable ? <div><button className={cx(s.btn, s.red)} onClick={save} disabled={f.person.trim().split(/\s+/).length < 2 || !f.name.trim() || !list(f.aliases).length}>Start tracking</button></div> : <p className={s.small}>An editor sets this up.</p>}
       </div>
+    </div>
+    <aside data-tour="next" className={cx(s.box, "min-w-0 p-5")}>
+      <h2 className="text-[15px] font-semibold">What happens next</h2>
+      <ol className="mt-3 grid gap-3">
+        {[["Pick the prompts", "Start from 20 buyer questions or write your own."], ["Connect an AI key", "Claude, OpenAI, Gemini or Perplexity. The key stays in your browser."], ["Run and read the answers", "Each answer shows whether Shashi and Antier are named and linked, and which sites the AI trusted."]].map(([t, d], i) => (
+          <li key={t} className="flex gap-3"><span className="num grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#141414] text-[12px] font-semibold text-white">{i + 1}</span><span><b className="block text-[13.5px]">{t}</b><span className={s.small}>{d}</span></span></li>
+        ))}
+      </ol>
+    </aside>
     </div>
   );
 }

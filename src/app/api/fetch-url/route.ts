@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
 import { supabaseServer } from "@/lib/supabase/server";
 import { urlProblem, isPrivateIp, readable } from "@/lib/content";
+import { decodePage } from "@/lib/text";
 
 export const runtime = "nodejs";
 
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
         if (size > MAX_BYTES) { await reader.cancel(); break; }
         chunks.push(value);
       }
-      const html = new TextDecoder().decode(Buffer.concat(chunks));
+      const html = decodePage(new Uint8Array(Buffer.concat(chunks)), type);
       const { title, text } = type.includes("text/plain") ? { title: "", text: html } : readable(html);
       return NextResponse.json({ url: target, host: new URL(target).hostname, title, text: text.slice(0, 20000), truncated: size > MAX_BYTES || text.length > 20000 });
     }

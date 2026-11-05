@@ -84,7 +84,7 @@ export function KeysModal({ onClose }: { onClose: () => void }) {
         {status && !status.installed ? <p className="mt-4 text-[13.5px] text-[#d64545]">The Prax extension is not installed in this browser. Install it from the Extension page first.</p> : (
           <div className="mt-4 grid gap-3">{KEYS.map((k) => (
             <div key={k.id} className="grid gap-1.5 border-t border-[#ececec] pt-3">
-              <div className="flex items-center justify-between gap-2"><label htmlFor={`key-${k.id}`} className="text-[13.5px] font-semibold">{k.name} <span className="font-normal text-[#8c8c8c]">{k.hint}</span></label><span className={cx(s.pill, saved(k.id) ? s.pDark : s.pLine)}>{saved(k.id) ? "Saved" : "Not connected"}</span></div>
+              <div className="flex items-center justify-between gap-2"><label htmlFor={`key-${k.id}`} className="text-[13.5px] font-semibold">{k.name} <span className="font-normal text-faint">{k.hint}</span></label><span className={cx(s.pill, saved(k.id) ? s.pDark : s.pLine)}>{saved(k.id) ? "Saved" : "Not connected"}</span></div>
               <div className="flex gap-2">
                 <input id={`key-${k.id}`} className={s.field} type="password" autoComplete="off" placeholder={saved(k.id) ? "Saved. Paste a new key to replace it" : k.ph} value={draft[k.id] ?? ""} onChange={(e) => setDraft({ ...draft, [k.id]: e.target.value })} />
                 {saved(k.id) && <button className={cx(s.btn, "text-[#d64545]")} onClick={() => remove(k)}>Remove</button>}
@@ -111,11 +111,11 @@ export function TrendChart({ weeks, series, aria }: { weeks: string[]; series: S
   return (
     <div className={s.chartWrap} onMouseLeave={() => setHover(null)}>
       <svg viewBox="0 0 640 205" width="100%" role="img" aria-label={aria} className="block">
-        {ticks.map((t) => <g key={t}><line x1="40" x2="630" y1={py(t)} y2={py(t)} stroke={t ? "#f0f0f0" : "#d0d0d0"} /><text x="32" y={py(t) + 4} textAnchor="end" fontSize="11" fill="#8c8c8c">{t}</text></g>)}
+        {ticks.map((t) => <g key={t}><line x1="40" x2="630" y1={py(t)} y2={py(t)} stroke={t ? "#f0f0f0" : "#d0d0d0"} /><text x="32" y={py(t) + 4} textAnchor="end" fontSize="11" fill="#6b6b6b">{t}</text></g>)}
         {hover != null && <line x1={px(hover)} x2={px(hover)} y1="14" y2="180" stroke="#141414" strokeDasharray="3 3" />}
         {series.map((x) => <polyline key={x.key} points={pts(x.values)} fill="none" stroke={x.color} strokeWidth="2.5" strokeDasharray={x.dash ? "5 5" : undefined} />)}
         {hover != null && series.map((x) => x.values[hover] != null && <circle key={x.key} cx={px(hover)} cy={py(x.values[hover]!)} r="4.5" fill="#fff" stroke={x.color} strokeWidth="2.5" />)}
-        {weeks.map((w, i) => <text key={w} x={px(i)} y="200" textAnchor="middle" fontSize="11" fill={hover === i ? "#141414" : "#8c8c8c"} fontWeight={hover === i ? 700 : 400}>{shortDate(w)}</text>)}
+        {weeks.map((w, i) => <text key={w} x={px(i)} y="200" textAnchor="middle" fontSize="11" fill={hover === i ? "#141414" : "#6b6b6b"} fontWeight={hover === i ? 700 : 400}>{shortDate(w)}</text>)}
         {weeks.map((w, i) => <rect key={w} x={px(i) - hw / 2} y="10" width={hw} height="180" fill="transparent" style={{ cursor: "pointer" }} onMouseEnter={() => setHover(i)} onClick={() => setHover(i)} />)}
       </svg>
       {hover != null && (
@@ -205,7 +205,7 @@ export function Home({ c, onTab, onOpenRun, onKeys, onRun, cards }: { c: Ctx; on
             <div className="flex items-center justify-between px-4 py-3"><span className="font-semibold">Recent activity</span><button className="text-[12.5px] font-semibold text-[#d64545]" onClick={() => onTab("Answers")}>All answers</button></div>
             {latest.length ? latest.map((r) => { const [t, pc] = outcome(r); const q = qs.find((x) => x.id === r.question_id); return (
               <button key={r.id} onClick={() => onOpenRun(r.id)} className="flex w-full items-start gap-3 border-t border-[#ececec] px-4 py-3 text-left hover:bg-[#fafafa]">
-                <span className={cx(s.num, "w-[92px] shrink-0 pt-0.5 text-[11.5px] text-[#8c8c8c]")}>{when(r.run_at)}</span>
+                <span className={cx(s.num, "w-[92px] shrink-0 pt-0.5 text-[11.5px] text-faint")}>{when(r.run_at)}</span>
                 <span className="min-w-0 flex-1"><b>{engineLabel(r.engine)}</b> <span className={cx(s.small, "block truncate")}>{q?.question ?? ""}</span></span>
                 <span className={cx(s.pill, pc)}>{t}</span>
               </button>
@@ -422,7 +422,7 @@ export function Report({ c, onShare, facts }: { c: Ctx; onShare: () => void; fac
             <div className={s.label} style={{ color: "#d64545" }}>AI citations report</div>
             <h2 className="mt-1 text-[28px] font-semibold leading-tight tracking-tight">{doc.title}</h2>
             <p className="mt-1 text-[#5f5f5f]">{doc.subtitle}</p>
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ececec] pt-4 text-[12.5px] md:grid-cols-4">{doc.coverMeta.map(([k, v]) => <span key={k}><span className="block text-[10.5px] font-bold tracking-wider text-[#8c8c8c]">{k}</span>{v}</span>)}</div>
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#ececec] pt-4 text-[12.5px] md:grid-cols-4">{doc.coverMeta.map(([k, v]) => <span key={k}><span className="block text-[12px] font-semibold text-faint">{k}</span>{v}</span>)}</div>
           </div>
           <div className="border-y border-[#ececec] bg-[#fafafa] px-11 py-4"><div className={s.label}>Contents</div><div className="mt-2 grid gap-x-6 gap-y-1 text-[13px] md:grid-cols-2">{doc.sections.map((sc, i) => <span key={sc.title}><b className={s.num} style={{ color: "#d64545" }}>{i + 1}.</b> {sc.title}</span>)}</div></div>
           <div className="px-11 pb-10">{doc.sections.map((sc, i) => (

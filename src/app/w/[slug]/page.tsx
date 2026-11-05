@@ -9,7 +9,7 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
 import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
 import { LinkedInMcpButton } from "@/components/linkedin-mcp";
-import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, type NeedInput } from "@/lib/dashboard";
+import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
 import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
@@ -40,14 +40,15 @@ const DASH_TOUR: TourStep[] = [
 const NOT_POSTED = ["Posted", "On hold", "Published"];
 
 export default function Dashboard() {
-  const { ws, can } = useWorkspace();
+  const { ws, can, name, email } = useWorkspace();
   const t = today();
   const wk = weekStart(t);
   const lastWk = addDays(wk, -7);
   const items = useLive<Item>("daily_items", ws.id, { filter: (q) => q.gte("day", addDays(t, -27)) });
   const prospects = useLive<Prospect>("prospects", ws.id);
   const snaps = useLive<Snap>("snapshots", ws.id, { order: "captured_at", asc: false, filter: (q) => q.limit(200) });
-  const acts = useLive<Act>("activity", ws.id, { order: "at", asc: false, filter: (q) => q.limit(8) });
+  // Enough rows that repeats can collapse and still fill the panel.
+  const acts = useLive<Act>("activity", ws.id, { order: "at", asc: false, filter: (q) => q.limit(40) });
   const posts = useLive<Post>("posts", ws.id, { filter: (q) => q.or(`publish_date.gte.${addDays(t, -28)},status.eq."In review"`) });
   const drafts = useLive<{ created_at: string }>("saved_drafts", ws.id, { filter: (q) => q.gte("created_at", lastWk) });
   const logged = useLive<{ day: string }>("comment_log", ws.id, { filter: (q) => q.gte("day", lastWk) });
@@ -140,7 +141,7 @@ export default function Dashboard() {
   const draftDelta = deltaOf(studio.drafts.now, studio.drafts.prev);
 
   return (
-    <Section id="dashboard" title={`Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}`} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
+    <Section id="dashboard" title={greeting(hour, firstName(name, email))} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
       entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
       actions={<>
         <LinkedInMcpButton tour="mcp" />
@@ -187,20 +188,20 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div className={`${reveal(6).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(6).style}>
-            <Activity tour="activity" items={acts.rows.map((a) => ({ when: relTime(a.at), text: labelFor(a), tag: a.kind === "stage" ? "Pipeline" : "Today" }))}
+            <Activity tour="activity" items={collapseActivity(acts.rows.map((a) => ({ kind: a.kind, when: relTime(a.at), text: labelFor(a), tag: a.kind === "stage" ? "Pipeline" : "Today" }))).slice(0, 8)}
               empty="Nothing yet. Ticks on Today and pipeline moves appear here as they happen." />
           </div>
           <div className={`${reveal(7).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(7).style}>
             <Panel tour="reach" title="LinkedIn reach" meta="captured with the extension">
-              <div className="grid grid-cols-2 border-t border-line">
-                {REACH.map((r, i) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
-                  <div key={r.key} className={`flex flex-col gap-1 px-[18px] py-3.5 ${i % 2 ? "border-l border-line" : ""} ${i > 1 ? "border-t border-line" : ""}`}>
-                    <span className="text-[11.5px] font-semibold uppercase tracking-[.05em] text-faint">{r.label}</span>
-                    <span className="num text-[22px] font-semibold leading-none tracking-[-0.02em]">{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
-                    <span className="text-[12px] text-muted">{e?.now ? <>{d && d.dir !== "flat" && <span className={`num font-semibold ${d.dir === "up" ? "text-ink" : "text-[#9e1c1c]"}`}>{d.text} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : "Not captured yet"}</span>
-                  </div>
-                ); })}
-              </div>
+              {/* One row per metric. Nothing captured yet: "None" on each row and one honest line, no empty grid. */}
+              {REACH.map((r) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
+                <div key={r.key} className="flex items-center gap-3 border-t border-line px-[18px] py-2.5">
+                  <span className="flex min-w-0 flex-1 flex-col"><span className="text-[13px] font-semibold">{r.label}</span>
+                    <span className="truncate text-[12px] text-muted">{e?.now ? <>{d && d.dir !== "flat" && <span className={`num font-semibold ${d.dir === "up" ? "text-ink" : "text-dark-red"}`}>{d.text} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : r.sub}</span></span>
+                  <span className={`num shrink-0 text-right ${e?.now ? "text-[18px] font-semibold tracking-[-0.02em]" : "text-[13px] text-muted"}`}>{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
+                </div>
+              ); })}
+              {!REACH.some((r) => reach[r.key]?.now) && <p className="border-t border-line px-[18px] py-3 text-[12.5px] text-muted">Nothing captured yet. Open his LinkedIn analytics with the extension on to capture these.</p>}
             </Panel>
           </div>
         </div>

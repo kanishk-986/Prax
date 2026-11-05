@@ -14,8 +14,14 @@ export default async function WsLayout({ children, params }: { children: React.R
   if (!ws) notFound();
   const { data: me } = await sb.from("members").select("role").eq("workspace_id", ws.id).eq("user_id", user.id).maybeSingle();
   const role = (me?.role ?? "viewer") as Role;
+  // The member's own name for greetings: the name on their sign-in profile, if any; the email is the fallback.
+  const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+  return <Shell ws={ws as Workspace} role={role} userId={user.id} email={user.email ?? ""} name={meta.full_name || meta.name || ""}>{children}</Shell>;
+}
+
+function Shell({ ws, role, userId, email, name, children }: { ws: Workspace; role: Role; userId: string; email: string; name: string; children: React.ReactNode }) {
   return (
-    <WorkspaceProvider ws={ws as Workspace} role={role} userId={user.id} email={user.email ?? ""}>
+    <WorkspaceProvider ws={ws} role={role} userId={userId} email={email} name={name}>
       <Toaster>
         <div className="flex min-h-full">
           <Sidebar />

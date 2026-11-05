@@ -38,7 +38,7 @@ export function EntryMoment({ id, title, line }: { id: string; title: string; li
         <span className="intro-l3 mt-1 flex flex-col items-center gap-3">
           <button className="btn btn-primary h-11 px-6 text-[14.5px]" onClick={(e) => { e.stopPropagation(); leave(); }}>Enter workspace</button>
           <span className="h-0.5 w-[140px] overflow-hidden rounded bg-[#e3e3e3]"><span className="intro-bar block h-full w-full bg-[#141414]" /></span>
-          <span className="text-[12px] text-[#8c8c8c]">or press Enter</span>
+          <span className="text-[12px] text-faint">or press Enter</span>
         </span>
       </div>
     </div>

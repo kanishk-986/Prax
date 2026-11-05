@@ -6,11 +6,11 @@ export type Workspace = { id: string; slug: string; name: string; headline: stri
 export type Quotas = { comment: number; request: number; dm: number; inmail: number; reply: number };
 
 const rank: Record<Role, number> = { owner: 4, editor: 3, commenter: 2, viewer: 1 };
-type Ctx = { ws: Workspace; role: Role; userId: string; email: string; can: (min: Role) => boolean };
+type Ctx = { ws: Workspace; role: Role; userId: string; email: string; name: string; can: (min: Role) => boolean };
 const C = createContext<Ctx | null>(null);
 
-export function WorkspaceProvider({ ws, role, userId, email, children }: { ws: Workspace; role: Role; userId: string; email: string; children: React.ReactNode }) {
-  return <C.Provider value={{ ws, role, userId, email, can: (min) => rank[role] >= rank[min] }}>{children}</C.Provider>;
+export function WorkspaceProvider({ ws, role, userId, email, name = "", children }: { ws: Workspace; role: Role; userId: string; email: string; name?: string; children: React.ReactNode }) {
+  return <C.Provider value={{ ws, role, userId, email, name, can: (min) => rank[role] >= rank[min] }}>{children}</C.Provider>;
 }
 export function useWorkspace() {
   const v = useContext(C);

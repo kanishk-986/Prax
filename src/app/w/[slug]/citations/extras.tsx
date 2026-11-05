@@ -366,7 +366,7 @@ export function AskPanel({ runs, qs, self, rivals, onClose }: { runs: Run[]; qs:
       <div className="mt-4 flex flex-col gap-3">
         {!msgs.length && <div className="flex flex-wrap gap-1.5">{STARTERS.map((x) => <button key={x} className={cx(s.btn, s.sm)} onClick={() => ask(x)}>{x}</button>)}</div>}
         {msgs.map((m, i) => <div key={i} className={cx("max-w-[92%] whitespace-pre-wrap rounded-xl px-3.5 py-2.5 text-[13.5px] leading-relaxed", m.who === "you" ? "self-end bg-[#141414] text-white" : "self-start border border-[#e8e8e8] bg-white")}>{m.text}</div>)}
-        {busy && <div className="self-start text-[12.5px] text-[#8c8c8c]">Thinking</div>}
+        {busy && <div className="self-start text-[12.5px] text-faint">Thinking</div>}
       </div>
       <form className="mt-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
         <label htmlFor="ask-box" className="sr-only">Ask a question</label>

@@ -7,6 +7,7 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
 import { Section, KpiTiles, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
+import { decodeText } from "@/lib/text";
 import {
   readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normUrl,
   DEFAULT_SEGMENTS, DEFAULT_TOPICS, SENIORITY, type ParsedExport, type Person, type ProspectLite, type CommentLite, type SegRule, type TopicRule, type Warm,
@@ -198,7 +199,7 @@ function UploadTab({ imports, people, prospects, onDone }: { imports: Import[]; 
     if (!f.name.toLowerCase().endsWith(".zip")) { toast("Choose the .zip file LinkedIn emailed you"); return; }
     setBusy("Reading the zip");
     try {
-      const x = readExport(new Uint8Array(await f.arrayBuffer()), f.name, today());
+      const x = readExport(new Uint8Array(await f.arrayBuffer()), f.name, today(), decodeText);
       if (!x.files.length) toast("This zip has none of the LinkedIn files Prax reads");
       else setParsed({ x, name: f.name });
     } catch { toast("This file could not be read as a zip"); }

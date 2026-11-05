@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Lightbulb, Link2, FileText, PenLine, MessageSquare, TrendingDown, Copy, Download, Sparkles, X } from "lucide-react";
+import { Lightbulb, Link2, FileText, PenLine, MessageSquare, TrendingDown, Copy, Download, Sparkles, X, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, today, fmtDay, addDays } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
@@ -271,8 +271,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
       {camp && <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] text-white"><span className="font-semibold text-[#ff8a80]">Campaign</span><span className="font-semibold">{camp.name}</span><span className="text-[#cfcfcf]">{idea?.title}</span></div>}
       <nav aria-label="Steps" data-tour="steps" className="flex flex-wrap gap-1 rounded-2xl border border-line bg-white p-1.5">
         {names.map((n, i) => (
-          <button key={n} onClick={() => setStep(i)} className="inline-flex h-[38px] items-center gap-2 rounded-xl pl-1.5 pr-3.5 text-[13px] font-semibold" style={{ background: step === i ? "#d64545" : "transparent", color: step === i ? "#fff" : i < step ? "#141414" : "#8c8c8c" }}>
-            <span className="num inline-grid h-6 w-6 place-items-center rounded-full text-[11px]" style={{ background: step === i ? "#fff" : i < step ? "#141414" : "#fff", color: step === i ? "#d64545" : i < step ? "#fff" : "#8c8c8c", border: step === i || i < step ? 0 : "1px solid #d0d0d0" }}>{i < step ? "✓" : i + 1}</span>{n}
+          <button key={n} onClick={() => setStep(i)} className="inline-flex h-[38px] items-center gap-2 rounded-xl pl-1.5 pr-3.5 text-[13px] font-semibold" style={{ background: step === i ? "#d64545" : "transparent", color: step === i ? "#fff" : i < step ? "#141414" : "var(--faint)" }}>
+            <span className="num inline-grid h-6 w-6 place-items-center rounded-full text-[11px]" style={{ background: step === i ? "#fff" : i < step ? "#141414" : "#fff", color: step === i ? "#d64545" : i < step ? "#fff" : "var(--faint)", border: step === i || i < step ? 0 : "1px solid #d0d0d0" }}>{i < step ? <Check size={13} strokeWidth={2.6} aria-label="done" /> : i + 1}</span>{n}
           </button>
         ))}
       </nav>
@@ -370,7 +370,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           {step === 4 && video && <div className="flex flex-col gap-3">
             <H t="Write the script" sub="What Shashi says, and what shows on screen while he says it." right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-[12px] text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
-            <label className="flex flex-col gap-2 rounded-2xl bg-[#141414] p-4 text-white"><span className="text-[11.5px] font-semibold uppercase tracking-wider text-[#ff8a80]">Hook · first 3 seconds</span><input className="h-11 rounded-xl border border-white/20 bg-white/5 px-3 text-[15px] font-semibold text-white outline-none" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
+            <label className="flex flex-col gap-2 rounded-2xl bg-[#141414] p-4 text-white"><span className="text-[12.5px] font-semibold text-[#ff8a80]">Hook · first 3 seconds</span><input className="h-11 rounded-xl border border-white/20 bg-white/5 px-3 text-[15px] font-semibold text-white outline-none" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
             {script.beats.map((b, i) => (
               <div key={i} className="card flex gap-3 p-3.5">
                 <span className="num grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#d64545] text-[12px] text-white">{i + 1}</span>

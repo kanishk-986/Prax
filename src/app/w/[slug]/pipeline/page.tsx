@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, LayoutGrid, List, Flame } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, LayoutGrid, List, Flame, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, STAGES, SEGMENTS, today, fmtDay } from "@/lib/workspace";
@@ -80,7 +80,7 @@ export default function Pipeline() {
               {[...OPEN, "Parked"].map((s) => { const n = rows.filter((p) => p.stage === s).length; const max = Math.max(1, ...[...OPEN, "Parked"].map((x) => rows.filter((p) => p.stage === x).length)); return (
                 <button key={s} type="button" onClick={() => { setTab("people"); setView("table"); setQ(""); }} className="grid w-full grid-cols-[150px_1fr_40px] items-center gap-3 border-t border-line px-[18px] py-2.5 text-left text-[13px] hover:bg-[#fafafa]">
                   <span className="font-medium">{s}</span>
-                  <span className="h-2 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: s === "Parked" ? "#8c8c8c" : s === "Won" || s === "Call booked" ? "#9e1c1c" : "#d64545" }} /></span>
+                  <span className="h-2 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: s === "Parked" ? "var(--stroke)" : s === "Won" || s === "Call booked" ? "#9e1c1c" : "#d64545" }} /></span>
                   <span className="num text-right">{n}</span>
                 </button>
               ); })}
@@ -105,7 +105,7 @@ export default function Pipeline() {
       </div>
 
       <div data-tour="filters" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl">
-        <div className="relative w-full max-w-[260px]"><Search size={14} className="absolute left-2.5 top-2.5 text-faint" /><input id="p-search" className="field pl-8" placeholder="Search people, companies" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="relative w-full sm:max-w-[260px]"><Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" /><input id="p-search" className="field pl-8" placeholder="Search people, companies" aria-label="Search people" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select id="p-seg" className="field w-auto" value={seg} onChange={(e) => setSeg(e.target.value)} aria-label="Segment">
           <option value="">All segments</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{k} · {v.label}</option>)}
         </select>
@@ -119,7 +119,7 @@ export default function Pipeline() {
       {loading ? (
         <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-[320px] w-[260px] shrink-0 animate-pulse rounded-xl bg-surface-2" />)}</div>
       ) : view === "board" ? (
-        <div data-tour="board" className="flex gap-3 overflow-x-auto rounded-xl pb-4">
+        <Board>
           {[...OPEN, "Parked"].map((s) => {
             const items = by(s);
             return (
@@ -136,7 +136,7 @@ export default function Pipeline() {
               </section>
             );
           })}
-        </div>
+        </Board>
       ) : (
         <div data-tour="board" className="card overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -158,6 +158,34 @@ export default function Pipeline() {
       </>}
       {sel && <ProspectDrawer p={sel === "new" ? null : sel} onClose={() => setSel(null)} />}
     </Section>
+  );
+}
+
+/** The stage board scrolls sideways inside its own area: a visible scrollbar, and arrows that say how far along you are. */
+function Board({ children }: { children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const b = box.current; if (!b) return;
+    setEdge({ left: b.scrollLeft > 4, right: b.scrollLeft + b.clientWidth < b.scrollWidth - 4 });
+  }, []);
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+  const go = (dir: number) => { const b = box.current; if (b) b.scrollBy({ left: dir * Math.max(280, b.clientWidth * 0.8), behavior: "smooth" }); };
+  return (
+    <div data-tour="board" className="flex flex-col gap-2 rounded-xl">
+      {(edge.left || edge.right) && (
+        <div className="flex items-center justify-end gap-2 text-[12px] text-muted">
+          <span>{edge.right ? "More stages to the right" : "End of the board"}</span>
+          <button type="button" className="btn" style={{ width: 32, padding: 0 }} onClick={() => go(-1)} disabled={!edge.left} aria-label="Earlier stages"><ChevronLeft size={15} /></button>
+          <button type="button" className="btn" style={{ width: 32, padding: 0 }} onClick={() => go(1)} disabled={!edge.right} aria-label="Later stages"><ChevronRight size={15} /></button>
+        </div>
+      )}
+      <div ref={box} onScroll={measure} className="flex gap-3 overflow-x-auto overscroll-x-contain rounded-xl pb-3">{children}</div>
+    </div>
   );
 }
 

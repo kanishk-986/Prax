@@ -38,3 +38,11 @@ export function moveTour(s: TourState, action: TourAction, total: number): TourS
 
 export const tourLabel = (s: TourState, total: number) => (s.index == null ? "" : `Step ${s.index + 1} of ${total} · ${s.done.length} completed`);
 export const tourPercent = (s: TourState, total: number) => (total ? Math.round((s.done.length / total) * 100) : 0);
+
+/** A sidebar link is the current page when the path is its own address or sits below it. The Dashboard ("") only
+ *  matches the workspace root, and "/studio" never matches "/studio-content". */
+export function navActive(path: string, base: string, href: string): boolean {
+  if (href === "") return path === base || path === base + "/";
+  const full = base + href;
+  return path === full || path.startsWith(full + "/");
+}
