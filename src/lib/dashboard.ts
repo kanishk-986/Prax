@@ -208,3 +208,38 @@ export function relTime(iso: string, now = Date.now()): string {
   if (a.toDateString() === y.toDateString()) return "Yesterday";
   return a.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
+
+/** Live activity without repeats: back-to-back rows of the same kind and the same action ("Comment done", or
+ *  "Connection request done" before the colon) become one row with a count. The parts after the colon, when they
+ *  differ, become the detail ("Igor Pesin, Prajit Nanu"). Pipeline moves only merge when they are identical.
+ *  Order and the newest row's time are kept. */
+export function collapseActivity<T extends { kind: string; text: string }>(rows: T[]): (T & { count: number; detail?: string })[] {
+  const split = (t: string) => { const i = t.indexOf(": "); return i < 0 ? [t, ""] : [t.slice(0, i), t.slice(i + 2)]; };
+  const out: { row: T; count: number; tails: string[] }[] = [];
+  for (const r of rows) {
+    const [head, tail] = split(r.text);
+    const last = out[out.length - 1];
+    if (last && last.row.kind === r.kind && split(last.row.text)[0] === head && (r.kind !== "stage" || last.row.text === r.text)) {
+      last.count++;
+      if (tail && !last.tails.includes(tail)) last.tails.push(tail);
+      continue;
+    }
+    out.push({ row: r, count: 1, tails: tail ? [tail] : [] });
+  }
+  return out.map(({ row, count, tails }) => count === 1 ? { ...row, count }
+    : { ...row, count, text: row.kind === "stage" ? row.text : split(row.text)[0], ...(tails.length && row.kind !== "stage" ? { detail: tails.join(", ") } : {}) });
+}
+
+/** First name for greetings: the member's own profile name, else a readable email name ("kanishk.raj" gives
+ *  "Kanishk"), else nothing. */
+export function firstName(name: string | null | undefined, email: string | null | undefined): string {
+  const n = (name ?? "").trim().split(/\s+/)[0];
+  if (n) return n;
+  const local = (email ?? "").split("@")[0].split(/[._\-+0-9]/)[0];
+  return /^[a-z]{2,}$/i.test(local) ? local[0].toUpperCase() + local.slice(1).toLowerCase() : "";
+}
+
+/** "Good morning, Alok" before noon, afternoon until five, then evening. Without a name: "Good morning". */
+export function greeting(hour: number, name: string): string {
+  return `Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}${name ? `, ${name}` : ""}`;
+}

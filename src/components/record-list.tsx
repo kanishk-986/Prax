@@ -4,30 +4,39 @@ import { Plus, X, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace } from "@/lib/workspace";
+import { repairFields } from "@/lib/text";
 import { Threads } from "./threads";
 import { useToast, haptic } from "./toaster";
 
-export type Field = { key: string; label: string; type?: "text" | "textarea" | "date" | "select" | "number" | "checkbox" | "url"; options?: string[]; wide?: boolean };
+export type Field = { key: string; label: string; type?: "text" | "textarea" | "date" | "select" | "number" | "checkbox" | "url"; options?: string[]; optionLabels?: Record<string, string>; wide?: boolean };
 export type Col = { key: string; label: string; render?: (r: any) => React.ReactNode; className?: string };
 
-/** A live table of records with an add/edit/delete drawer, role-aware. */
-export function RecordList({ table, fields, cols, order, asc = true, filter, defaults = {}, empty, groupBy }: {
-  table: string; fields: Field[]; cols: Col[]; order?: string; asc?: boolean; filter?: (q: any) => any; defaults?: Record<string, unknown>; empty: string; groupBy?: string;
+/** A live table of records with an add/edit/delete drawer, role-aware.
+ *  groupBy is a column or a function; groups follow groupOrder (unknown ones last) and show groupLabel's name.
+ *  Pass adding and onAdding to put the Add button in the section header (AddButton) instead of above the table. */
+export function RecordList({ table, fields, cols, order, asc = true, filter, defaults = {}, empty, groupBy, groupLabel, groupOrder, adding, onAdding }: {
+  table: string; fields: Field[]; cols: Col[]; order?: string; asc?: boolean; filter?: (q: any) => any; defaults?: Record<string, unknown>; empty: string;
+  groupBy?: string | ((r: any) => string); groupLabel?: (g: string) => string; groupOrder?: string[]; adding?: boolean; onAdding?: (v: boolean) => void;
 }) {
   const { ws, can } = useWorkspace();
   const { rows, loading } = useLive<any>(table, ws.id, { order, asc, filter });
   const [sel, setSel] = useState<any | "new" | null>(null);
   const editable = can("editor");
-  const groups: [string, any[]][] = groupBy ? Object.entries(rows.reduce((m: Record<string, any[]>, r) => { (m[r[groupBy] || "Other"] ||= []).push(r); return m; }, {})) : [["", rows]];
+  const keyOf = (r: any) => (typeof groupBy === "function" ? groupBy(r) : groupBy ? r[groupBy] : "") || "Other";
+  const rank = (g: string) => { const i = groupOrder?.indexOf(g) ?? -1; return i < 0 ? 999 : i; };
+  const groups: [string, any[]][] = groupBy ? Object.entries(rows.reduce((m: Record<string, any[]>, r) => { (m[keyOf(r)] ||= []).push(r); return m; }, {})).sort((a, b) => rank(a[0]) - rank(b[0])) as [string, any[]][] : [["", rows]];
+  const controlled = !!onAdding;
+  const open = controlled && adding ? "new" : sel;
+  const close = () => { setSel(null); onAdding?.(false); };
 
   return (
     <>
-      <div className="mb-3 flex justify-end">{editable && <button className="btn btn-primary" onClick={() => setSel("new")}><Plus size={14} /> Add</button>}</div>
+      {!controlled && <div className="mb-3 flex justify-end">{editable && <button className="btn btn-primary" onClick={() => setSel("new")}><Plus size={14} /> Add</button>}</div>}
       {loading ? <div className="card flex flex-col gap-2 p-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-surface-2" />)}</div> : rows.length === 0 ? <div className="card p-10 text-center text-[13px] text-muted">{empty}</div> : (
         <div className="flex flex-col gap-4">
           {groups.map(([g, list]) => (
             <div key={g} className="card overflow-x-auto">
-              {g && <div className="border-b border-line px-4 py-2.5 text-[13px] font-semibold">{g} <span className="num font-normal text-muted">{list.length}</span></div>}
+              {g && <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 text-[13.5px] font-semibold">{groupLabel ? groupLabel(g) : g}<span className="count-badge muted">{list.length}</span></div>}
               <table className="w-full text-[13px]">
                 <thead><tr className="border-b border-line text-left">{cols.map((c) => <th key={c.key} className="label px-4 py-2.5 font-semibold">{c.label}</th>)}</tr></thead>
                 <tbody>{list.map((r) => (
@@ -40,9 +49,15 @@ export function RecordList({ table, fields, cols, order, asc = true, filter, def
           ))}
         </div>
       )}
-      {sel && <Drawer table={table} fields={fields} rec={sel === "new" ? null : sel} defaults={defaults} onClose={() => setSel(null)} />}
+      {open && <Drawer table={table} fields={fields} rec={open === "new" ? null : open} defaults={defaults} onClose={close} />}
     </>
   );
+}
+
+/** The Add button for a section header, paired with RecordList's adding and onAdding. Hidden for viewers. */
+export function AddButton({ onClick, label = "Add" }: { onClick: () => void; label?: string }) {
+  const { can } = useWorkspace();
+  return can("editor") ? <button className="btn btn-primary h-10 px-4" onClick={onClick}><Plus size={14} /> {label}</button> : null;
 }
 
 function Drawer({ table, fields, rec, defaults, onClose }: { table: string; fields: Field[]; rec: any | null; defaults: Record<string, unknown>; onClose: () => void }) {
@@ -54,8 +69,10 @@ function Drawer({ table, fields, rec, defaults, onClose }: { table: string; fiel
   async function save() {
     const body: Record<string, any> = {};
     fields.forEach((x) => { let v = f[x.key]; if (x.type === "number") v = v === "" || v == null ? null : Number(v); if (x.type === "date") v = v || null; body[x.key] = v ?? (x.type === "checkbox" ? false : x.type === "number" || x.type === "date" ? null : ""); });
-    const { error } = rec ? await supabase().from(table).update(body).eq("id", rec.id)
-      : await supabase().from(table).insert({ ...defaults, ...body, workspace_id: ws.id });
+    // Pasted text sometimes arrives as mojibake ("Santill√°n"); repair it before it is saved.
+    const clean = repairFields(body);
+    const { error } = rec ? await supabase().from(table).update(clean).eq("id", rec.id)
+      : await supabase().from(table).insert({ ...defaults, ...clean, workspace_id: ws.id });
     if (error) { toast(error.message); return; }
     haptic(); toast(rec ? "Saved" : "Added"); onClose();
   }
@@ -77,7 +94,7 @@ function Drawer({ table, fields, rec, defaults, onClose }: { table: string; fiel
               <label key={x.key} className={`flex flex-col gap-1 ${x.wide || x.type === "textarea" ? "col-span-2" : ""} ${x.type === "checkbox" ? "flex-row items-center gap-2" : ""}`}>
                 {x.type !== "checkbox" && <span className="label">{x.label}</span>}
                 {x.type === "textarea" ? <textarea id={`f-${x.key}`} rows={x.key === "body" || x.key === "draft" || x.key === "text" ? 10 : 4} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />
-                  : x.type === "select" ? <select id={`f-${x.key}`} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })}>{x.options!.map((o) => <option key={o}>{o}</option>)}</select>
+                  : x.type === "select" ? <select id={`f-${x.key}`} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })}>{x.options!.map((o) => <option key={o} value={o}>{x.optionLabels?.[o] ?? o}</option>)}</select>
                   : x.type === "checkbox" ? <><input id={`f-${x.key}`} type="checkbox" checked={!!f[x.key]} onChange={(e) => setF({ ...f, [x.key]: e.target.checked })} /><span className="text-[13px]">{x.label}</span></>
                   : <input id={`f-${x.key}`} type={x.type ?? "text"} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />}
               </label>

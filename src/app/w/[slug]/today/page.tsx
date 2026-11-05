@@ -223,7 +223,7 @@ function GroupBar({ i, label, done, skipped, total, onJump }: { i: number; label
       <span className="truncate text-[12.5px] font-medium text-ink-2 transition-colors group-hover:text-ink">{label}</span>
       <span className="flex h-1.5 overflow-hidden rounded-full bg-[#ececec] transition-[height] duration-200 group-hover:h-2">
         <span className="bar-grow block h-full transition-[width] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${total ? (done / total) * 100 : 0}%`, background: clear ? "#141414" : "#d64545", "--i": i } as React.CSSProperties} />
-        <span className="bar-grow block h-full transition-[width] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${total ? (skipped / total) * 100 : 0}%`, background: clear ? "#8c8c8c" : "#c4c4c4", "--i": i } as React.CSSProperties} />
+        <span className="bar-grow block h-full transition-[width] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${total ? (skipped / total) * 100 : 0}%`, background: clear ? "var(--faint)" : "var(--stroke)", "--i": i } as React.CSSProperties} />
       </span>
       <span className="relative h-4 text-right text-[12px]">
         <span className="num absolute inset-0 text-muted transition-[opacity,transform] duration-200 group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0">{done + skipped}/{total}</span>
@@ -250,7 +250,7 @@ function DueStrip({ slug, t, people, posts }: { slug: string; t: string; people:
           {cards.map((c) => { const late = c.due < t; return (
             <Link key={c.key} href={c.href} className="hover-lift flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface px-3.5 py-3">
               <span className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-faint">{c.kind}</span>
+                <span className="text-[12px] font-semibold text-muted">{c.kind}</span>
                 <span className={`num text-[11.5px] ${late ? "font-semibold text-[#9e1c1c]" : "text-muted"}`}>{whenLabel(c.due, t)}</span>
               </span>
               <span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{c.title}</span>
@@ -271,7 +271,7 @@ function DaySummary({ prog, rows, isToday, slug, onNext }: { prog: ReturnType<ty
         <Check size={30} strokeWidth={2.4} />
       </ProgressRing>
       <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
-        <span className="text-[11.5px] font-semibold uppercase tracking-[.06em] text-[#bdbdbd]">{isToday ? "Day complete" : "This day is complete"}</span>
+        <span className="text-[13px] font-semibold text-[#ff8a80]">{isToday ? "Day complete" : "This day is complete"}</span>
         <span className="text-[24px] font-[650] leading-tight tracking-[-0.02em]">{prog.done} done{prog.skipped ? `, ${prog.skipped} skipped` : ""}.</span>
         <span className="text-[13px] text-[#cfcfcf]">Every tick is already on the dashboard. Anything extra today is a bonus.</span>
         <span className="mt-2 flex flex-wrap gap-2">
@@ -305,7 +305,7 @@ function Row({ it, i, slug, tour, focused, pop, editable, onToggle, onSkip, onPa
         className={`task-check grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] ${it.done ? "is-done border-[#141414] bg-[#141414] text-white" : "border-line-strong bg-surface"}`}>
         <Check size={13} strokeWidth={3} className={`task-tick ${it.done ? "on" : ""}`} />
       </button>
-      <span tabIndex={hint ? 0 : undefined} data-tip={hint || undefined} className={`tip hidden w-[88px] shrink-0 truncate rounded text-[11px] font-semibold uppercase tracking-[.05em] transition-colors sm:block ${cleared ? "text-faint" : "text-muted group-hover:text-ink"}`}>{typeLabel(it)}</span>
+      <span tabIndex={hint ? 0 : undefined} data-tip={hint || undefined} className={`tip hidden w-[88px] shrink-0 truncate rounded text-[12px] font-semibold transition-colors sm:block ${cleared ? "text-faint" : "text-muted group-hover:text-ink"}`}>{typeLabel(it)}</span>
       <span className="relative flex min-w-0 flex-1 basis-[calc(100%-32px)] items-center sm:basis-auto">
         {/* A one-line textarea that grows with its text (field-sizing), so long campaign titles wrap instead of being cut off. */}
         <textarea id={`t-${it.id}`} rows={1} disabled={!editable} value={title} placeholder={placeholder} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))} onBlur={() => title !== it.title && onPatch(it.id, { title })}
@@ -321,7 +321,7 @@ function Row({ it, i, slug, tour, focused, pop, editable, onToggle, onSkip, onPa
       {/* On phones the type and buttons sit on a second line; from sm up, fixed-width slots keep every row aligned. */}
       {hasActions && (
         <span className="flex w-full items-center gap-1 pl-8 sm:contents">
-          <span className="mr-auto whitespace-nowrap text-[11px] font-semibold uppercase tracking-[.05em] text-faint sm:hidden">{typeLabel(it)}{skipped ? " · Skipped" : ""}</span>
+          <span className="mr-auto whitespace-nowrap text-[12px] font-semibold text-faint sm:hidden">{typeLabel(it)}{skipped ? " · Skipped" : ""}</span>
           <span className="flex shrink-0 items-center justify-end sm:w-[150px]">
             {act && !cleared && (act.external
               ? <a href={act.href} target="_blank" rel="noopener noreferrer" className="btn task-act h-8 whitespace-nowrap px-2.5 text-[12.5px]">{act.label.startsWith("Open ") ? <><span className="hidden sm:inline">Open</span>{act.label.slice(5)}</> : act.label}<ArrowUpRight size={13} /></a>

@@ -89,7 +89,7 @@ export default function ContentStudio() {
               {editable && <button className="btn btn-primary h-10 px-4" onClick={() => { setSeed(null); setTab("write"); }}>Write a post</button>}
             </div>
           </div>
-          <div role="tablist" aria-label="Content Studio" data-tour="tabs" className="flex flex-wrap gap-6 border-b border-line">
+          <div role="tablist" aria-label="Content Studio" data-tour="tabs" className="tabs-row">
             {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{l}{k === "library" && <span className="num ml-1.5 rounded-full bg-[#ececec] px-1.5 text-[11px] text-muted">{posts.rows.length}</span>}</button>)}
           </div>
         </header>
@@ -164,7 +164,7 @@ function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; camp
             const past = (p.publish_date ?? "") < t, s = past && statusOf(p.status) !== "Posted" ? "Missed" : statusOf(p.status);
             return (
               <button key={p.id} onClick={() => openPost(p)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-[#fafafa] ${i ? "border-t border-line" : ""}`} style={p.publish_date === day ? { boxShadow: "inset 3px 0 0 #d64545" } : undefined}>
-                <span className="flex w-[74px] shrink-0 flex-col"><span className="text-[12px] font-semibold" style={{ color: p.publish_date === t ? "#d64545" : past ? "#8c8c8c" : "#141414" }}>{p.publish_date === t ? "Today" : fmtDay(p.publish_date!, { weekday: "short", day: "numeric" })}</span><span className="num text-[12px] text-muted">{p.planned_time}</span></span>
+                <span className="flex w-[74px] shrink-0 flex-col"><span className="text-[12px] font-semibold" style={{ color: p.publish_date === t ? "#d64545" : past ? "var(--faint)" : "#141414" }}>{p.publish_date === t ? "Today" : fmtDay(p.publish_date!, { weekday: "short", day: "numeric" })}</span><span className="num text-[12px] text-muted">{p.planned_time}</span></span>
                 <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className={`truncate text-[14px] font-semibold ${past ? "text-muted" : ""}`}>{p.title}</span><ChannelFlag p={p} /></span><span className="text-[12px] text-muted">{p.format}{p.newsletter ? " · Newsletter" : ""} · {p.pillar || "No pillar"} · {campName(p.campaign_id)}</span></span>
                 {s === "Missed" ? <span className="pill border border-[#d4d4d4] bg-white text-muted">Not posted</span> : <StatusPill s={s} />}
               </button>
@@ -180,7 +180,7 @@ function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; camp
       </section>
       <aside className="flex min-w-0 flex-[2_1_300px] flex-col gap-2">
         <div className="rounded-xl bg-[#141414] p-4 text-white">
-          <div className="text-[12px] font-semibold uppercase tracking-wider text-[#ff8a80]">{week === weekStart(t) ? "This week" : "That week"}</div>
+          <div className="text-[13px] font-semibold text-[#ff8a80]">{week === weekStart(t) ? "This week" : "That week"}</div>
           <div className="mt-2 flex gap-6"><span><b className="num block text-[24px] font-medium">{inWeek.length}</b><span className="text-[12px] text-[#cfcfcf]">posts planned</span></span><span><b className="num block text-[24px] font-medium">{new Set(inWeek.map((p) => p.pillar).filter(Boolean)).size}/6</b><span className="text-[12px] text-[#cfcfcf]">pillars covered</span></span></div>
         </div>
         <div className="mt-2 flex flex-col gap-0.5" data-tour="toplan"><span className="label text-ink">To plan</span><span className="text-[12px] text-muted">Drag a topic onto a day, or press Pick a date. Discovery Studio and AI citations topics come first.</span></div>
@@ -279,7 +279,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[1040px]">
-            <div className={`grid ${cols} gap-3 bg-[#141414] px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-white`}><span>Post</span><span>Type</span><span>Pillar</span><span>Campaign</span><span>Status</span><span>Planned or posted</span><span className="text-right">Actions</span></div>
+            <div className={`grid ${cols} gap-3 bg-[#141414] px-4 py-2.5 text-[12px] font-semibold text-white`}><span>Post</span><span>Type</span><span>Pillar</span><span>Campaign</span><span>Status</span><span>Planned or posted</span><span className="text-right">Actions</span></div>
             {rows.map((p) => {
               const s = statusOf(p.status), cn = campName(p.campaign_id);
               return (
@@ -288,7 +288,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
                     {postSource(p) === "discovery" && <button type="button" className="pill h-[22px] border border-[#d64545] bg-white px-2 text-[11.5px] text-[#d64545] hover:bg-[#fbeaea]" onClick={() => setDisc(p)}>From Discovery{p.discovery?.rank ? ` · #${p.discovery.rank}` : ""}{p.discovery?.score != null ? ` · ${p.discovery.score}` : ""}</button>}</span>
                   <span>{p.format || "Text post"}</span>
                   <span className="truncate text-muted">{p.pillar || p.topic || "Not set"}</span>
-                  <span className="truncate text-[12.5px] font-semibold" style={{ color: cn ? "#d64545" : "#8c8c8c" }}>{cn ?? "Independent"}</span>
+                  <span className="truncate text-[12.5px] font-semibold" style={{ color: cn ? "#d64545" : "var(--faint)" }}>{cn ?? "Independent"}</span>
                   <span><StatusPill s={s} /></span>
                   <span className="num text-[12px] text-muted">{p.publish_date ? `${s === "Posted" ? "Posted" : "Planned"} ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned"}</span>
                   <span className="flex justify-end gap-1">

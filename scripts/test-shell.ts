@@ -1,5 +1,5 @@
 // Checks the section shell rules: entry moment and tour gating, and tour step maths. Run: node scripts/test-shell.ts
-import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, type Store } from "../src/lib/shell.ts";
+import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, type Store } from "../src/lib/shell.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -34,6 +34,16 @@ t = moveTour(t, "next", 3); t = moveTour(t, "next", 3); eq("past the last step c
 eq("percent", tourPercent(t, 3), 100);
 eq("back at the first step stays", moveTour({ index: 0, done: [] }, "back", 3), { index: 0, done: [] });
 eq("end closes at once", moveTour({ index: 1, done: [0] }, "end", 3), { index: null, done: [0] });
+
+const B = "/w/shashi";
+eq("comment studio is active on its page", navActive(`${B}/studio`, B, "/studio"), true);
+eq("comment studio is not active on content studio", navActive(`${B}/studio-content`, B, "/studio"), false);
+eq("content studio is active on its page", navActive(`${B}/studio-content`, B, "/studio-content"), true);
+eq("a page below a section keeps it active", navActive(`${B}/pipeline/abc`, B, "/pipeline"), true);
+eq("dashboard only on the root", navActive(B, B, ""), true);
+eq("dashboard not on other pages", navActive(`${B}/today`, B, ""), false);
+eq("dashboard with a trailing slash", navActive(`${B}/`, B, ""), true);
+eq("a longer word that starts the same does not match", navActive(`${B}/notesx`, B, "/notes"), false);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

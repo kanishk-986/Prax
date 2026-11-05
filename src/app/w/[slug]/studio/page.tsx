@@ -8,6 +8,7 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd, today, weekStart, addDays } from "@/lib/workspace";
 import { Section, KpiTiles, DarkCard, StartCards, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
+import { decodeText } from "@/lib/text";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import {
   mergeStudio, humanScore, LENGTHS, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, DEFAULT_TUNING, DEFAULT_SAFETY,
@@ -146,7 +147,7 @@ async function fileText(f: File): Promise<string> {
     const xml = strFromU8(files["word/document.xml"] ?? new Uint8Array());
     return xml.replace(/<\/w:p>/g, "\n").replace(/<w:tab\/>/g, " ").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'");
   }
-  return f.text();
+  return decodeText(new Uint8Array(await f.arrayBuffer())); // a BOM, UTF-16 or a Windows-1252 .txt reads correctly
 }
 
 type Version = { id: string; source_name: string; source_chars: number; fingerprint: Fingerprint; created_at: string };
@@ -563,7 +564,7 @@ function SafetyTab({ studio, save }: { studio: Studio; save: Save }) {
           <div className="flex justify-between text-[13px]"><span>Drafts per day, per browser</span><span className="num font-semibold">{s.dailyCap || "No limit"}</span></div>
           <input type="range" min={0} max={200} step={5} value={s.dailyCap} disabled={!ed} onChange={(e) => setS({ ...s, dailyCap: Number(e.target.value) })} onMouseUp={() => save("safety", s, "Limit saved")} onTouchEnd={() => save("safety", s, "Limit saved")} onKeyUp={() => save("safety", s, "Limit saved")} className="mt-2 w-full accent-[var(--accent)]" aria-label="Daily draft limit" />
           <div className="flex justify-between text-[11px] text-faint"><span>No limit</span><span>200 a day</span></div>
-          <div className="mt-3 rounded-lg border-l-2 border-accent bg-surface-2 px-3 py-2 text-[12px] leading-relaxed text-ink-2"><b>Why this matters:</b> LinkedIn restricts accounts that comment at inhuman rates. 20 to 40 a day keeps activity natural. Prax never posts for you either way.</div>
+          <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-[12px] leading-relaxed text-ink-2"><b className="text-dark-red">Why this matters:</b> LinkedIn restricts accounts that comment at inhuman rates. 20 to 40 a day keeps activity natural. Prax never posts for you either way.</div>
         </div>
         <div className="card p-4">
           <div className="mb-1 text-[13px] font-semibold">VIP authors</div>

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, ClipboardPaste, FileText, X, ChevronDown, Check, Circle, RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
@@ -10,6 +10,50 @@ import { parseProfile, auditProfile, topicReport, prosCons, roadmap, MANUAL, TOP
 
 type Doc = { id: string; subject: "self" | "prospect"; prospect_id: string | null; source: string; file_name: string; raw_text: string; parsed: Parsed; audit: Audit & { manual?: Record<string, boolean>; roadmap?: Record<string, boolean> }; score: number; created_at: string };
 type P = { id: string; name: string; company: string };
+
+/** One point per day (that day's latest review), on a fixed 0 to 100 scale with gridlines, dates and the values.
+ *  The latest point is red. Hover or focus a point for its date and score; click opens that review. */
+function ScoreChart({ docs, onPick }: { docs: Doc[]; onPick: (id: string) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(560);
+  const [hover, setHover] = useState<number | null>(null);
+  useEffect(() => {
+    const el = box.current; if (!el) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(260, Math.round(e.contentRect.width))));
+    ro.observe(el); return () => ro.disconnect();
+  }, []);
+  // docs arrive newest first, so the first one seen for a day is that day's latest review.
+  const days = useMemo(() => {
+    const seen = new Map<string, Doc>();
+    for (const d of docs) { const k = ymd(new Date(d.created_at)); if (!seen.has(k)) seen.set(k, d); }
+    return [...seen.entries()].reverse().slice(-12).map(([day, d]) => ({ day, id: d.id, score: d.score }));
+  }, [docs]);
+  const H = 208, L = 30, R = 16, T = 18, B = 26;
+  const x = (i: number) => (days.length === 1 ? L + (w - L - R) / 2 : L + (i / (days.length - 1)) * (w - L - R));
+  const y = (v: number) => T + (1 - v / 100) * (H - T - B);
+  const label = (d: string) => fmtDay(d, { day: "numeric", month: "short" });
+  const every = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((w - L - R) / 64))));
+  const last = days.length - 1;
+  return (
+    <div ref={box} className="relative w-full">
+      <svg width={w} height={H} viewBox={`0 0 ${w} ${H}`} role="img" aria-label={`Profile score by day: ${days.map((d) => `${label(d.day)} ${d.score}`).join(", ")}`} className="block">
+        {[0, 25, 50, 75, 100].map((t) => <g key={t}><line x1={L} x2={w - R} y1={y(t)} y2={y(t)} stroke={t ? "var(--line)" : "var(--stroke)"} /><text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--faint)" className="num">{t}</text></g>)}
+        {days.length > 1 && <polyline points={days.map((d, i) => `${x(i)},${y(d.score)}`).join(" ")} fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+        {days.map((d, i) => (i % every === 0 || i === last) && <text key={d.day} x={x(i)} y={H - 8} textAnchor={days.length > 1 && i === last ? "end" : days.length > 1 && i === 0 ? "start" : "middle"} fontSize="11" fill={hover === i ? "var(--ink)" : "var(--faint)"}>{label(d.day)}</text>)}
+        {days.map((d, i) => (
+          <g key={d.id} role="button" tabIndex={0} aria-label={`${label(d.day)}: ${d.score} of 100. Open this review`} className="cursor-pointer outline-none"
+            onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
+            onClick={() => onPick(d.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(d.id); } }}>
+            <rect x={x(i) - 14} y={T} width="28" height={H - T - B} fill="transparent" />
+            <circle cx={x(i)} cy={y(d.score)} r={hover === i ? 6 : 4.5} fill={i === last ? "var(--accent)" : "var(--ink)"} stroke="var(--surface)" strokeWidth="2" />
+            {(i === last || i === 0 || hover === i) && <text x={x(i)} y={y(d.score) - 11} textAnchor={days.length > 1 && i === last ? "end" : days.length > 1 && i === 0 ? "start" : "middle"} fontSize="12" fontWeight="600" fill="var(--ink)" className="num">{d.score}</text>}
+          </g>
+        ))}
+      </svg>
+      {days.length === 1 && <p className="mt-1 text-[12px] text-muted">One review so far. Each new review adds a point.</p>}
+    </div>
+  );
+}
 const PROFILE_TOUR: TourStep[] = [
   { target: "kpis", title: "How strong his profile is", body: "The latest score out of 100, the change since the previous review, and how far the three-month roadmap has got.", tab: "home" },
   { target: "trend", title: "Score over time", body: "Every review is kept, so each fix shows up as a step up.", tab: "home" },
@@ -70,16 +114,8 @@ export default function ProfileStudio() {
           ]} />
           <div className="flex flex-wrap gap-4">
             <section data-tour="trend" className="min-w-0 flex-[3_1_480px] rounded-2xl border border-line bg-surface p-[18px]">
-              <div className="mb-3 font-semibold">Score over time</div>
-              <div className="flex h-[140px] items-end gap-2" role="img" aria-label={`Scores: ${[...selfDocs].reverse().map((d) => d.score).join(", ")}`}>
-                {[...selfDocs].reverse().slice(-12).map((d) => (
-                  <button key={d.id} type="button" title={`${fmtDay(ymd(new Date(d.created_at)), { day: "numeric", month: "short" })}: ${d.score}`} onClick={() => { pickView("self"); setSelId(d.id); }} className="flex flex-1 flex-col items-center gap-1">
-                    <span className="num text-[11px] text-muted">{d.score}</span>
-                    <span className="w-full rounded-t-md bg-[#141414]" style={{ height: `${Math.max(6, d.score)}px` }} />
-                    <span className="num text-[10px] text-faint">{fmtDay(ymd(new Date(d.created_at)), { day: "numeric", month: "short" })}</span>
-                  </button>
-                ))}
-              </div>
+              <div className="mb-3 flex items-baseline justify-between gap-3"><span className="font-semibold">Score over time</span><span className="text-[12px] text-muted">out of 100, latest review each day</span></div>
+              <ScoreChart docs={selfDocs} onPick={(id) => { pickView("self"); setSelId(id); }} />
             </section>
             <div className="min-w-0 flex-[2_1_320px]">
               <NeedsYou tour="fixes" title="Top fixes" empty="Every readable check passes." items={home.fixes.map((c) => ({ title: c.label, sub: `+${c.max} points · ${c.fix}`, cta: "Open", onClick: () => pickView("self"), tone: "red" as const }))} />

@@ -7,6 +7,7 @@ import { useWorkspace, STAGES, SEGMENTS, fmtDay } from "@/lib/workspace";
 import { normCompany, seniority, type Person } from "@/lib/network";
 import { Threads } from "./threads";
 import { useToast, haptic } from "./toaster";
+import { repairFields } from "@/lib/text";
 
 export type Prospect = {
   id: string; name: string; role: string; company: string; segment: string; region: string; stage: string; warmth: string;
@@ -29,7 +30,8 @@ export function ProspectDrawer({ p, onClose }: { p: Prospect | null; onClose: ()
 
   async function save() {
     setBusy(true);
-    const body = { ...f, next_date: f.next_date || null, value: Number(f.value) || 0 };
+    // Pasted names sometimes arrive as mojibake ("Santill√°n"); repair them before they are saved.
+    const body = repairFields({ ...f, next_date: f.next_date || null, value: Number(f.value) || 0 });
     const { error } = p ? await supabase().from("prospects").update(body).eq("id", p.id)
       : await supabase().from("prospects").insert({ ...body, workspace_id: ws.id });
     setBusy(false);

@@ -1,14 +1,15 @@
 /* AI citations uses the newer Prax direction (dark, red, dark red, white) scoped to this page only,
    until the whole-app palette switch is approved. */
-.root { --k: #141414; --r: #d64545; --dr: #9e1c1c; --w: #ffffff; --g1: #5f5f5f; --g2: #8c8c8c; --ln: #e8e8e8; --sf: #fafafa;
+.root { --k: #141414; --r: #d64545; --dr: #9e1c1c; --w: #ffffff; --g1: #5f5f5f; --g2: #6b6b6b; --ln: #e8e8e8; --sf: #fafafa;
   color: var(--k); font-size: 14px; }
 .sub { color: var(--g1); font-size: 14px; margin-top: 4px; }
 .small { color: var(--g1); font-size: 12.5px; }
 .faint { color: var(--g2); }
-.label { font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--k); }
+.label { font-size: 12.5px; font-weight: 600; color: var(--k); }
 
-.tabs { display: flex; flex-wrap: wrap; gap: 26px; border-bottom: 1px solid #e3e3e3; margin: 18px 0 20px; }
-.tab { height: 44px; padding: 0 2px; margin-bottom: -1px; border: 0; background: transparent; font-size: 14px; font-weight: 600; color: var(--g2); cursor: pointer; }
+.tabs { display: flex; gap: 26px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; box-shadow: inset 0 -1px 0 #e3e3e3; margin: 18px 0 20px; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; white-space: nowrap; height: 44px; padding: 0 2px; border: 0; background: transparent; font-size: 14px; font-weight: 600; color: var(--g2); cursor: pointer; }
 .tab:hover { color: var(--k); }
 .tabOn { color: var(--k); box-shadow: inset 0 -2px 0 var(--r); }
 .count { margin-left: 7px; display: inline-flex; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; align-items: center; justify-content: center; border-radius: 99px; font: 500 11px var(--font-mono); background: #ececec; color: var(--g1); }
@@ -28,7 +29,7 @@
 .field:focus-visible, .btn:focus-visible, .tab:focus-visible, .cell:focus-visible { outline: 2px solid var(--r); outline-offset: 1px; }
 
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.table th { text-align: left; padding: 10px 12px; background: var(--k); color: var(--w); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.table th { text-align: left; padding: 10px 12px; background: var(--k); color: var(--w); font-size: 12px; font-weight: 600; }
 .table td { padding: 10px 12px; border-top: 1px solid #ececec; vertical-align: top; }
 .table tr:hover td { background: var(--sf); }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -96,5 +97,5 @@
 /* Report */
 .report { border-radius: 6px; background: var(--w); border: 1px solid #e3e3e3; overflow: hidden; line-height: 1.6; }
 .reportCover { padding: 40px 44px 32px; border-top: 6px solid var(--r); }
-.finding { padding: 10px 14px; border-left: 3px solid var(--r); background: var(--sf); font-size: 13.5px; }
+.finding { padding: 10px 14px; border: 1px solid var(--ln); border-radius: 10px; background: var(--sf); font-size: 13.5px; }
 .tiny { font-size: 11px; font-weight: 600; letter-spacing: .02em; }

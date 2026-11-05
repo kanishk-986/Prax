@@ -23,14 +23,13 @@ export function ReportView({ r, expires }: { r: ReportSnapshot; expires?: string
   const top = r.leaderboard[0];
   return (
     <article className="mx-auto max-w-[760px] bg-white px-6 py-8 text-[14px] leading-relaxed text-[#141414]" style={{ fontFamily: "var(--font-sans, system-ui)" }}>
-      <div className="text-[12px] font-semibold uppercase tracking-[.06em] text-[#d64545]">AI citations report</div>
-      <h1 className="mt-1 text-[26px] font-semibold tracking-tight">{r.name}</h1>
-      <p className="text-[13px] text-[#5f5f5f]">{day}. Every answer comes from each model&apos;s API with web search on: close to, not the same as, what someone sees in the app.{expires ? ` This view-only link expires ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.` : ""}</p>
+      <h1 className="text-[26px] font-semibold tracking-tight">{r.name}</h1>
+      <p className="text-[13px] text-[#5f5f5f]"><b className="font-semibold text-[#141414]">AI citations report</b>, {day}. Every answer comes from each model&apos;s API with web search on: close to, not the same as, what someone sees in the app.{expires ? ` This view-only link expires ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.` : ""}</p>
 
       <h2 className="mt-6 text-[16px] font-semibold">Where things stand</h2>
       <p>AI tools named Shashi or Antier in <b>{r.headline.named} of {r.headline.total}</b> answers ({pct(r.headline.named, r.headline.total)}), and linked to his sites in {r.headline.linked}. Questions that already name him and runs that failed are left out. His LinkedIn was cited {r.linkedin} time{r.linkedin === 1 ? "" : "s"}.</p>
       <table className="mt-3 w-full border-collapse text-[13px]">
-        <thead><tr className="bg-[#141414] text-left text-[11px] uppercase tracking-[.06em] text-white"><th className="px-3 py-2">Engine</th><th className="px-3 py-2">Named</th></tr></thead>
+        <thead><tr className="bg-[#141414] text-left text-[12px] text-white"><th className="px-3 py-2">Engine</th><th className="px-3 py-2">Named</th></tr></thead>
         <tbody>{r.engines.map((e) => <tr key={e.name} className="border-t border-[#ececec]"><td className="px-3 py-2 font-medium">{e.name}</td><td className="px-3 py-2">{e.total ? `${e.named} of ${e.total}` : "Not run"}</td></tr>)}</tbody>
       </table>
 

@@ -5,6 +5,7 @@ import { Flame, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
+import { navActive } from "@/lib/shell";
 
 const NAV = [
   { href: "", label: "Dashboard", icon: LayoutDashboard },
@@ -30,7 +31,7 @@ export function Sidebar() {
   const [open, setOpen] = useState(false);
   const item = (href: string, label: string, Icon: React.ElementType) => {
     const full = base + href;
-    const active = href === "" ? path === base : path.startsWith(full);
+    const active = navActive(path, base, href);
     return (
       <Link key={href} href={full} onClick={() => setOpen(false)} aria-current={active ? "page" : undefined}
         className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors ${active ? "bg-surface text-ink shadow-[var(--shadow)] ring-1 ring-line" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>
@@ -39,12 +40,12 @@ export function Sidebar() {
     );
   };
   const body = (
-    <div className="flex h-full flex-col gap-5 px-3 py-4">
+    <div className="flex min-h-full flex-col gap-5 px-3 py-4">
       <Link href="/" className="flex items-center gap-2.5 rounded-md px-1.5 py-1 hover:bg-surface-2">
         <Logo />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold leading-tight">{ws.name}</div>
-          <div className="text-[11px] text-muted capitalize leading-tight">{role}</div>
+          <div className="truncate text-[13.5px] font-semibold leading-tight text-ink">{ws.name}</div>
+          <div className="mt-0.5 text-[11.5px] capitalize leading-tight text-muted">{role}</div>
         </div>
         <ChevronsUpDown size={14} className="text-faint" />
       </Link>
@@ -61,12 +62,13 @@ export function Sidebar() {
   );
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 border-r border-line bg-canvas md:block side-red">{body}</aside>
-      <button className="btn btn-ghost fixed left-3 top-3 z-30 md:hidden" aria-label="Open menu" onClick={() => setOpen(true)}><Menu size={16} /></button>
+      <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 overflow-y-auto border-r border-line bg-canvas md:block side-red">{body}</aside>
+      {/* The wrapper carries the position: .btn sets its own position and display, which would override fixed and md:hidden. */}
+      <div className="fixed left-3 top-3 z-30 md:hidden"><button className="btn btn-ghost" aria-label="Open menu" onClick={() => setOpen(true)}><Menu size={16} /></button></div>
       {open && (
         <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setOpen(false)}>
-          <aside className="h-full w-[260px] border-r border-line bg-canvas side-red" onClick={(e) => e.stopPropagation()}>
-            <button className="btn btn-ghost absolute right-2 top-2" aria-label="Close menu" onClick={() => setOpen(false)}><X size={16} /></button>
+          <aside className="relative h-full w-[260px] overflow-y-auto border-r border-line bg-canvas side-red" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute right-2 top-2 z-10"><button className="btn btn-ghost" aria-label="Close menu" onClick={() => setOpen(false)}><X size={16} /></button></div>
             {body}
           </aside>
         </div>

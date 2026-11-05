@@ -2,7 +2,7 @@
 // agenda grouping, the row action, Needs you ranking and the copy helpers. Run: node scripts/test-dashboard.ts
 import {
   plusDays, mondayOf, daysBetween, SKIP, isSkipped, skipNote, unskipNote, progressOf, deltaOf, weekOverWeek, dailySeries, countAt,
-  groupOf, typeLabel, agenda, primaryAction, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder,
+  groupOf, typeLabel, agenda, primaryAction, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder, collapseActivity, firstName, greeting,
 } from "../src/lib/dashboard.ts";
 
 let fails = 0;
@@ -138,6 +138,26 @@ const rowsS = [{ id: "a", done: true }, { id: "b", done: false }, { id: "c", don
 eq("settle sinks cleared rows", settleOrder(rowsS).map((r) => r.id), ["b", "d", "a", "c"]);
 eq("settle holds a just-cleared row in place", settleOrder(rowsS, new Set(["a"])).map((r) => r.id), ["a", "b", "d", "c"]);
 eq("settle keeps an all-open list", settleOrder([{ id: "x", done: false }, { id: "y", done: false }]).map((r) => r.id), ["x", "y"]);
+
+const acts = [
+  { kind: "comment", text: "Comment done", when: "2m" }, { kind: "comment", text: "Comment done", when: "5m" }, { kind: "comment", text: "Comment done", when: "9m" },
+  { kind: "stage", text: "Jimena moved to Warming", when: "10m" },
+  { kind: "request", text: "Connection request done: Igor Pesin", when: "11m" }, { kind: "request", text: "Connection request done: Prajit Nanu", when: "12m" },
+  { kind: "request", text: "Connection request done: Igor Pesin", when: "13m" },
+  { kind: "stage", text: "Jimena moved to Warming", when: "14m" }, { kind: "stage", text: "Igor moved to Connected", when: "15m" },
+];
+const col = collapseActivity(acts);
+eq("repeats collapse to one row each", col.map((r) => [r.text, r.count]), [["Comment done", 3], ["Jimena moved to Warming", 1], ["Connection request done", 3], ["Jimena moved to Warming", 1], ["Igor moved to Connected", 1]]);
+eq("the newest time is kept", col[0].when, "2m");
+eq("the detail lists who, once each", col[2].detail, "Igor Pesin, Prajit Nanu");
+eq("identical rows have no detail", col[0].detail, undefined);
+eq("a single row keeps its full text", collapseActivity([{ kind: "request", text: "Connection request done: Igor Pesin" }])[0].text, "Connection request done: Igor Pesin");
+eq("first name from the profile", firstName("Alok Diwan", "diwan.alok@antiersolutions.com"), "Alok");
+eq("first name from the email", firstName("", "kanishk.raj@antiersolutions.com"), "Kanishk");
+eq("no name from an unreadable email", firstName("", "x1@antier.com"), "");
+eq("greeting with a name", greeting(9, "Alok"), "Good morning, Alok");
+eq("greeting in the afternoon", greeting(13, "Alok"), "Good afternoon, Alok");
+eq("greeting without a name", greeting(20, ""), "Good evening");
 
 console.log(fails ?`\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -24,7 +24,7 @@ export function LinkedInPreview({ text, image, video, company, device, setDevice
           <span className="flex min-w-0 flex-col"><span className="text-[14px] font-semibold">{company ? "Antier" : "Shashi Pal"}</span><span className="truncate text-[12px] text-[#5f5f5f]">{company ? "Company page" : "Co-Founder and COO, Antier"}</span></span>
         </div>
         <div className="whitespace-pre-wrap px-4 pb-3.5 text-[14px] leading-normal">
-          {text ? (open || !f.folded ? text : f.shown) : <span className="text-[#8c8c8c]">The post appears here as you write.</span>}
+          {text ? (open || !f.folded ? text : f.shown) : <span className="text-faint">The post appears here as you write.</span>}
           {text && f.folded && !open && <button className="ml-1 font-semibold text-[#5f5f5f]" onClick={() => setOpen(true)}>…see more</button>}
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element -- a generated data URL, not a static asset */}
