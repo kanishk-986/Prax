@@ -142,6 +142,17 @@ Order: Content Studio, then Pipeline, then AI citations, then restyle the remain
 - Today adds one "Run the AI citation questions" task when the last run is 7 days old or there has never been one.
 - `db/010_citations_more.sql` (after 009). Tone and wrong facts are stored on `citation_runs` when the check runs; alerts are computed on the page. Not verified against Supabase yet.
 
+## Section shell (app-wide look, Wave 1)
+
+Every section uses `src/components/shell/index.tsx`; the gating and tour maths are pure functions in `src/lib/shell.ts`, tested by `node scripts/test-shell.ts`.
+
+- `Section({ id, title, status, entryStatus, actions, tabs, tab, onTab, steps, wide })` renders the entry moment, the header (title, status line, Guide button, actions top right), `UnderlineTabs` and the tour. `id` is the gating key, so keep it stable.
+- Entry moment: blurred veil, Prax mark, title and `entryStatus` (one live sentence). It dissolves after 2.3 s, on Enter or Escape, or on the button. It plays once per section per session (`sessionStorage prax:intro:<id>`) and never with reduced motion.
+- Tour: pass `steps: TourStep[]` (`{ target, title, body, tab? }`). Mark each target with `data-tour="<target>"`; `header` is built in. A step with `tab` switches to that tab through `onTab` first. The tour starts once per person per section after the entry moment (`localStorage prax:tour:<id>:<userId>`), and Guide reopens it. Keep tours at 6 to 10 steps, first step explains what the section is for.
+- Home blocks: `KpiTiles` (`tone` dark or red, `href` or `onClick`), `NeedsYou`, `StartCards`, `Activity`, `DarkCard`. Each takes `tour` to become a tour target. Use real data and an honest empty state; show "None" rather than a dash.
+- Settings and Extension keep `PageHeader`, restyled to the same type, with no entry moment.
+- Palette and tab, pill, tile, entry and tour classes are in `globals.css`. Content Studio and AI citations move onto `Section` after merge; their previews already match this API.
+
 ## Known gaps
 
 - Sign-in email uses Supabase's built-in sender, which is rate-limited. Fix: custom SMTP (Resend) set up by Alok.

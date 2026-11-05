@@ -1,20 +1,32 @@
 "use client";
-import { PageHeader } from "@/components/page-header";
+import { Section, type TourStep } from "@/components/shell";
 import { RecordList } from "@/components/record-list";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, SEGMENTS, today, weekStart, addDays } from "@/lib/workspace";
 
 type C = { id: string; day: string; author: string; segment: string; mode: string; url: string; reply: boolean; prospect_id: string | null; source: string };
 
+const ENG_TOUR: TourStep[] = [
+  { target: "header", title: "What came of every comment", body: "Engagement fills itself from comments logged with the extension, so you can see which ones earn replies.", tab: "home" },
+  { target: "kpis", title: "The numbers that matter", body: "Comments this week against the quota, the reply rate over 30 days, and prospects engaged.", tab: "home" },
+  { target: "modes", title: "Which modes earn replies", body: "Each mode of comment with its share of replies. Lean on the ones that work.", tab: "home" },
+  { target: "waiting", title: "Waiting for a reply", body: "Posts from the last 7 days with no reply yet. Open one, then press Check replies in the extension.", tab: "home" },
+  { target: "drafting", title: "Drafting", body: "What the extension drafted in 30 days: counts and scores only, never the text.", tab: "home" },
+  { target: "log", title: "The full log", body: "Every comment, with its author, segment, mode and reply. Add one by hand if it was posted without the extension.", tab: "log" },
+];
+
 export default function CommentLog() {
+  const { ws } = useWorkspace();
+  const [tab, setTab] = useState("home");
+  const wk = weekStart(today());
+  const { rows } = useLive<C>("comment_log", ws.id, { filter: (q) => q.gte("day", wk) });
   return (
-    <div className="mx-auto max-w-[1100px]">
-      <PageHeader title="Engagement" sub="Fills itself from comments logged with the extension. Replies are marked when you check a thread." />
-      <Insights />
-      <Drafting />
-      <RecordList table="comment_log" order="created_at" asc={false} empty="No comments logged yet. Comments posted with the Prax extension appear here automatically."
+    <Section id="engagement" title="Engagement" status="Fills itself from comments logged with the extension. Replies are marked when you check a thread."
+      entryStatus={`${rows.length} comments this week, ${rows.filter((r) => r.reply).length} with a reply.`}
+      tabs={[{ id: "home", label: "Home" }, { id: "log", label: "Log" }]} tab={tab} onTab={setTab} steps={ENG_TOUR}>
+      {tab === "home" ? <><Insights /><div data-tour="drafting" className="rounded-2xl"><Drafting /></div></> : <div data-tour="log" className="rounded-2xl"><RecordList table="comment_log" order="created_at" asc={false} empty="No comments logged yet. Comments posted with the Prax extension appear here automatically."
         defaults={{ day: new Date().toISOString().slice(0, 10), source: "manual" }}
         cols={[
           { key: "day", label: "Date", className: "num whitespace-nowrap text-muted", render: (r) => fmtDay(r.day) },
@@ -32,8 +44,8 @@ export default function CommentLog() {
           { key: "url", label: "Post URL", type: "url", wide: true },
           { key: "text", label: "Comment text", type: "textarea" },
           { key: "reply", label: "Reply received", type: "checkbox" },
-        ]} />
-    </div>
+        ]} /></div>}
+    </Section>
   );
 }
 
@@ -64,7 +76,7 @@ function Drafting() {
       <div className="card p-4 md:col-span-2">
         <div className="mb-3 flex flex-wrap items-baseline gap-x-5 gap-y-2">
           <span className="label">Drafting, 30 days</span>
-          {[["Drafts written", s.drafts], ["Used and posted", s.used], ["Avg Human", s.human ?? "–"], ["Avg Impact", s.impact ?? "–"], ["Day streak", s.streak]].map(([l, v]) => <span key={l as string} className="text-[12px] text-muted">{l} <b className="num text-[15px] text-ink">{v}</b></span>)}
+          {[["Drafts written", s.drafts], ["Used and posted", s.used], ["Avg Human", s.human ?? "None"], ["Avg Impact", s.impact ?? "None"], ["Day streak", s.streak]].map(([l, v]) => <span key={l as string} className="text-[12px] text-muted">{l} <b className="num text-[15px] text-ink">{v}</b></span>)}
         </div>
         <div className="flex h-16 items-end gap-1.5" role="img" aria-label={`Drafts per day: ${s.days.map((d) => d.n).join(", ")}`}>
           {s.days.map((d) => <div key={d.d} className="flex flex-1 flex-col items-center gap-1"><div title={`${fmtDay(d.d)}: ${d.n}`} className="w-full rounded-sm" style={{ height: `${Math.max(3, (d.n / peak) * 52)}px`, background: d.n ? "var(--accent)" : "var(--line)" }} /><span className="num text-[10px] text-faint">{d.d.slice(8)}</span></div>)}
@@ -119,13 +131,13 @@ function Insights() {
   );
   return (
     <div className="mb-6 flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div data-tour="kpis" className="grid grid-cols-2 gap-3 rounded-2xl md:grid-cols-4">
         {kpi.map(([l, v, h]) => <div key={l} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-[20px] font-semibold">{v}</div><div className="text-[11px] text-muted">{h}</div></div>)}
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <Bars title="Which modes earn replies" data={s.modes} />
+        <div data-tour="modes" className="rounded-2xl"><Bars title="Which modes earn replies" data={s.modes} /></div>
         <Bars title="By segment" data={s.segs} color={(k) => SEGMENTS[k]?.color ?? "var(--faint)"} />
-        <div className="card p-4">
+        <div data-tour="waiting" className="card p-4">
           <div className="label mb-2">Waiting for a reply (7 days)</div>
           {s.waiting.length === 0 ? <p className="text-[13px] text-muted">Nothing waiting.</p> : s.waiting.map((r) => (
             <a key={r.id} href={r.url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-2 rounded-md py-1.5 text-[13px] hover:text-accent">

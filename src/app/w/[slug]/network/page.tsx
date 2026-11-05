@@ -5,7 +5,7 @@ import { Upload, FileArchive, ExternalLink, Check, X, ChevronDown, Trash2, UserP
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { Section, KpiTiles, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import {
   readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normUrl,
@@ -15,7 +15,7 @@ import {
 type Post = { kind: "post" | "comment"; key: string; day: string | null; url: string; text: string };
 type Import = { id: string; file_name: string; export_date: string | null; counts: Record<string, number>; created_at: string };
 type Settings = { segments: SegRule[]; topics: TopicRule[] };
-const TABS = ["Upload", "Segments", "Warm paths", "Topics"] as const;
+const TABS = ["Home", "Segments", "Warm paths", "Topics", "Import"] as const;
 type Tab = (typeof TABS)[number];
 const OPEN_STAGES = ["Target", "Warming", "Requested"];
 const splitWords = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
@@ -32,9 +32,18 @@ async function loadAll<T>(table: string, wsId: string, cols = "*"): Promise<T[]>
   return out;
 }
 
+const NET_TOUR: TourStep[] = [
+  { target: "known", title: "Who Shashi already knows at each target account", body: "Network exists for one reason: a warm way in before anyone sends a cold request. Every open prospect is ranked by the warmest route: already connected, talked before, then a colleague at their company.", tab: "Home" },
+  { target: "kpis", title: "How warm the pipeline is", body: "How many prospects are already connections, have talked before, or work where someone he knows works.", tab: "Home" },
+  { target: "row", title: "One action per person", body: "Message them when he is connected, ask a colleague for an intro, or comment on their posts first. Prax opens LinkedIn; Shashi writes and sends.", tab: "Home" },
+  { target: "freshness", title: "Keep the export fresh", body: "Connections change. Import the LinkedIn export again every month or two; Prax reminds you after 60 days.", tab: "Home" },
+  { target: "header", title: "The detail behind it", body: "Segments sorts every connection into A to E, Warm paths shows each route in full, and Topics shows what he has posted about.", tab: "Home" },
+  { target: "import", title: "Import", body: "The LinkedIn export zip is read in this browser. Message text and emails are never saved.", tab: "Import" },
+];
+
 export default function NetworkPage() {
   const { ws } = useWorkspace();
-  const [tab, setTab] = useState<Tab>("Upload");
+  const [tab, setTab] = useState<Tab>("Home");
   const [people, setPeople] = useState<Person[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [imports, setImports] = useState<Import[]>([]);
@@ -56,25 +65,109 @@ export default function NetworkPage() {
     setLoading(false);
   }, [ws.id]);
   useEffect(() => { reload(); }, [reload]);
-  useEffect(() => { if (!loading && people.length) setTab((t) => (t === "Upload" ? "Warm paths" : t)); }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Prospect companies act as company rules for their segment.
   const prospectCompanies = useMemo(() => new Map(prospects.rows.filter((p) => p.company && p.segment).map((p) => [normCompany(p.company), p.segment])), [prospects.rows]);
   const segOf = useCallback((x: Person) => x.segment_manual || segmentFor(x.company, x.position, settings.segments, prospectCompanies), [settings.segments, prospectCompanies]);
   const idx = useMemo(() => indexPeople(people), [people]);
 
+  const conns = people.filter((p) => p.is_connection).length;
   return (
-    <div className="mx-auto max-w-[1180px]">
-      <PageHeader title="Network" sub="What the LinkedIn data export says about your network: who is in which segment, the warm way in to each prospect, and what you post about." />
-      <div className="mb-4 flex w-fit flex-wrap rounded-lg border border-line-strong bg-surface p-0.5">
-        {TABS.map((t) => <button key={t} className={`btn h-7 border-0 ${tab === t ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setTab(t)}>{t}</button>)}
-      </div>
+    <Section id="network" title="Network" status="Who Shashi already knows at each target account, so every approach starts warm."
+      entryStatus={conns ? `${conns.toLocaleString()} connections imported. The warmest routes to your prospects are on Home.` : "Import his LinkedIn connections to find warm routes to every prospect."}
+      tabs={TABS.map((t) => ({ id: t, label: t }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={NET_TOUR}
+      actions={<button className="btn btn-primary h-10 px-4" onClick={() => setTab("Import")}><Upload size={14} /> Import connections</button>}>
       {loading ? <div className="card h-64 animate-pulse bg-surface-2" />
-        : tab === "Upload" ? <UploadTab imports={imports} people={people} prospects={prospects.rows} onDone={reload} />
-        : !people.length && tab !== "Topics" ? <Empty onUpload={() => setTab("Upload")} />
+        : tab === "Home" ? <NetworkHome people={people} idx={idx} prospects={prospects.rows} comments={comments.rows} imports={imports} onImport={() => setTab("Import")} />
+        : tab === "Import" ? <div data-tour="import" className="rounded-2xl"><UploadTab imports={imports} people={people} prospects={prospects.rows} onDone={reload} /></div>
+        : !people.length && tab !== "Topics" ? <Empty onUpload={() => setTab("Import")} />
         : tab === "Segments" ? <SegmentsTab people={people} segOf={segOf} settings={settings} setSettings={setSettings} prospects={prospects.rows} onChange={setPeople} />
         : tab === "Warm paths" ? <WarmTab people={people} idx={idx} prospects={prospects.rows} comments={comments.rows} segOf={segOf} onChange={setPeople} />
-        : <TopicsTab posts={posts} settings={settings} setSettings={setSettings} onUpload={() => setTab("Upload")} />}
+        : <TopicsTab posts={posts} settings={settings} setSettings={setSettings} onUpload={() => setTab("Import")} />}
+    </Section>
+  );
+}
+
+type Camp = { id: string; name: string; status: string };
+
+/** Home: one row per open prospect, ranked by the warmest route in, with one clear next step. */
+function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { people: Person[]; idx: ReturnType<typeof indexPeople>; prospects: ProspectLite[]; comments: CommentLite[]; imports: Import[]; onImport: () => void }) {
+  const { ws, can } = useWorkspace();
+  const toast = useToast();
+  const [camps, setCamps] = useState<Camp[]>([]);
+  const [pick, setPick] = useState<string | null>(null);
+  useEffect(() => {
+    supabase().from("campaigns").select("id,name,status").eq("workspace_id", ws.id).eq("template", false).neq("status", "done")
+      .then(({ data, error }: { data: Camp[] | null; error: unknown }) => { if (!error && data) setCamps(data); });
+  }, [ws.id]);
+  const rows = useMemo(() => prospects.filter((p) => !["Won", "Parked"].includes(p.stage)).map((p) => ({ p, w: warmPaths(p, people, idx, comments) }))
+    .sort((a, b) => (a.w.level || 9) - (b.w.level || 9)
+      || (a.w.colleagues[0] ? seniority(a.w.colleagues[0].position) : 9) - (b.w.colleagues[0] ? seniority(b.w.colleagues[0].position) : 9)
+      || a.p.name.localeCompare(b.p.name)), [prospects, people, idx, comments]);
+  const last = imports[0];
+  const ageDays = last ? Math.floor((Date.now() - Date.parse(last.created_at)) / 864e5) : null;
+  const n = (l: number) => rows.filter((r) => r.w.level === l).length;
+
+  if (!people.length) return (
+    <section data-tour="known" className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-6">
+      <h2 className="text-[19px] font-semibold">Who Shashi already knows at each target account</h2>
+      <p className="max-w-[640px] text-[14px] leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people he does not know yet. Import his connections once and Prax shows, for every prospect, whether he is connected, has talked before, or knows someone there.</p>
+      <ol className="ml-4 list-decimal space-y-1 text-[13px] text-ink-2">
+        <li>On LinkedIn: Me, Settings &amp; Privacy, Data privacy, Get a copy of your data.</li>
+        <li>Choose the larger archive, or pick Connections, Messages, Invitations, Shares and Comments.</li>
+        <li>LinkedIn emails a link, sometimes after up to 24 hours. Drop the zip in Import.</li>
+      </ol>
+      <div><button className="btn btn-primary h-10 px-4" onClick={onImport}><Upload size={14} /> Import LinkedIn connections</button></div>
+    </section>
+  );
+
+  const route = (w: Warm, p: ProspectLite) => {
+    if (w.linked?.is_connection) return { text: `Connected${w.linked.connected_on ? ` since ${fmtDay(w.linked.connected_on, { month: "short", year: "numeric" })}` : ""}${w.msgs ? `, ${w.msgs.count} messages` : ""}`, cta: "Message them", url: w.linked.url || p.linkedin };
+    if (w.msgs || w.comments.replies) return { text: w.msgs ? `Talked before: ${w.msgs.count} messages, ${w.msgs.from === "us" ? "waiting on them" : "they wrote last"}` : `Replied to his comments ${w.comments.replies} time${w.comments.replies > 1 ? "s" : ""}`, cta: "Message them", url: w.linked?.url || p.linkedin };
+    const c = w.colleagues[0];
+    if (c) return { text: `Knows ${c.name}${c.position ? `, ${c.position}` : ""}, at ${p.company}${w.colleagues.length > 1 ? `, and ${w.colleagues.length - 1} more` : ""}`, cta: "Ask for an intro", url: c.url };
+    return { text: "No warm route yet. Comment on their posts before any request.", cta: "Comment on their posts first", url: p.linkedin };
+  };
+  async function addTarget(p: ProspectLite, campId: string) {
+    const { error } = await supabase().from("campaign_targets").insert({ workspace_id: ws.id, campaign_id: campId, prospect_id: p.id, name: p.name, company: p.company, linkedin: p.linkedin });
+    setPick(null);
+    if (error) toast(error.message); else { haptic(); toast(`${p.name} added to ${camps.find((c) => c.id === campId)?.name ?? "the campaign"}`); }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <KpiTiles tour="kpis" items={[
+        { label: "Already connected", value: n(1), of: `of ${rows.length}`, sub: "open prospects", tone: "dark" },
+        { label: "Talked before", value: n(2), of: `of ${rows.length}`, sub: "messages or replies" },
+        { label: "Knows someone there", value: n(3), of: `of ${rows.length}`, sub: "a colleague is a connection" },
+        { label: "No route yet", value: rows.filter((r) => !r.w.level).length, of: `of ${rows.length}`, sub: "comment first", tone: "red" },
+      ]} />
+      <div data-tour="freshness" className={`flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 text-[13px] ${ageDays != null && ageDays >= 60 ? "bg-[#141414] text-white" : "border border-line bg-surface text-muted"}`}>
+        <span className="flex-1">{ageDays == null ? "No import recorded yet." : ageDays >= 60 ? `Re-import due: the last export is ${ageDays} days old, so newer connections are missing.` : `Last import ${ageDays === 0 ? "today" : `${ageDays} days ago`}: ${people.filter((x) => x.is_connection).length.toLocaleString()} connections.`}</span>
+        {ageDays != null && ageDays >= 60 && <button className="btn btn-primary h-8" onClick={onImport}>Import again</button>}
+      </div>
+      <section data-tour="known" className="overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5"><span className="text-[15px] font-semibold">Who Shashi already knows at each target account</span><span className="text-[12px] text-muted">warmest route first</span></div>
+        {rows.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">No open prospects yet. Add people in Pipeline, or from Segments.</p> : rows.map(({ p, w }, i) => {
+          const r = route(w, p);
+          return (
+            <div key={p.id} data-tour={i === 0 ? "row" : undefined} className="flex flex-wrap items-center gap-3 border-t border-line px-[18px] py-3">
+              <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
+                <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-[14px] font-semibold hover:underline">{p.name}</Link>
+                <span className="text-[12px] text-muted">{[p.role, p.company].filter(Boolean).join(" · ")} · {p.stage}</span>
+              </span>
+              <span className="min-w-[240px] flex-[2] text-[13px] text-ink-2">{r.text}</span>
+              <span className="flex flex-wrap items-center gap-2">
+                {r.url ? <a href={r.url} target="_blank" rel="noopener" className={`btn h-8 ${w.level ? "btn-primary" : "btn-dark"}`}>{r.cta} <ExternalLink size={12} /></a> : <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="btn h-8">{r.cta}</Link>}
+                {can("editor") && camps.length > 0 && (pick === p.id
+                  ? <select autoFocus className="field h-8 w-44 text-[12px]" defaultValue="" onBlur={() => setPick(null)} onChange={(e) => e.target.value && addTarget(p, e.target.value)} aria-label={`Campaign for ${p.name}`}><option value="" disabled>Pick a campaign</option>{camps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                  : <button className="btn h-8" onClick={() => setPick(p.id)}><UserPlus size={13} /> Add to campaign targets</button>)}
+              </span>
+            </div>
+          );
+        })}
+        <p className="border-t border-line px-[18px] py-2.5 text-[11.5px] text-faint">Prax only opens LinkedIn. Shashi writes and sends every message himself.</p>
+      </section>
     </div>
   );
 }

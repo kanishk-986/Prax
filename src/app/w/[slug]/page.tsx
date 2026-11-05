@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase/client";
 import { ArrowUpRight, Activity as ActivityIcon } from "lucide-react";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, SEGMENTS, KINDS } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { Section, type TourStep } from "@/components/shell";
 
 type Item = { day: string; kind: string; done: boolean };
 type Prospect = { id: string; name: string; company: string; stage: string; segment: string; next_action: string; next_date: string | null };
@@ -17,6 +17,16 @@ const REACH = [
   { key: "followers", label: "Followers", sub: "total" },
   { key: "profile_views_90d", label: "Profile viewers", sub: "last 90 days" },
   { key: "search_appearances", label: "Search appearances", sub: "last week" },
+];
+
+const DASH_TOUR: TourStep[] = [
+  { target: "kpis", title: "The numbers for this week", body: "Today's progress, comments and requests against quota, conversations, calls, your streak and warm paths. Click warm paths to open Network." },
+  { target: "next", title: "Next actions", body: "What needs doing now: today's items, follow-ups that are due, prospects ready for a request, and posts still in the works." },
+  { target: "execution", title: "Daily execution", body: "Fourteen days of items done against planned, so a slipping week shows early." },
+  { target: "funnel", title: "Pipeline at a glance", body: "How many people sit in each stage. Open Pipeline to move them." },
+  { target: "reach", title: "LinkedIn reach", body: "Impressions, followers, profile viewers and search appearances, captured when you open his LinkedIn analytics with the extension." },
+  { target: "activity", title: "Live activity", body: "Ticks on Today and pipeline moves appear here as the team works." },
+  { target: "followups", title: "Follow-ups due", body: "People whose next action date has arrived. Nothing here means nobody is waiting on you." },
 ];
 
 export default function Dashboard() {
@@ -63,13 +73,14 @@ export default function Dashboard() {
   const wkDays = Math.min(5, Math.round((new Date(t + "T12:00:00").getTime() - new Date(wk + "T12:00:00").getTime()) / 864e5) + 1);
   const hour = new Date().getHours();
 
+  const left = stats.today.total - stats.today.done;
   return (
-    <div className="mx-auto max-w-[1180px]">
-      <PageHeader title={`Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}`} sub={`${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}`}>
-        <Link href={`/w/${ws.slug}/today`} className="btn btn-primary">Open today’s checklist <ArrowUpRight size={14} /></Link>
-      </PageHeader>
+    <Section id="dashboard" title={`Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}`} status={`${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}`}
+      entryStatus={stats.today.total ? `${left} of ${stats.today.total} items left today. ${pipe.due.length} follow-ups due.` : `${pipe.due.length} follow-ups due. Today's checklist is not opened yet.`}
+      actions={<Link href={`/w/${ws.slug}/today`} className="btn btn-primary h-10 px-4">Open today’s checklist <ArrowUpRight size={14} /></Link>}
+      steps={DASH_TOUR}>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div data-tour="kpis" className="grid grid-cols-2 gap-3 rounded-2xl sm:grid-cols-4 lg:grid-cols-7">
         <Kpi label="Today" value={`${stats.today.done}/${stats.today.total || 0}`} foot={stats.today.total ? `${Math.round((stats.today.done / stats.today.total) * 100)}% done` : "Not opened yet"} tone={stats.today.total && stats.today.done >= stats.today.total ? "good" : undefined} />
         <Kpi label="Comments this week" value={stats.comment.done} foot={`target ${q.comment * wkDays}`} />
         <Kpi label="Requests this week" value={stats.request.done} foot={`target ${q.request * wkDays}`} />
@@ -79,22 +90,22 @@ export default function Dashboard() {
         <Link href={`/w/${ws.slug}/network`} className="contents"><Kpi label="Warm paths" value={warm ?? "–"} foot={warm == null ? "upload the export" : "open prospects"} tone={warm ? "good" : undefined} /></Link>
       </div>
 
-      <NextActions slug={ws.slug} todayLeft={stats.today.total - stats.today.done} todayTotal={stats.today.total} due={pipe.due.length}
-        ready={prospects.rows.filter((p) => p.stage === "Warming").length} posts={posts.rows.filter((p) => !["Posted", "Ready", "On hold", "Published", "Approved", "Scheduled"].includes(p.status))} />
+      <div data-tour="next"><NextActions slug={ws.slug} todayLeft={stats.today.total - stats.today.done} todayTotal={stats.today.total} due={pipe.due.length}
+        ready={prospects.rows.filter((p) => p.stage === "Warming").length} posts={posts.rows.filter((p) => !["Posted", "Ready", "On hold", "Published", "Approved", "Scheduled"].includes(p.status))} /></div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-3">
-        <section className="card p-5 lg:col-span-2">
+      <div className="grid gap-3 lg:grid-cols-3">
+        <section data-tour="execution" className="card p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Daily execution</h2><span className="text-[12px] text-muted">last 14 days · items done vs planned</span></div>
           <Bars days={stats.days} today={t} />
         </section>
-        <section className="card p-5">
+        <section data-tour="funnel" className="card p-5">
           <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Pipeline</h2><Link href={`/w/${ws.slug}/pipeline`} className="text-[12px] text-accent">Open</Link></div>
           <Funnel counts={pipe.counts} />
         </section>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-3">
-        <section className="card p-5 lg:col-span-2">
+      <div className="grid gap-3 lg:grid-cols-3">
+        <section data-tour="reach" className="card p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">LinkedIn reach</h2><span className="text-[12px] text-muted">captured from LinkedIn with the Prax extension</span></div>
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {REACH.map((r) => { const e = latest[r.key]; const delta = e?.now && e?.prev ? e.now.value - e.prev.value : null; return (
@@ -106,7 +117,7 @@ export default function Dashboard() {
             ); })}
           </div>
         </section>
-        <section className="card p-5">
+        <section data-tour="activity" className="card p-5">
           <h2 className="flex items-center gap-2 text-[14px] font-semibold"><ActivityIcon size={14} /> Live activity</h2>
           <ul className="mt-3 flex max-h-[220px] flex-col gap-2 overflow-auto">
             {acts.rows.length === 0 && <li className="text-[13px] text-muted">Ticks on Today and pipeline moves appear here as they happen.</li>}
@@ -120,7 +131,7 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <section className="card mt-3 p-5">
+      <section data-tour="followups" className="card p-5">
         <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Follow-ups due</h2><span className="text-[12px] text-muted">{pipe.due.length} people</span></div>
         {pipe.due.length === 0 ? <p className="mt-3 text-[13px] text-muted">Nothing due. People whose next-action date has arrived show here.</p> : (
           <ul className="mt-2 divide-y divide-line">
@@ -136,7 +147,7 @@ export default function Dashboard() {
           </ul>
         )}
       </section>
-    </div>
+    </Section>
   );
 }
 

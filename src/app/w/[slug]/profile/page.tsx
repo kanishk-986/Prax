@@ -4,12 +4,20 @@ import { Upload, ClipboardPaste, FileText, X, ChevronDown, Check, Circle, Rotate
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { Section, KpiTiles, NeedsYou, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { parseProfile, auditProfile, topicReport, prosCons, roadmap, MANUAL, TOP_TIER, type Parsed, type Audit } from "@/lib/profile";
 
 type Doc = { id: string; subject: "self" | "prospect"; prospect_id: string | null; source: string; file_name: string; raw_text: string; parsed: Parsed; audit: Audit & { manual?: Record<string, boolean>; roadmap?: Record<string, boolean> }; score: number; created_at: string };
 type P = { id: string; name: string; company: string };
+const PROFILE_TOUR: TourStep[] = [
+  { target: "kpis", title: "How strong his profile is", body: "The latest score out of 100, the change since the previous review, and how far the three-month roadmap has got.", tab: "home" },
+  { target: "trend", title: "Score over time", body: "Every review is kept, so each fix shows up as a step up.", tab: "home" },
+  { target: "fixes", title: "Top fixes", body: "The changes worth the most points, largest first. Open the report for the full list.", tab: "home" },
+  { target: "topics", title: "Target topics", body: "What his profile should be known for. Scores are measured against these.", tab: "self" },
+  { target: "intake", title: "Run a review", body: "Save his LinkedIn profile as a PDF and drop it here, or paste the text. Prospects and personas work the same way.", tab: "self" },
+  { target: "report", title: "The report", body: "Score by area, pros and cons, the keyword map, the roadmap with ticks, and every fix.", tab: "self" },
+];
 
 export default function ProfileStudio() {
   const { ws, can } = useWorkspace();
@@ -32,27 +40,69 @@ export default function ProfileStudio() {
     if (error) toast(error.message); else haptic();
   }
 
+  const [view, setView] = useState<"home" | "self" | "prospect">("home");
+  const selfDocs = docs.filter((d) => d.subject === "self");
+  const latest = selfDocs[0], prev = selfDocs[1];
+  const home = useMemo(() => {
+    if (!latest) return null;
+    const audit = auditProfile(latest.parsed, topics);
+    const rows = topicReport(latest.parsed, topics);
+    const steps = roadmap(audit, rows, latest.audit?.manual ?? {});
+    const done = steps.filter((x) => latest.audit?.roadmap?.[x.id]).length;
+    const fixes = audit.checks.filter((c) => !c.pass).sort((a, b) => b.max - a.max).slice(0, 5);
+    return { score: audit.score, done, total: steps.length, fixes };
+  }, [latest, topics]);
+  const pickView = (v: string) => { setView(v as typeof view); if (v !== "home") { setTab(v as "self" | "prospect"); setSelId(null); setFresh(false); } };
+  const first = ws.name.split(" ")[0];
   return (
-    <div className="mx-auto max-w-[1200px]">
-      <PageHeader title="Profile Studio" sub="Upload a LinkedIn profile, see how it scores for the topics you want to rank for, and fix what fails.">
-        {editable && mine.length > 0 && !fresh && <button className="btn" onClick={() => { setFresh(true); setSelId(null); haptic(); }}><RotateCcw size={14} /> Start a new review</button>}
-      </PageHeader>
-      <TopicEditor topics={topics} editable={can("owner")} onChange={saveTopics} />
+    <Section id="profile" title="Profile Studio" status="How his LinkedIn profile scores for the topics he wants to rank for, and what to fix next."
+      entryStatus={home ? `${first}'s profile scores ${home.score} out of 100. ${home.fixes.length} fixes worth doing.` : `No review of ${first}'s profile yet.`}
+      tabs={[{ id: "home", label: "Home" }, { id: "self", label: `${first}'s profile` }, { id: "prospect", label: "Prospects and personas" }]} tab={view} onTab={pickView} steps={PROFILE_TOUR}
+      actions={editable && view !== "home" && mine.length > 0 && !fresh ? <button className="btn h-10" onClick={() => { setFresh(true); setSelId(null); haptic(); }}><RotateCcw size={14} /> Start a new review</button> : undefined}>
 
-      <div className="mb-4 mt-6 flex rounded-lg border border-line-strong bg-surface p-0.5 w-fit">
-        {(["self", "prospect"] as const).map((t) => (
-          <button key={t} className={`btn h-7 border-0 ${tab === t ? "bg-surface-2" : "bg-transparent"}`} onClick={() => { setTab(t); setSelId(null); setFresh(false); }}>
-            {t === "self" ? `${ws.name.split(" ")[0]}'s profile` : "Prospects and personas"}
-          </button>
-        ))}
-      </div>
+      {view === "home" && (home ? (
+        <div className="flex flex-col gap-4">
+          <KpiTiles tour="kpis" items={[
+            { label: "Profile score", value: home.score, of: "of 100", sub: home.score >= TOP_TIER ? "top tier" : `top tier needs ${TOP_TIER}+`, tone: "dark", onClick: () => pickView("self") },
+            { label: "Since last review", value: prev ? `${home.score - prev.score >= 0 ? "+" : ""}${home.score - prev.score}` : "None", sub: prev ? `from ${prev.score}` : "first review" },
+            { label: "Roadmap", value: home.done, of: `of ${home.total}`, sub: "steps done" },
+            { label: "Fixes open", value: home.fixes.length, sub: "largest first", tone: home.fixes.length ? "red" : undefined, onClick: () => pickView("self") },
+          ]} />
+          <div className="flex flex-wrap gap-4">
+            <section data-tour="trend" className="min-w-0 flex-[3_1_480px] rounded-2xl border border-line bg-surface p-[18px]">
+              <div className="mb-3 font-semibold">Score over time</div>
+              <div className="flex h-[140px] items-end gap-2" role="img" aria-label={`Scores: ${[...selfDocs].reverse().map((d) => d.score).join(", ")}`}>
+                {[...selfDocs].reverse().slice(-12).map((d) => (
+                  <button key={d.id} type="button" title={`${fmtDay(ymd(new Date(d.created_at)), { day: "numeric", month: "short" })}: ${d.score}`} onClick={() => { pickView("self"); setSelId(d.id); }} className="flex flex-1 flex-col items-center gap-1">
+                    <span className="num text-[11px] text-muted">{d.score}</span>
+                    <span className="w-full rounded-t-md bg-[#141414]" style={{ height: `${Math.max(6, d.score)}px` }} />
+                    <span className="num text-[10px] text-faint">{fmtDay(ymd(new Date(d.created_at)), { day: "numeric", month: "short" })}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+            <div className="min-w-0 flex-[2_1_320px]">
+              <NeedsYou tour="fixes" title="Top fixes" empty="Every readable check passes." items={home.fixes.map((c) => ({ title: c.label, sub: `+${c.max} points · ${c.fix}`, cta: "Open", onClick: () => pickView("self"), tone: "red" as const }))} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <section data-tour="kpis" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-6">
+          <h2 className="text-[19px] font-semibold">No review yet</h2>
+          <p className="max-w-[600px] text-[14px] text-ink-2">Save {first}&apos;s LinkedIn profile as a PDF (open the profile, More, Save to PDF) and drop it in. Prax scores it against his target topics and builds a three-month roadmap.</p>
+          <div><button className="btn btn-primary h-10 px-4" onClick={() => pickView("self")}><Upload size={14} /> Review his profile</button></div>
+        </section>
+      ))}
+
+      {view !== "home" && <>
+      <div data-tour="topics" className="rounded-2xl"><TopicEditor topics={topics} editable={can("owner")} onChange={saveTopics} /></div>
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <div className="flex flex-col gap-4">
+        <div data-tour="intake" className="flex flex-col gap-4 rounded-2xl">
           {editable && <Intake key={`${tab}${fresh}`} subject={tab} topics={topics} prospects={prospects} prev={fresh ? undefined : mine[0]} onSaved={(id) => { setSelId(id); setFresh(false); }} />}
           <History docs={mine} loading={loading} sel={sel?.id} onPick={(id) => { setSelId(id); setFresh(false); }} prospects={prospects} />
         </div>
-        {sel ? <Report doc={sel} topics={topics} editable={editable} prospect={prospects.find((p) => p.id === sel.prospect_id)} />
+        <div data-tour="report" className="min-w-0 rounded-2xl">{sel ? <Report doc={sel} topics={topics} editable={editable} prospect={prospects.find((p) => p.id === sel.prospect_id)} />
           : fresh ? (
             <div className="card grid min-h-[320px] place-items-center p-10 text-center">
               <div className="max-w-[360px]">
@@ -61,9 +111,10 @@ export default function ProfileStudio() {
                 <button className="btn btn-ghost mt-3" onClick={() => setFresh(false)}>Back to the last review</button>
               </div>
             </div>
-          ) : <div className="card grid min-h-[320px] place-items-center p-10 text-center text-[13px] text-muted">{loading ? "Loading" : tab === "self" ? "No profile uploaded yet. Save the profile as a PDF from LinkedIn and drop it on the left." : "No prospect profiles yet. Paste a prospect's profile text to build a persona."}</div>}
+          ) : <div className="card grid min-h-[320px] place-items-center p-10 text-center text-[13px] text-muted">{loading ? "Loading" : tab === "self" ? "No profile uploaded yet. Save the profile as a PDF from LinkedIn and drop it on the left." : "No prospect profiles yet. Paste a prospect's profile text to build a persona."}</div>}</div>
       </div>
-    </div>
+      </>}
+    </Section>
   );
 }
 
