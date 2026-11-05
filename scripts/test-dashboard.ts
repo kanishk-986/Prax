@@ -2,7 +2,7 @@
 // agenda grouping, the row action, Needs you ranking and the copy helpers. Run: node scripts/test-dashboard.ts
 import {
   plusDays, mondayOf, daysBetween, SKIP, isSkipped, skipNote, unskipNote, progressOf, deltaOf, weekOverWeek, dailySeries, countAt,
-  groupOf, typeLabel, agenda, primaryAction, urgency, rankNeeds, whenLabel, weekSentence, relTime,
+  groupOf, typeLabel, agenda, primaryAction, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder,
 } from "../src/lib/dashboard.ts";
 
 let fails = 0;
@@ -120,5 +120,23 @@ eq("rel yesterday", relTime(new Date(Date.parse("2026-11-05T10:00:00")).toISOStr
 eq("rel older", relTime(new Date(Date.parse("2026-11-01T10:00:00")).toISOString(), now), "1 Nov");
 eq("rel bad input", relTime("nope", now), "");
 
-console.log(fails ? `\n${fails} failed` : "\nall passed");
+// count between (numbers that change after first view)
+eq("count between starts at from", countBetween(4, 9, 0), 4);
+eq("count between lands on to", countBetween(4, 9, 300), 9);
+eq("count between going down", countBetween(9, 4, 9999), 4);
+eq("count between moves toward to", countBetween(0, 10, 150) > 5, true);
+
+// AI citations headline change in points
+eq("points up", pointsDelta(40, 25), { diff: 15, dir: "up", text: "+15 pts" });
+eq("points down", pointsDelta(10, 30), { diff: -20, dir: "down", text: "−20 pts" });
+eq("points flat", pointsDelta(20, 20)?.text, "No change");
+eq("points need both weeks", pointsDelta(20, null), null);
+
+// settle order: open rows first, cleared rows sink, just-cleared rows wait
+const rowsS = [{ id: "a", done: true }, { id: "b", done: false }, { id: "c", done: false, note: SKIP }, { id: "d", done: false }];
+eq("settle sinks cleared rows", settleOrder(rowsS).map((r) => r.id), ["b", "d", "a", "c"]);
+eq("settle holds a just-cleared row in place", settleOrder(rowsS, new Set(["a"])).map((r) => r.id), ["a", "b", "d", "c"]);
+eq("settle keeps an all-open list", settleOrder([{ id: "x", done: false }, { id: "y", done: false }]).map((r) => r.id), ["x", "y"]);
+
+console.log(fails ?`\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

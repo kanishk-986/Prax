@@ -7,9 +7,14 @@ import { ChevronLeft, ChevronRight, Plus, Check, Link2, Trash2, ArrowUpRight } f
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, fmtDay, isWeekday, KINDS } from "@/lib/workspace";
-import { Section, ProgressRing, CountUp, reveal, type TourStep } from "@/components/shell";
+import { Section, ProgressRing, CountUp, reveal, useFlip, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
-import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primaryAction, whenLabel, GROUPS, groupOf } from "@/lib/dashboard";
+import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primaryAction, whenLabel, settleOrder, GROUPS, groupOf } from "@/lib/dashboard";
+
+const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+/** What a task type means, shown when hovering or focusing its type label. */
+const hintFor = (it: { kind: string; idx: number }) => KINDS.find((k) => k.key === it.kind)?.hint ?? GROUPS.find((g) => g.key === groupOf(it))?.hint ?? "";
+const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
 
 type Item = { id: string; day: string; kind: string; idx: number; title: string; done: boolean; link: string; note: string; done_at: string | null };
 type Due = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null };
@@ -66,7 +71,13 @@ export default function Today() {
     })();
   }, [day, loading, rows, editable, ws.id, ws.slug, reload]);
 
-  const groups = useMemo(() => agenda(rows), [rows]);
+  // A cleared row holds its place for a moment (the tick shows), then settles below the open ones.
+  const [holding, setHolding] = useState<Set<string>>(new Set());
+  const hold = useCallback((id: string) => {
+    setHolding((h) => new Set(h).add(id));
+    setTimeout(() => setHolding((h) => { const n = new Set(h); n.delete(id); return n; }), 420);
+  }, []);
+  const groups = useMemo(() => agenda(rows).map((g) => ({ ...g, items: settleOrder(g.items, holding) })), [rows, holding]);
   const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const prog = progressOf(rows);
 
@@ -80,19 +91,20 @@ export default function Today() {
     if (!editable) return;
     const next = !it.done;
     haptic(next ? 10 : 4);
-    if (next) setJustDone(it.id);
+    if (next) { setJustDone(it.id); if (!isSkipped(it.note)) hold(it.id); }
     // Ticking a skipped item clears the skip, so the note goes back to what it was.
     patch(it.id, isSkipped(it.note) ? { done: next, note: unskipNote(it.note) } : { done: next });
     if (next) toast(`${typeLabel(it)} done`, () => patch(it.id, { done: false, note: it.note }));
-  }, [editable, patch, toast]);
+  }, [editable, patch, toast, hold]);
 
   const skip = useCallback((it: Item) => {
     if (!editable || it.done) return;
     if (isSkipped(it.note)) { patch(it.id, { note: unskipNote(it.note) }); return; }
     haptic(4);
+    hold(it.id);
     patch(it.id, { note: skipNote(it.note) });
     toast(`${typeLabel(it)} skipped`, () => patch(it.id, { note: it.note }));
-  }, [editable, patch, toast]);
+  }, [editable, patch, toast, hold]);
 
   // Keyboard: j/k move, x toggles done, s skips.
   const list = useRef<HTMLDivElement>(null);
@@ -108,7 +120,14 @@ export default function Today() {
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [ordered, focus, toggle, skip]);
-  useEffect(() => { list.current?.querySelector(`[data-i="${focus}"]`)?.scrollIntoView({ block: "nearest" }); }, [focus]);
+  useEffect(() => { list.current?.querySelector(`[data-i="${focus}"]`)?.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" }); }, [focus]);
+  useFlip(list);
+  const jumpTo = (key: string) => {
+    const g = groups.find((x) => x.key === key);
+    const first = g?.items.find((r) => !r.done && !isSkipped(r.note)) ?? g?.items[0];
+    if (first) setFocus(ordered.indexOf(first));
+    document.getElementById(`group-${key}`)?.scrollIntoView({ block: "start", behavior: reduced() ? "auto" : "smooth" });
+  };
 
   async function addCustom() {
     const { data } = await supabase().from("daily_items").insert({ workspace_id: ws.id, day, kind: "custom", idx: Math.max(1000, ...rows.filter((r) => r.kind === "custom" && r.idx < 2000).map((r) => r.idx)) + 1, title: "" }).select().single();
@@ -135,18 +154,18 @@ export default function Today() {
         {prog.state === "complete" ? <DaySummary prog={prog} rows={rows} isToday={isToday} slug={ws.slug} onNext={() => setDay(addDays(day, 1))} /> : (
           <section data-tour="progress" {...reveal(0)} className={`panel ${reveal(0).className} flex flex-wrap items-center gap-x-8 gap-y-5 p-5`}>
             <ProgressRing pct={prog.pct} size={112} stroke={9} label={`${prog.pct}% of the day cleared`}>
-              <span className="num text-[30px] font-semibold tracking-[-0.03em]"><CountUp value={prog.done} /></span>
+              <span className="num text-[30px] font-semibold tracking-[-0.03em]"><CountUp value={prog.done} live /></span>
               <span className="mt-1 text-[11.5px] text-muted">of {prog.total} done</span>
             </ProgressRing>
             <div className="flex min-w-[200px] flex-col gap-1">
               <span className="tile-label">{isToday ? "Today's progress" : fmtDay(day, { weekday: "long" })}</span>
-              <span className="text-[22px] font-[650] leading-tight tracking-[-0.02em]">{prog.total === 0 ? "No plan for this day" : `${prog.left} left`}</span>
+              <span className="text-[22px] font-[650] leading-tight tracking-[-0.02em]">{prog.total === 0 ? "No plan for this day" : <><span className="num"><CountUp value={prog.left} live /></span> left</>}</span>
               <span className="text-[13px] text-muted">{prog.total === 0 ? (editable ? "It builds from the daily quota in a moment." : "An editor opens it to build the plan.") : `${prog.done} done${prog.skipped ? ` · ${prog.skipped} skipped` : ""} · ${prog.pct}% cleared`}</span>
             </div>
             {groups.length > 0 && (
-              <div className="ml-auto grid min-w-[260px] max-w-[460px] flex-1 grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2.5">
+              <div className="ml-auto flex w-full min-w-[240px] max-w-[460px] flex-1 flex-col">
                 {groups.map((g, i) => { const p = progressOf(g.items); return (
-                  <GroupBar key={g.key} i={i} label={g.label} done={p.done + p.skipped} total={p.total} />
+                  <GroupBar key={g.key} i={i} label={g.label} done={p.done} skipped={p.skipped} total={p.total} onJump={() => jumpTo(g.key)} />
                 ); })}
               </div>
             )}
@@ -160,19 +179,19 @@ export default function Today() {
         ) : (
           <div ref={list} data-tour="agenda" className="flex flex-col gap-4 rounded-2xl">
             {groups.map((g, gi) => { const p = progressOf(g.items); return (
-              <section key={g.key} {...reveal(gi + 2)} className={`panel ${reveal(gi + 2).className}`}>
+              <section key={g.key} id={`group-${g.key}`} {...reveal(gi + 2)} className={`panel scroll-mt-6 ${reveal(gi + 2).className}`}>
                 <header className="flex items-center gap-3 px-[18px] py-3">
                   <h2 className="text-[14px] font-semibold">{g.label}</h2>
                   <span className="hidden truncate text-[12px] text-muted sm:block">{g.hint}</span>
                   <span className="ml-auto flex items-center gap-2.5">
-                    <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-[#ececec] sm:block"><span className="block h-full rounded-full bg-[#141414] transition-[width] duration-300" style={{ width: `${p.pct}%` }} /></span>
-                    <span className="num text-[12px] text-muted">{p.done + p.skipped}/{p.total}</span>
+                    <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-[#ececec] sm:block"><span className="block h-full rounded-full transition-[width,background-color] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${p.pct}%`, background: p.left ? "#d64545" : "#141414" }} /></span>
+                    <span className="num text-[12px] text-muted"><CountUp value={p.done + p.skipped} live />/{p.total}</span>
                   </span>
                 </header>
                 <ul className="border-t border-line">
                   {g.items.map((it) => { const i = ordered.indexOf(it); return (
                     <Row key={it.id} it={it} i={i} slug={ws.slug} tour={it === firstOpen ? "row" : undefined} focused={i === focus} pop={justDone === it.id} editable={editable}
-                      onToggle={() => { setFocus(i); toggle(it); }} onSkip={() => { setFocus(i); skip(it); }} onPatch={patch} />
+                      onToggle={() => { setFocus(i); toggle(it); }} onSkip={() => { setFocus(i); skip(it); }} onPatch={patch} onFocusRow={() => setFocus(i)} />
                   ); })}
                 </ul>
                 {g.key === "other" && editable && <button onClick={addCustom} className="flex w-full items-center gap-2 border-t border-line px-[18px] py-2.5 text-left text-[13px] text-muted hover:bg-[#fafafa] hover:text-ink"><Plus size={14} /> Add a one-off task</button>}
@@ -181,7 +200,7 @@ export default function Today() {
             {editable && !groups.some((g) => g.key === "other") && (
               <button onClick={addCustom} className="flex items-center gap-2 rounded-2xl border border-dashed border-line-strong px-[18px] py-3 text-left text-[13px] text-muted hover:border-ink hover:text-ink"><Plus size={14} /> Add a one-off task for this day</button>
             )}
-            <p data-tour="keys" className="flex flex-wrap items-center justify-center gap-1.5 rounded-xl pb-2 text-center text-[12px] text-faint">
+            <p data-tour="keys" className="hidden flex-wrap items-center justify-center gap-1.5 rounded-xl pb-2 sm:flex text-center text-[12px] text-faint">
               <span className="kbd">J</span><span className="kbd">K</span> move <span className="mx-1.5 text-line-strong">|</span>
               <span className="kbd">X</span> done <span className="mx-1.5 text-line-strong">|</span>
               <span className="kbd">S</span> skip <span className="mx-1.5 text-line-strong">|</span>
@@ -194,16 +213,23 @@ export default function Today() {
   );
 }
 
-function GroupBar({ i, label, done, total }: { i: number; label: string; done: number; total: number }) {
-  const pct = total ? (done / total) * 100 : 0;
+/** One group's bar: done in red (dark when the group is clear), skipped as a lighter segment. Hover shows
+ *  what is left; click jumps to the group and puts the keyboard on its first open task. */
+function GroupBar({ i, label, done, skipped, total, onJump }: { i: number; label: string; done: number; skipped: number; total: number; onJump: () => void }) {
+  const clear = done + skipped >= total;
+  const left = total - done - skipped;
   return (
-    <>
-      <span className="text-[12.5px] font-medium text-ink-2">{label}</span>
-      <span className="h-1.5 overflow-hidden rounded-full bg-[#ececec]">
-        <span className="bar-grow block h-full rounded-full transition-[width] duration-300" style={{ width: `${pct}%`, background: done >= total ? "#141414" : "#d64545", "--i": i } as React.CSSProperties} />
+    <button type="button" onClick={onJump} className="group-bar group grid grid-cols-[84px_1fr_72px] items-center gap-3 rounded-lg px-2 py-[5px] text-left" aria-label={`${label}: ${done} done, ${skipped} skipped, ${left} left. Jump to ${label}`}>
+      <span className="truncate text-[12.5px] font-medium text-ink-2 transition-colors group-hover:text-ink">{label}</span>
+      <span className="flex h-1.5 overflow-hidden rounded-full bg-[#ececec] transition-[height] duration-200 group-hover:h-2">
+        <span className="bar-grow block h-full transition-[width] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${total ? (done / total) * 100 : 0}%`, background: clear ? "#141414" : "#d64545", "--i": i } as React.CSSProperties} />
+        <span className="bar-grow block h-full transition-[width] duration-[400ms] ease-[cubic-bezier(.2,.8,.2,1)]" style={{ width: `${total ? (skipped / total) * 100 : 0}%`, background: clear ? "#8c8c8c" : "#c4c4c4", "--i": i } as React.CSSProperties} />
       </span>
-      <span className="num text-right text-[12px] text-muted">{done}/{total}</span>
-    </>
+      <span className="relative h-4 text-right text-[12px]">
+        <span className="num absolute inset-0 text-muted transition-[opacity,transform] duration-200 group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0">{done + skipped}/{total}</span>
+        <span className="absolute inset-0 translate-y-1 whitespace-nowrap font-semibold text-ink opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">{clear ? "Clear" : `${left} left`}</span>
+      </span>
+    </button>
   );
 }
 
@@ -216,19 +242,19 @@ function DueStrip({ slug, t, people, posts }: { slug: string; t: string; people:
   return (
     <section data-tour="due" {...reveal(1)} className={`panel ${reveal(1).className}`}>
       <div className="panel-head">
-        <span className="flex items-center gap-2">Due and overdue{cards.length > 0 && <span className="count-badge">{cards.length}</span>}</span>
-        <span className="text-[12px] font-normal text-muted">{cards.length ? `${overdue} overdue · ${cards.length - overdue} due today` : ""}</span>
+        <span className="flex items-center gap-2 whitespace-nowrap">Due and overdue{cards.length > 0 && <span className="count-badge">{cards.length}</span>}</span>
+        <span className="hidden whitespace-nowrap text-[12px] font-normal text-muted sm:inline">{cards.length ? `${overdue} overdue · ${cards.length - overdue} due today` : ""}</span>
       </div>
       {cards.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">Nothing due or overdue. Follow-ups and posts show here on their date.</p> : (
-        <div className="flex gap-3 overflow-x-auto border-t border-line p-3 [scrollbar-width:thin]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 border-t border-line p-3">
           {cards.map((c) => { const late = c.due < t; return (
-            <Link key={c.key} href={c.href} className={`hover-lift flex w-[236px] shrink-0 flex-col gap-1 rounded-xl border bg-surface px-3.5 py-3 border-line`}>
+            <Link key={c.key} href={c.href} className="hover-lift flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface px-3.5 py-3">
               <span className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-faint">{c.kind}</span>
                 <span className={`num text-[11.5px] ${late ? "font-semibold text-[#9e1c1c]" : "text-muted"}`}>{whenLabel(c.due, t)}</span>
               </span>
-              <span className="truncate text-[13.5px] font-semibold">{c.title}</span>
-              <span className="truncate text-[12px] text-muted">{c.sub}</span>
+              <span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{c.title}</span>
+              <span className="line-clamp-2 text-[12px] text-muted">{c.sub}</span>
             </Link>
           ); })}
         </div>
@@ -260,7 +286,7 @@ function DaySummary({ prog, rows, isToday, slug, onNext }: { prog: ReturnType<ty
   );
 }
 
-function Row({ it, i, slug, tour, focused, pop, editable, onToggle, onSkip, onPatch }: { it: Item; i: number; slug: string; tour?: string; focused: boolean; pop: boolean; editable: boolean; onToggle: () => void; onSkip: () => void; onPatch: (id: string, p: Partial<Item>) => void }) {
+function Row({ it, i, slug, tour, focused, pop, editable, onToggle, onSkip, onPatch, onFocusRow }: { it: Item; i: number; slug: string; tour?: string; focused: boolean; pop: boolean; editable: boolean; onToggle: () => void; onSkip: () => void; onPatch: (id: string, p: Partial<Item>) => void; onFocusRow: () => void }) {
   const [title, setTitle] = useState(it.title);
   const [link, setLink] = useState(it.link);
   useEffect(() => { setTitle(it.title); setLink(it.link); }, [it.title, it.link]);
@@ -269,40 +295,53 @@ function Row({ it, i, slug, tour, focused, pop, editable, onToggle, onSkip, onPa
   const kind = KINDS.find((k) => k.key === it.kind);
   const placeholder = it.kind === "custom" ? "What needs doing" : `${kind ? kind.unit[0].toUpperCase() + kind.unit.slice(1) : "Task"} ${it.idx}: who or what`;
   const act = primaryAction(it, slug);
+  const hint = hintFor(it);
+  const hasActions = (act && !cleared) || (editable && !it.done) || (it.kind === "custom" && editable) || it.done;
   return (
-    <li data-i={i} data-tour={tour} className={`group relative flex items-center gap-3 border-b border-line px-[18px] py-2.5 last:border-b-0 transition-colors ${focused ? "bg-[#fafafa]" : "hover:bg-[#fcfcfc]"} ${pop ? "anim-flash" : ""}`}>
-      {focused && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-[#d64545]" aria-hidden="true" />}
-      <button disabled={!editable} onClick={onToggle} aria-label={it.done ? "Mark not done" : "Mark done"}
-        className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] transition-all duration-150 active:scale-90 ${it.done ? "border-[#141414] bg-[#141414] text-white" : "border-line-strong bg-surface hover:border-[#141414]"}`}>
-        {it.done && <Check size={13} strokeWidth={3} className={pop ? "anim-pop" : ""} />}
+    <li data-i={i} data-flip={it.id} data-tour={tour} onFocusCapture={onFocusRow} aria-current={focused ? "true" : undefined}
+      className={`task-row group relative flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-[18px] py-2.5 last:border-b-0 sm:flex-nowrap ${focused ? "is-focused" : ""} ${cleared ? "is-cleared" : ""} ${pop ? "anim-flash" : ""}`}>
+      <span className="task-rail" aria-hidden="true" />
+      <button disabled={!editable} onClick={onToggle} aria-label={it.done ? "Mark not done" : "Mark done"} aria-pressed={it.done}
+        className={`task-check grid h-5 w-5 shrink-0 place-items-center rounded-md border-[1.5px] ${it.done ? "is-done border-[#141414] bg-[#141414] text-white" : "border-line-strong bg-surface"}`}>
+        <Check size={13} strokeWidth={3} className={`task-tick ${it.done ? "on" : ""}`} />
       </button>
-      <span className={`hidden w-[88px] shrink-0 truncate text-[11px] font-semibold uppercase tracking-[.05em] sm:block ${cleared ? "text-faint" : "text-muted"}`}>{typeLabel(it)}</span>
-      <input id={`t-${it.id}`} disabled={!editable} value={title} placeholder={placeholder} onChange={(e) => setTitle(e.target.value)} onBlur={() => title !== it.title && onPatch(it.id, { title })}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} aria-label="Who or what"
-        className={`min-w-0 flex-1 bg-transparent text-[13.5px] outline-none transition-colors placeholder:text-faint ${it.done ? "text-muted line-through decoration-faint" : skipped ? "text-faint" : ""}`} />
-      {skipped && <span className="count-badge muted shrink-0">Skipped</span>}
+      <span tabIndex={hint ? 0 : undefined} data-tip={hint || undefined} className={`tip hidden w-[88px] shrink-0 truncate rounded text-[11px] font-semibold uppercase tracking-[.05em] transition-colors sm:block ${cleared ? "text-faint" : "text-muted group-hover:text-ink"}`}>{typeLabel(it)}</span>
+      <span className="relative flex min-w-0 flex-1 basis-[calc(100%-32px)] items-center sm:basis-auto">
+        {/* A one-line textarea that grows with its text (field-sizing), so long campaign titles wrap instead of being cut off. */}
+        <textarea id={`t-${it.id}`} rows={1} disabled={!editable} value={title} placeholder={placeholder} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))} onBlur={() => title !== it.title && onPatch(it.id, { title })}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} aria-label="Who or what"
+          className={`task-title min-w-0 flex-1 resize-none rounded-md bg-transparent px-1 py-0.5 text-[13.5px] leading-snug outline-none [field-sizing:content] placeholder:text-faint ${it.done ? "is-done" : skipped ? "text-faint" : ""}`} />
+      </span>
+      {skipped && <span className="hidden sm:contents"><span className="count-badge muted shrink-0 whitespace-nowrap">Skipped</span></span>}
       <div className="hidden w-[30%] max-w-[300px] items-center gap-1.5 text-faint md:flex">
         <Link2 size={13} className="shrink-0" />
         <input id={`l-${it.id}`} disabled={!editable} value={link} placeholder="Paste link" onChange={(e) => setLink(e.target.value)} onBlur={() => link !== it.link && onPatch(it.id, { link })} aria-label="Link"
-          className="min-w-0 flex-1 bg-transparent text-[12px] text-ink-2 outline-none placeholder:text-faint" />
+          className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 text-[12px] text-ink-2 outline-none placeholder:text-faint focus-visible:bg-[#f3f3f3]" />
       </div>
-      {/* Fixed-width action slots so every row lines up, whatever it offers. */}
-      <span className="flex shrink-0 items-center justify-end sm:w-[150px]">
-        {act && !cleared && (act.external
-          ? <a href={act.href} target="_blank" rel="noopener noreferrer" className="btn h-8 whitespace-nowrap px-2.5 text-[12.5px]">{act.label}<ArrowUpRight size={13} /></a>
-          : <Link href={act.href} className="btn h-8 whitespace-nowrap px-2.5 text-[12.5px]">{act.label}<ChevronRight size={13} /></Link>)}
-      </span>
-      <span className="flex shrink-0 items-center justify-end gap-0.5 sm:w-[112px]">
-        {editable && !it.done && (
-          <button type="button" onClick={onSkip} className={`btn btn-ghost h-8 px-2 text-[12.5px] ${skipped || focused ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"}`}>{skipped ? "Undo skip" : "Skip"}</button>
-        )}
-        {it.kind === "custom" && editable && (
-          <button className="btn btn-ghost h-8 px-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Delete task" onClick={() => supabase().from("daily_items").delete().eq("id", it.id)}><Trash2 size={14} /></button>
-        )}
-      </span>
+      {/* On phones the type and buttons sit on a second line; from sm up, fixed-width slots keep every row aligned. */}
+      {hasActions && (
+        <span className="flex w-full items-center gap-1 pl-8 sm:contents">
+          <span className="mr-auto whitespace-nowrap text-[11px] font-semibold uppercase tracking-[.05em] text-faint sm:hidden">{typeLabel(it)}{skipped ? " · Skipped" : ""}</span>
+          <span className="flex shrink-0 items-center justify-end sm:w-[150px]">
+            {act && !cleared && (act.external
+              ? <a href={act.href} target="_blank" rel="noopener noreferrer" className="btn task-act h-8 whitespace-nowrap px-2.5 text-[12.5px]">{act.label.startsWith("Open ") ? <><span className="hidden sm:inline">Open</span>{act.label.slice(5)}</> : act.label}<ArrowUpRight size={13} /></a>
+              : <Link href={act.href} className="btn task-act h-8 whitespace-nowrap px-2.5 text-[12.5px]">{act.label}<ChevronRight size={13} /></Link>)}
+            {it.done && <span className="num whitespace-nowrap text-[11.5px] text-faint">{it.done_at ? `Done ${clock(it.done_at)}` : "Done"}</span>}
+          </span>
+          <span className="flex shrink-0 items-center justify-end gap-0.5 sm:w-[112px]">
+            {editable && !it.done && (
+              <button type="button" onClick={onSkip} className={`btn btn-ghost h-8 whitespace-nowrap px-2 text-[12.5px] ${skipped || focused ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"}`}>{skipped ? "Undo skip" : "Skip"}</button>
+            )}
+            {it.kind === "custom" && editable && (
+              <button className="btn btn-ghost h-8 px-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Delete task" onClick={() => supabase().from("daily_items").delete().eq("id", it.id)}><Trash2 size={14} /></button>
+            )}
+          </span>
+        </span>
+      )}
     </li>
   );
 }
+
 
 function Skeleton() {
   return <div className="flex flex-col gap-4" aria-busy="true">{[132, 96, 220, 180].map((h, k) => <div key={k} className="animate-pulse rounded-2xl bg-[#ececec]" style={{ height: h }} />)}</div>;

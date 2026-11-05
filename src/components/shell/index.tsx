@@ -2,10 +2,10 @@
 // The section shell every Prax area uses: an entry moment, a plain header, underline tabs, a guided tour,
 // and the Home building blocks. Patterns match the approved Content Studio and AI citations designs.
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
 import { useWorkspace } from "@/lib/workspace";
-import { countAt } from "@/lib/dashboard";
+import { countAt, countBetween } from "@/lib/dashboard";
 import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, type TourState, type TourAction } from "@/lib/shell";
 
 const safe = (pick: () => Storage) => { try { return pick(); } catch { return null; } };
@@ -159,25 +159,52 @@ export function Section({ id, title, status, actions, tabs, tab, onTab, steps = 
 }
 
 // ---------- motion helpers ----------
-/** Counts up from 0 to the first non-zero value (450 ms, eased), so data that loads late still counts up;
- *  later changes land at once. Off with reduced motion. */
-export function useCountUp(value: number, duration = 450) {
+/** Counts up from 0 to the first non-zero value (450 ms, eased), so data that loads late still counts up.
+ *  With live, later changes roll from the old value to the new one (300 ms); otherwise they land at once.
+ *  Off with reduced motion. */
+export function useCountUp(value: number, duration = 450, live = false) {
   const [shown, setShown] = useState(0);
   const played = useRef(false);
+  const last = useRef(0);
   useEffect(() => {
     if (value === 0 && !played.current) { setShown(0); return; }
-    if (played.current || reducedMotion() || !Number.isFinite(value)) { played.current = true; setShown(value); return; }
+    const from = last.current;
+    last.current = value;
+    if (reducedMotion() || !Number.isFinite(value) || (played.current && (!live || from === value))) { played.current = true; setShown(value); return; }
+    const first = !played.current;
     played.current = true;
     let raf = 0; const t0 = performance.now();
-    const tick = (now: number) => { const e = now - t0; setShown(countAt(value, e, duration)); if (e < duration) raf = requestAnimationFrame(tick); };
+    const d = first ? duration : 300;
+    const tick = (now: number) => { const e = now - t0; setShown(first ? countAt(value, e, d) : countBetween(from, value, e, d)); if (e < d) raf = requestAnimationFrame(tick); };
     raf = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(raf); setShown(value); };
-  }, [value, duration]);
+  }, [value, duration, live]);
   return shown;
 }
-export function CountUp({ value, format }: { value: number; format?: (n: number) => string }) {
-  const n = useCountUp(value);
+export function CountUp({ value, format, live }: { value: number; format?: (n: number) => string; live?: boolean }) {
+  const n = useCountUp(value, 450, live);
   return <>{format ? format(n) : n.toLocaleString("en-GB")}</>;
+}
+
+/** Smoothly slides children marked data-flip="<key>" to their new place when a list reorders (FLIP).
+ *  Positions are measured against the container, so scrolling never triggers it. Off with reduced motion. */
+export function useFlip(container: React.RefObject<HTMLElement | null>) {
+  const prev = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const box = container.current;
+    if (!box) return;
+    const top = box.getBoundingClientRect().top;
+    const rows = Array.from(box.querySelectorAll<HTMLElement>("[data-flip]"));
+    const next = new Map<string, number>();
+    rows.forEach((r) => next.set(r.dataset.flip!, r.getBoundingClientRect().top - top));
+    if (!reducedMotion() && prev.current.size) {
+      rows.forEach((r) => {
+        const was = prev.current.get(r.dataset.flip!), now = next.get(r.dataset.flip!)!;
+        if (was != null && Math.abs(was - now) > 1) r.animate?.([{ transform: `translateY(${was - now}px)` }, { transform: "none" }], { duration: 340, easing: "cubic-bezier(.2,.8,.2,1)" });
+      });
+    }
+    prev.current = next;
+  });
 }
 /** Staggered reveal: spread on each block in order; i sets the delay (45 ms a step). */
 export const reveal = (i: number) => ({ className: "reveal", style: { "--i": i } as React.CSSProperties });
@@ -186,15 +213,23 @@ export const reveal = (i: number) => ({ className: "reveal", style: { "--i": i }
 export function ProgressRing({ pct, size = 96, stroke = 8, tone = "red", children, label }: { pct: number; size?: number; stroke?: number; tone?: "red" | "dark" | "light"; children?: React.ReactNode; label?: string }) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const [p, setP] = useState(0);
-  useEffect(() => { const t = requestAnimationFrame(() => setP(pct)); return () => cancelAnimationFrame(t); }, [pct]);
+  const box = useRef<HTMLSpanElement>(null);
+  const was = useRef<number | null>(null);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setP(pct));
+    // A small settle each time the ring gains ground (a task cleared), never on the first fill.
+    if (was.current != null && pct > was.current && !reducedMotion()) box.current?.animate?.([{ transform: "scale(1)" }, { transform: "scale(1.045)" }, { transform: "scale(1)" }], { duration: 300, easing: "cubic-bezier(.2,.8,.2,1)" });
+    was.current = pct;
+    return () => cancelAnimationFrame(t);
+  }, [pct]);
   const color = tone === "dark" ? "#141414" : tone === "light" ? "#ffffff" : "#d64545";
   const track = tone === "light" ? "rgba(255,255,255,.16)" : "#ececec";
   return (
-    <span className="relative inline-grid shrink-0 place-items-center" style={{ width: size, height: size }} role="img" aria-label={label ?? `${pct}% done`}>
+    <span ref={box} className="relative inline-grid shrink-0 place-items-center" style={{ width: size, height: size }} role="img" aria-label={label ?? `${pct}% done`}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="absolute inset-0" aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
-        {p > 0 && <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c}
-          strokeDashoffset={c * (1 - Math.min(100, p) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} className="ring-fill" />}
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeOpacity={p > 0 ? 1 : 0}
+          strokeDashoffset={c * (1 - Math.min(100, p) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} className="ring-fill" />
       </svg>
       <span className="relative flex flex-col items-center leading-none">{children}</span>
     </span>
@@ -238,15 +273,17 @@ function DeltaChip({ d, dark }: { d: KpiDelta; dark?: boolean }) {
 }
 export function KpiTiles({ items, tour }: { items: Kpi[]; tour?: string }) {
   return (
-    <div data-tour={tour} className="grid grid-cols-2 gap-3 rounded-2xl md:grid-cols-4">
+    // Four tiles: 2 by 2, then one row. Five: phone 1 + 2 + 2 (lead tile full width), tablet 2 + 3, wide one row of five.
+    <div data-tour={tour} className={`grid grid-cols-2 gap-3 rounded-2xl ${items.length === 5 ? "md:grid-cols-6 xl:grid-cols-5" : "md:grid-cols-4"}`}>
       {items.map((k, i) => {
         const r = reveal(i);
+        const span = items.length !== 5 ? "" : i === 0 ? " col-span-2 md:col-span-3 xl:col-span-1" : i === 1 ? " md:col-span-3 xl:col-span-1" : " md:col-span-2 xl:col-span-1";
         return (
-          <Hit key={k.label} href={k.href} onClick={k.onClick} className={`tile ${r.className}${k.tone ? " " + k.tone : ""}${k.href || k.onClick ? " hit" : ""}`} style={r.style}>
+          <Hit key={k.label} href={k.href} onClick={k.onClick} className={`tile ${r.className}${span}${k.tone ? " " + k.tone : ""}${k.href || k.onClick ? " hit" : ""}`} style={r.style}>
             <span className="tile-label">{k.label}</span>
             <span className="flex w-full items-end justify-between gap-2">
               <span className="flex min-w-0 items-baseline gap-1.5"><span className="num tile-num">{typeof k.value === "number" ? <CountUp value={k.value} /> : k.value}</span>{k.of && <span className="num truncate text-[13px] opacity-60">{k.of}</span>}</span>
-              {k.spark && <Spark values={k.spark} light={k.tone === "dark"} />}
+              {k.spark && <span className="hidden sm:block"><Spark values={k.spark} light={k.tone === "dark"} /></span>}
             </span>
             {(k.sub || k.delta) && (
               <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] opacity-80">
@@ -273,7 +310,7 @@ export function NeedsYou({ items, empty = "Nothing waiting.", title = "Needs you
         return (
           <Hit key={i} href={x.href} onClick={x.onClick} className={`row-hit group ${r.className}`} style={r.style}>
             <span className="h-8 w-[3px] shrink-0 rounded-full" style={{ background: x.tone === "dark" ? "#141414" : x.tone === "dim" ? "#d4d4d4" : "#d64545" }} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="truncate text-[13.5px] font-semibold leading-snug">{x.title}</span>{x.sub && <span className="truncate text-[12px] text-muted">{x.sub}</span>}</span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{x.title}</span>{x.sub && <span className="line-clamp-2 text-[12px] text-muted">{x.sub}</span>}</span>
             {x.when && <span className={`num hidden shrink-0 text-[11.5px] sm:block ${/overdue/.test(x.when) ? "font-semibold text-[#9e1c1c]" : "text-faint"}`}>{x.when}</span>}
             {x.cta && <span className="flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold text-ink">{x.cta}<ChevronRight size={14} className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" /></span>}
           </Hit>
@@ -312,7 +349,7 @@ export function Activity({ items, title = "Recent activity", empty = "No activit
               <Hit href={a.href} onClick={a.onClick} className="flex w-full items-start gap-3 px-[18px] py-2 text-left hover:bg-[#fafafa]">
                 <span className="mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full border-[1.5px] border-[#141414] bg-white" />
                 <span className="min-w-0 flex-1 text-[13px] leading-snug text-ink-2">{a.text}</span>
-                {a.tag && <span className="count-badge muted shrink-0">{a.tag}</span>}
+                {a.tag && <span className="hidden sm:contents"><span className="count-badge muted shrink-0">{a.tag}</span></span>}
                 <span className="num w-[68px] shrink-0 pt-px text-right text-[11.5px] text-faint">{a.when}</span>
               </Hit>
             </li>

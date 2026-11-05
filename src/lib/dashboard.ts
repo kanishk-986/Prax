@@ -69,6 +69,19 @@ export function countAt(target: number, elapsed: number, duration = 450): number
   if (duration <= 0 || elapsed >= duration) return target;
   return Math.round(target * easeOut(Math.max(0, elapsed) / duration));
 }
+/** Same easing between two values, for numbers that change after first view (a task cleared). */
+export function countBetween(from: number, to: number, elapsed: number, duration = 300): number {
+  if (duration <= 0 || elapsed >= duration) return to;
+  return Math.round(from + (to - from) * easeOut(Math.max(0, elapsed) / duration));
+}
+
+// ---------- AI citations headline ----------
+/** Change between two shares in percentage points; null when either week has no answers. */
+export function pointsDelta(now: number | null | undefined, prev: number | null | undefined): Delta | null {
+  const d = deltaOf(now, prev);
+  if (!d) return null;
+  return { ...d, text: d.dir === "flat" ? "No change" : `${d.text} pts` };
+}
 
 // ---------- Today agenda ----------
 export type GroupKey = "comment" | "post" | "followup" | "connect" | "other";
@@ -113,6 +126,13 @@ const KIND_ORDER = ["comment", "reply", "post", "dm", "inmail", "request", "cust
 export function agenda<T extends AgendaItem>(items: T[]): { key: GroupKey; label: string; hint: string; items: T[] }[] {
   const rank = (k: string) => { const i = KIND_ORDER.indexOf(k); return i < 0 ? KIND_ORDER.length : i; };
   return GROUPS.map((g) => ({ ...g, items: items.filter((i) => groupOf(i) === g.key).sort((a, b) => rank(a.kind) - rank(b.kind) || a.idx - b.idx) })).filter((g) => g.items.length);
+}
+
+/** Open items first, then cleared ones (done or skipped), each keeping its order. Ids in `holding` were just
+ *  cleared and stay where they are for a moment, so the tick shows before the row settles to the bottom. */
+export function settleOrder<T extends { id: string; done: boolean; note?: string | null }>(items: T[], holding: Set<string> = new Set()): T[] {
+  const cleared = (i: T) => (i.done || isSkipped(i.note)) && !holding.has(i.id);
+  return [...items.filter((i) => !cleared(i)), ...items.filter(cleared)];
 }
 
 /** The one button a row offers. A saved link wins; otherwise where the work is done. Never posts or sends anything. */

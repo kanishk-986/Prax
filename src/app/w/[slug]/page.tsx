@@ -7,10 +7,10 @@ import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
-import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, reveal, type TourStep, type Need } from "@/components/shell";
+import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
 import { LinkedInMcpButton } from "@/components/linkedin-mcp";
-import { deltaOf, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, type NeedInput } from "@/lib/dashboard";
-import { personContext, promptGaps, subjectShare, type Entity, type Question, type Run } from "@/lib/citations";
+import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, type NeedInput } from "@/lib/dashboard";
+import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
 type Prospect = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; created_at: string };
@@ -28,7 +28,7 @@ const REACH = [
 
 const DASH_TOUR: TourStep[] = [
   { target: "header", title: "What the dashboard is for", body: "One place to see how the week is going for this profile and what to do next. Every number comes from the work logged in Prax." },
-  { target: "kpis", title: "The four numbers that matter", body: "People in the pipeline, warm paths from Network, posts out this week and comments against the weekly target. Small chips show the change on last week. Click a tile to open that section." },
+  { target: "kpis", title: "The five numbers that matter", body: "People in the pipeline, warm paths from Network, posts out this week, comments against the weekly target, and how often AI answers name Shashi. Small chips show the change on last week. Click a tile to open that section." },
   { target: "needs", title: "Needs you now", body: "Everything waiting on you, most urgent first: overdue follow-ups and posts lead, then approvals, today's plan and housekeeping." },
   { target: "glance", title: "This week at a glance", body: "One line for each part of Prax: Today, Content Studio, Comment Studio, Pipeline, Network and AI citations. Click a line to go there." },
   { target: "reach", title: "LinkedIn reach", body: "Impressions, followers, profile viewers and search appearances, captured when you open his LinkedIn analytics with the extension." },
@@ -106,7 +106,10 @@ export default function Dashboard() {
     const share = subjectShare(runs, cq.rows, "person", person, company, ctx, ["expert", "leadership"]);
     const gaps = promptGaps(runs, cq.rows, person, company, rivals.filter((e) => e.subject === "person"), rivals.filter((e) => e.subject !== "person"), ctx).length;
     const last = runs[0]?.run_at;
-    return { active, share, gaps, lastDays: last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null, last };
+    // Week on week: the share from each week's own runs only, so a week without runs gives no change.
+    const wkNow = weekStartOf(new Date());
+    const pctOf = (w: string) => subjectShare(runsInWeek(runs, w), cq.rows, "person", person, company, ctx, ["expert", "leadership"]).pct;
+    return { active, share, gaps, change: pointsDelta(pctOf(wkNow), pctOf(shiftWeek(wkNow, -1))), lastDays: last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null, last };
   }, [cq.rows, ents.rows, runs]);
 
   const reach = useMemo(() => {
@@ -141,7 +144,8 @@ export default function Dashboard() {
       entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
       actions={<>
         <LinkedInMcpButton tour="mcp" />
-        <Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link>
+        {/* On phones Today is one tap away in the menu and in Needs you now, so the header keeps to two buttons. */}
+        <span className="hidden sm:contents"><Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link></span>
       </>}
       steps={DASH_TOUR}>
 
@@ -149,20 +153,25 @@ export default function Dashboard() {
         <KpiTiles tour="kpis" items={[
           { label: "In pipeline", value: pipe.open, tone: "dark", href: `${base}/pipeline`,
             delta: pipe.added ? { text: `+${pipe.added}`, dir: "up", label: "added this week" } : null, sub: pipe.added ? undefined : `${pipe.conv} in conversation` },
-          { label: "Warm paths", value: warm ?? "None", href: `${base}/network`, sub: warm == null ? "Upload the LinkedIn export" : "open prospects with a way in" },
+          { label: "Warm paths", value: warm ?? "None", href: `${base}/network`, sub: warm == null ? "Upload the LinkedIn export" : "prospects with a way in" },
           { label: "Posts this week", value: content.posted.now, of: content.planned ? `of ${content.planned} planned` : undefined, href: `${base}/studio-content?tab=plan`,
             delta: postDelta && (content.posted.now || content.posted.prev) ? { ...postDelta, label: "vs last week" } : null, sub: content.planned || content.posted.now ? undefined : "Nothing planned yet" },
           { label: "Comments this week", value: week.comments.now, of: `of ${ws.quotas.comment * wkDays}`, href: `${base}/today`, spark: week.commentSpark,
             delta: commentDelta && (week.comments.now || week.comments.prev) ? { ...commentDelta, label: "vs last week" } : null, sub: week.comments.now || week.comments.prev ? undefined : "None yet this week" },
+          // "Shashi named in X% of AI answers": latest answer per prompt and AI tool over 28 days, strict person matching.
+          { label: "Shashi in AI answers", href: `${base}/citations`,
+            value: cit.share.pct == null ? "None" : <><CountUp value={cit.share.pct} />%</>, of: cit.share.pct == null ? undefined : "named",
+            sub: cit.share.pct == null ? (cit.active ? "No AI answers in 28 days" : "No prompts set up yet") : cit.change ? undefined : `${cit.share.named} of ${cit.share.total} answers`,
+            delta: cit.change ? { ...cit.change, label: "vs last week" } : null },
         ]} />
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div {...reveal(4)}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className={`${reveal(4).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(4).style}>
             <NeedsYou tour="needs" title="Needs you now" items={needs.slice(0, 7).map((n) => ({ ...n, when: n.kind === "followup" || n.kind === "post" ? whenLabel(n.due, t) : undefined }))} count={needs.length}
               empty="Nothing is waiting on you. Overdue follow-ups, posts due and approvals show here first." />
           </div>
-          <div {...reveal(5)}>
-            <Panel tour="glance" title="This week at a glance" meta={`${fmtDay(wk, { day: "numeric", month: "short" })} to ${fmtDay(addDays(wk, 6), { day: "numeric", month: "short" })}`}>
+          <div className={`${reveal(5).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(5).style}>
+            <Panel tour="glance" className="flex flex-col [&>a]:flex-1" title="This week at a glance" meta={`${fmtDay(wk, { day: "numeric", month: "short" })} to ${fmtDay(addDays(wk, 6), { day: "numeric", month: "short" })}`}>
               <Glance href={`${base}/today`} name="Today" line={week.today.total ? `${week.today.done} of ${week.today.total} done today` : "Today's plan is not opened yet"} aside={<MiniBars days={week.days} today={t} />} />
               <Glance href={`${base}/studio-content`} name="Content Studio" line={`${content.planned} planned · ${content.posted.now} out · ${content.review} in review`} />
               <Glance href={`${base}/studio`} name="Comment Studio" line={`${studio.drafts.now} drafts saved · ${studio.logged.now} comments logged`}
@@ -176,12 +185,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div {...reveal(6)}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className={`${reveal(6).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(6).style}>
             <Activity tour="activity" items={acts.rows.map((a) => ({ when: relTime(a.at), text: labelFor(a), tag: a.kind === "stage" ? "Pipeline" : "Today" }))}
               empty="Nothing yet. Ticks on Today and pipeline moves appear here as they happen." />
           </div>
-          <div {...reveal(7)}>
+          <div className={`${reveal(7).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(7).style}>
             <Panel tour="reach" title="LinkedIn reach" meta="captured with the extension">
               <div className="grid grid-cols-2 border-t border-line">
                 {REACH.map((r, i) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
@@ -211,7 +220,7 @@ function Glance({ href, name, line, aside, alert }: { href: string; name: string
     <Link href={href} className="row-hit group">
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-2 text-[13.5px] font-semibold">{name}{alert && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="needs attention" />}</span>
-        <span className="truncate text-[12.5px] text-muted">{line}</span>
+        <span className="text-[12.5px] text-muted">{line}</span>
       </span>
       {aside}
       <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
