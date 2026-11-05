@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Flame, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search } from "lucide-react";
+import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search } from "lucide-react";
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
@@ -20,8 +20,8 @@ const NAV = [
   { href: "/templates", label: "Templates", icon: LayoutTemplate },
   { href: "/citations", label: "AI citations", icon: Sparkles },
   { href: "/strategy", label: "Strategy", icon: Compass },
+  { href: "/extension", label: "Extension", icon: Star },
   { href: "/notes", label: "Notes", icon: StickyNote },
-  { href: "/extension", label: "Extension", icon: Flame },
 ];
 
 export function Sidebar() {

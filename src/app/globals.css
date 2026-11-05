@@ -71,7 +71,7 @@ html { scrollbar-color: #c9c9c9 transparent; }
 /* Buttons: three tiers, all with a physical press. */
 /* Buttons and fields sit in the components layer, so size utilities (h-10, w-auto, p-0) on them apply. */
 @layer components {
-.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; white-space: nowrap; flex-shrink: 0;
   border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 560; font-size: 13px; cursor: pointer; user-select: none;
   box-shadow: 0 1px 0 rgba(16,24,40,.04), inset 0 -1px 0 rgba(16,24,40,.04);
   transition: background .12s ease, border-color .12s ease, box-shadow .12s ease, transform .08s ease; }
