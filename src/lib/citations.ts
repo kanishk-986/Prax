@@ -8,18 +8,18 @@ export const ENGINES: { id: Engine; name: string; model: string; live: boolean }
   { id: "openai", name: "ChatGPT (OpenAI)", model: "gpt-5", live: true },
   { id: "gemini", name: "Gemini", model: "gemini-3.8-flash", live: true },
   { id: "claude", name: "Claude", model: "claude-opus-5-5", live: true },
-  { id: "perplexity", name: "Perplexity", model: "", live: false }, // needs a Sonar key; not connected yet
+  { id: "perplexity", name: "Perplexity", model: "sonar", live: true },
 ];
 
 export type Source = { url: string; title: string; domain: string; cited: boolean };
 export type Parsed = { answer: string; sources: Source[]; model: string; input_tokens: number; output_tokens: number; refused: boolean };
-export type Entity = { id: string; kind: "self" | "competitor"; name: string; aliases: string[]; domains: string[] };
+export type Entity = { id: string; kind: "self" | "competitor"; name: string; aliases: string[]; domains: string[]; subject?: "person" | "company"; status?: "active" | "suggested" };
 export type Run = {
   id: string; question_id: string; engine: Engine; model: string; status: "ok" | "failed" | "no_sources";
   answer: string; run_at: string; sources: Source[];
-  repeat_index?: number; sentiment?: string; fact_issues?: FactIssue[] | null;
+  repeat_index?: number; sentiment?: string; fact_issues?: FactIssue[] | null; person_review?: string;
 };
-export type Question = { id: string; question: string; topic: string; region: string; language: string; status: string; set_id?: string | null; repeats?: number; campaign_id?: string | null };
+export type Question = { id: string; question: string; topic: string; region: string; language: string; status: string; set_id?: string | null; repeats?: number; campaign_id?: string | null; audience?: "expert" | "vendor" | "leadership"; keywords?: string[] };
 export type FactIssue = { fact: string; said: string };
 
 // ---------- URLs ----------
@@ -109,8 +109,18 @@ export function parseGemini(j: J): Parsed {
   return { answer: answer.trim(), sources, model: j.model ?? j.modelVersion ?? "", input_tokens: u.input_tokens ?? u.total_input_tokens ?? um.promptTokenCount ?? 0, output_tokens: u.output_tokens ?? u.total_output_tokens ?? um.candidatesTokenCount ?? 0, refused: j.candidates?.[0]?.finishReason === "SAFETY" };
 }
 
+/** Perplexity Chat Completions (Sonar): the answer in choices[0].message.content, sources in search_results and citations. */
+export function parsePerplexity(j: J): Parsed {
+  const sources: Source[] = [];
+  const answer = String(j.choices?.[0]?.message?.content ?? "");
+  for (const r of j.search_results ?? []) if (r.url) addSource(sources, r.url, r.title ?? "", false);
+  for (const u of j.citations ?? []) if (typeof u === "string") addSource(sources, u, "", true);
+  return { answer: answer.trim(), sources, model: j.model ?? "", input_tokens: j.usage?.prompt_tokens ?? 0, output_tokens: j.usage?.completion_tokens ?? 0, refused: false };
+}
+
 export function parseEngine(engine: Engine, raws: J[]): Parsed {
   if (engine === "claude") return parseClaude(raws);
+  if (engine === "perplexity") return parsePerplexity(raws[raws.length - 1] ?? {});
   if (engine === "openai") return parseOpenAI(raws[raws.length - 1] ?? {});
   return parseGemini(raws[raws.length - 1] ?? {});
 }
@@ -268,7 +278,7 @@ export const ESTIMATE: Record<Engine, { inTok: number; outTok: number; usd: numb
   claude: { inTok: 20000, outTok: 1200, usd: 0.12, note: "Opus 5.5 at $4/$20 per million tokens plus web search at $10 per 1,000 searches" },
   openai: { inTok: 9000, outTok: 1000, usd: 0.05, note: "depends on your model; web search calls are billed per call" },
   gemini: { inTok: 6000, outTok: 900, usd: 0.04, note: "depends on your model; grounded searches are billed per query" },
-  perplexity: { inTok: 0, outTok: 0, usd: 0, note: "" },
+  perplexity: { inTok: 4000, outTok: 800, usd: 0.01, note: "Sonar with search; Perplexity bills tokens and a per-request search fee" },
 };
 
 // ---------- tone and facts ----------
@@ -433,4 +443,174 @@ export function askContext(runs: Run[], questions: Question[], self: Entity, riv
   const ch = changes(runs, self).slice(0, 15).map((c) => `${c.kind}: ${qText.get(c.question_id)} on ${c.engine} (${c.at.slice(0, 10)})`);
   const gaps = citationGaps(runs, self, rivals).slice(0, 10).map((g) => `${g.domain} (cites ${g.competitors.join(", ")})`);
   return `Named in ${sov.named} of ${sov.total} answers (latest batch, branded and failed excluded).\n\nLATEST PER QUESTION AND ENGINE:\n${rows.join("\n") || "(none)"}\n\nCHANGES:\n${ch.join("\n") || "(none)"}\n\nCITATION GAPS:\n${gaps.join("\n") || "(none)"}`;
+}
+// AI citations, person and company. Shashi (the person) and Antier (the company) are scored separately.
+// A person counts as named only by a full name that sits next to context (his company, his role or one of his
+// topics). A bare full name waits for a one-click review, and a first or last name alone never counts.
+// Pure functions, shared by the page and scripts/test-citations.ts.
+
+export type Audience = "expert" | "vendor" | "leadership";
+const ROLE = /(?<![\p{L}])(co-?founder|coo|chief operating officer|founder)(?![\p{L}])/iu;
+const paragraphs = (t: string) => t.split(/\n\s*\n|\n(?=\s*(?:\d+[.)]|[-*•])\s)/);
+const fullNames = (aliases: string[]) => aliases.filter((a) => a.trim().split(/\s+/).length >= 2);
+
+export type PersonHit = { named: boolean; review: boolean; attributed: boolean; matches: Match[] };
+/** contextTerms: his topics and keywords, lower case. A stored review ("confirmed" or "rejected") overrides the rule. */
+export function detectPerson(run: Pick<Run, "answer" | "person_review">, person: Pick<Entity, "aliases">, company: Pick<Entity, "aliases"> | undefined, contextTerms: string[] = []): PersonHit {
+  const names = fullNames(person.aliases);
+  const matches = findMatches(run.answer, names);
+  if (!matches.length) return { named: false, review: false, attributed: false, matches };
+  let context = false, attributed = false;
+  for (const p of paragraphs(run.answer)) {
+    if (!findMatches(p, names).length) continue;
+    const co = company ? findMatches(p, company.aliases).length > 0 : false;
+    const low = p.toLowerCase();
+    if (co) attributed = true;
+    if (co || ROLE.test(p) || contextTerms.some((t) => t && low.includes(t))) context = true;
+  }
+  if (run.person_review === "confirmed") return { named: true, review: false, attributed, matches };
+  if (run.person_review === "rejected") return { named: false, review: false, attributed: false, matches };
+  return { named: context, review: !context, attributed: context && attributed, matches };
+}
+
+/** Who a prompt is about when it has no audience stored. */
+export function audienceOf(q: Pick<Question, "question"> & { audience?: string }): Audience {
+  if (q.audience === "expert" || q.audience === "vendor" || q.audience === "leadership") return q.audience;
+  if (/(who leads|who is behind|founder of|leadership)/i.test(q.question)) return "leadership";
+  if (/(expert|voices?|speaker|thought leader|who writes|who should i (hear|follow)|leaders? on|people)/i.test(q.question)) return "expert";
+  return "vendor";
+}
+export const AUDIENCE_LABEL: Record<Audience, string> = { expert: "Expert", vendor: "Vendor", leadership: "Leadership" };
+
+export type Scored = { named: number; total: number; review: number; linked: number; pct: number | null };
+/** Named on prompts of the given audiences: latest batch per prompt and engine, majority of usable repeats; prompts that name the subject are left out. */
+export function subjectShare(runs: Run[], questions: Question[], subject: "person" | "company", ent: Entity | undefined, company: Entity | undefined, ctx: string[], audiences: Audience[], engine?: Engine): Scored {
+  const out: Scored = { named: 0, total: 0, review: 0, linked: 0, pct: null };
+  if (!ent) return out;
+  const brand = [...ent.aliases, ...(company && subject === "person" ? company.aliases : [])];
+  const qs = new Set(questions.filter((q) => q.status === "active" && audiences.includes(audienceOf(q)) && !findMatches(q.question, brand).length).map((q) => q.id));
+  latestBatches(runs).forEach(({ now }, key) => {
+    const [qid, eng] = key.split("|");
+    if (!qs.has(qid) || (engine && eng !== engine)) return;
+    const usable = now.filter((r) => r.status !== "failed");
+    if (!usable.length) return;
+    out.total++;
+    if (subject === "person") {
+      const hits = usable.map((r) => detectPerson(r, ent, company, ctx));
+      if (hits.filter((h) => h.named).length * 2 > hits.length) out.named++;
+      else if (hits.some((h) => h.review)) out.review++;
+      if (usable.some((r) => r.sources.some((x) => owns(x.url, ent.domains)))) out.linked++;
+    } else {
+      const a = aggregate(usable, ent);
+      if (a?.named) out.named++;
+      if (a?.linked) out.linked++;
+    }
+  });
+  out.pct = out.total ? Math.round((out.named / out.total) * 100) : null;
+  return out;
+}
+
+/** Context words for the person rule: his company's names plus the keywords of the prompts. */
+export function personContext(questions: Question[], company?: Entity) {
+  const t = new Set<string>(["stablecoin", "tokenisation", "tokenization", "blockchain", "digital asset"]);
+  (company?.aliases ?? []).forEach((a) => t.add(a.toLowerCase()));
+  questions.forEach((q) => (q.keywords ?? []).forEach((k) => k.trim() && t.add(k.toLowerCase())));
+  return [...t];
+}
+
+/** True when the prompt's subject (Shashi for expert and leadership, Antier for vendor and leadership) is named in its latest batch on any engine. */
+function namedOnPrompt(q: Question, batches: ReturnType<typeof latestBatches>, person: Entity | undefined, company: Entity | undefined, ctx: string[]) {
+  const aud = audienceOf(q);
+  let hit = false;
+  batches.forEach(({ now }, key) => {
+    if (hit || !key.startsWith(q.id + "|")) return;
+    const usable = now.filter((r) => r.status !== "failed");
+    if (!usable.length) return;
+    if (aud !== "vendor" && person && usable.some((r) => detectPerson(r, person, company, ctx).named)) hit = true;
+    if (aud !== "expert" && company && aggregate(usable, company)?.named) hit = true;
+  });
+  return hit;
+}
+
+/** "Named in X of Y prompts" for each keyword. */
+export function keywordStats(runs: Run[], questions: Question[], person: Entity | undefined, company: Entity | undefined, ctx: string[]) {
+  const batches = latestBatches(runs);
+  const by = new Map<string, { prompts: number; named: number }>();
+  for (const q of questions.filter((x) => x.status === "active")) {
+    const hit = namedOnPrompt(q, batches, person, company, ctx);
+    for (const k of q.keywords ?? []) { const key = k.trim(); if (!key) continue; const e = by.get(key) ?? { prompts: 0, named: 0 }; e.prompts++; if (hit) e.named++; by.set(key, e); }
+  }
+  return [...by.entries()].map(([keyword, v]) => ({ keyword, ...v })).sort((a, b) => b.prompts - a.prompts || a.keyword.localeCompare(b.keyword));
+}
+
+// ---------- weeks and trend ----------
+/** Monday (local) of the week a date falls in, as YYYY-MM-DD. */
+export function weekStartOf(d: Date | string) {
+  const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+export const shiftWeek = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n * 7); return weekStartOf(d); };
+/** Weeks (newest first) that hold at least one run. */
+export const runWeeks = (runs: Run[]) => [...new Set(runs.map((r) => weekStartOf(r.run_at)))].sort().reverse();
+export const runsInWeek = (runs: Run[], week: string) => runs.filter((r) => weekStartOf(r.run_at) === week);
+
+export type TrendPoint = { week: string; engines: Partial<Record<Engine, number | null>>; median: number | null; person: number | null; company: number | null };
+/** Eight weeks ending this week, from that week's runs only; null where nothing ran. Engine lines count prompts naming Shashi or Antier. */
+export function weeklyTrend(runs: Run[], questions: Question[], person: Entity | undefined, company: Entity | undefined, rivals: Entity[], ctx: string[], today = new Date()): TrendPoint[] {
+  const last = weekStartOf(today);
+  return Array.from({ length: 8 }, (_, i) => shiftWeek(last, i - 7)).map((week) => {
+    const wr = runsInWeek(runs, week);
+    const point: TrendPoint = { week, engines: {}, median: null, person: null, company: null };
+    if (!wr.length) return point;
+    const batches = latestBatches(wr);
+    for (const e of ENGINES) {
+      const eb = new Map([...batches.entries()].filter(([k]) => k.endsWith("|" + e.id)));
+      point.engines[e.id] = eb.size ? questions.filter((q) => q.status === "active" && namedOnPrompt(q, eb, person, company, ctx)).length : null;
+    }
+    point.person = subjectShare(wr, questions, "person", person, company, ctx, ["expert", "leadership"]).named;
+    point.company = subjectShare(wr, questions, "company", company, company, ctx, ["vendor", "leadership"]).named;
+    const counts = rivals.map((c) => shareOfVoice(wr, questions, c, company).named).sort((a, b) => a - b);
+    point.median = counts.length ? (counts.length % 2 ? counts[(counts.length - 1) / 2] : (counts[counts.length / 2 - 1] + counts[counts.length / 2]) / 2) : null;
+    return point;
+  });
+}
+
+/** Whether two series moved the same way over the window (first to last recorded point); null without enough data. */
+export function sameDirection(a: (number | null)[], b: (number | null)[]) {
+  const delta = (x: (number | null)[]) => { const v = x.filter((n): n is number => n != null); return v.length >= 2 ? v[v.length - 1] - v[0] : null; };
+  const da = delta(a), db = delta(b);
+  if (da == null || db == null) return null;
+  return Math.sign(da) === Math.sign(db);
+}
+
+// ---------- prompt gaps ----------
+export type PromptGap = { question: Question; rivals: string[]; engines: Engine[]; channel: "shashi" | "company" };
+/** Prompts where a tracked rival is named and the right subject is not: experts and leadership for Shashi, vendors for Antier. */
+export function promptGaps(runs: Run[], questions: Question[], person: Entity | undefined, company: Entity | undefined, peerExperts: Entity[], peerFirms: Entity[], ctx: string[]): PromptGap[] {
+  const out: PromptGap[] = [];
+  const batches = latestBatches(runs);
+  for (const q of questions.filter((x) => x.status === "active")) {
+    const channel = audienceOf(q) === "vendor" ? "company" : "shashi";
+    const pool = channel === "shashi" ? (peerExperts.length ? peerExperts : peerFirms) : peerFirms;
+    const subj = channel === "shashi" ? person : company;
+    if (!subj || !pool.length || findMatches(q.question, subj.aliases).length) continue;
+    const rv = new Set<string>(), engines: Engine[] = [];
+    batches.forEach(({ now }, key) => {
+      if (!key.startsWith(q.id + "|")) return;
+      const usable = now.filter((r) => r.status !== "failed");
+      if (!usable.length) return;
+      const mine = channel === "shashi" ? usable.some((r) => detectPerson(r, subj, company, ctx).named) : !!aggregate(usable, subj)?.named;
+      if (mine) return;
+      const named = pool.filter((c) => aggregate(usable, c)?.named).map((c) => c.name);
+      if (named.length) { named.forEach((n) => rv.add(n)); engines.push(now[0].engine); }
+    });
+    if (rv.size) out.push({ question: q, rivals: [...rv], engines, channel });
+  }
+  return out.sort((a, b) => b.engines.length - a.engines.length || b.rivals.length - a.rivals.length);
+}
+
+/** The topic a gap becomes in Content Studio. */
+export function gapTopic(g: PromptGap) {
+  const q = g.question.question.replace(/\?\s*$/, "");
+  return g.channel === "company" ? `Company content: ${q}` : `Answer it as Shashi: ${q}`;
 }

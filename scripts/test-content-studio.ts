@@ -2,7 +2,7 @@
 // the point-of-view prompt, newsletter dates and What works.
 // Run: node scripts/test-content-studio.ts
 import { foldCut, hookFits, sayableIn3s, plain, styled, styleRange, listLines, caseRange, markdownToLinkedIn, claimsCheck, urlProblem, isPrivateIp, readable, parseIdeas, parseHooks, parseDrafts, povText, EMPTY_POV, nextIssue, whatWorks, type ResultPost } from "../src/lib/content.ts";
-import { carouselPdf } from "../src/lib/pdf.ts";
+import { carouselPdf } from "../src/lib/carousel-pdf.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {

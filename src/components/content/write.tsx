@@ -9,7 +9,7 @@ import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { humanScore } from "@/lib/studio";
 import { PILLARS } from "@/lib/campaigns";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD } from "@/lib/content";
-import { carouselPdf, type Slide } from "@/lib/pdf";
+import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
 import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession } from "./shared";
 import { LinkedInPreview } from "./preview";
 import type { ContentSettings } from "./settings";

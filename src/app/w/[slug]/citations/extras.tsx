@@ -10,7 +10,7 @@ import { useWorkspace, today } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { upsertToday } from "@/components/content/shared";
-import { ReportView, type ReportSnapshot } from "@/components/citations-report";
+import { type ReportSnapshot } from "@/components/citations-report";
 import {
   ENGINES, alerts, recommend, lift, shareOfVoice, profileConsistency, starterQuestions, askContext, judgePrompt, parseJudge, factIssues,
   parseEngine, detect, setRollup, citationGaps, changes, linkedinCited, expiryFrom, owns, EMPTY_FACTS,
@@ -382,7 +382,12 @@ export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const [f, setF] = useState<Facts>({ ...EMPTY_FACTS, ...facts });
-  const FIELDS: [keyof Facts, string, string][] = [["titles", "His titles", "Co-Founder and COO"], ["company", "Company names", "Antier, Antier Solutions"], ["products", "Products and services", "Stablecoin infrastructure, tokenisation platforms"], ["licences", "Licences and registrations", ""], ["regions", "Regions served", "UAE, Saudi Arabia, India"], ["founded", "Founded", "2011"], ["other", "Other true facts", ""]];
+  const [side, setSide] = useState<"Shashi" | "Antier">("Shashi");
+  const ALL: Record<"Shashi" | "Antier", [keyof Facts, string, string][]> = {
+    Shashi: [["titles", "His titles", "Co-Founder and COO"], ["other", "Other true facts about him", ""]],
+    Antier: [["company", "Company names", "Antier, Antier Solutions"], ["products", "Products and services", "Stablecoin infrastructure, tokenisation platforms"], ["licences", "Licences and registrations", ""], ["regions", "Regions served", "UAE, Saudi Arabia, India"], ["founded", "Founded", "2011"]],
+  };
+  const FIELDS = ALL[side];
   async function save() {
     const { error } = await supabase().from("citation_facts").upsert({ workspace_id: ws.id, facts: f, updated_at: new Date().toISOString() });
     if (error) toast(error.message); else { haptic(); toast("Facts saved. New checks use them."); onClose(); }
@@ -390,6 +395,7 @@ export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose
   return (
     <Side title="Facts sheet" onClose={onClose}>
       <p className={s.small}>The true facts AI answers are checked against, and what his LinkedIn profile should say. Separate items with commas.</p>
+      <div className="mt-3 flex gap-2" role="tablist">{(["Shashi", "Antier"] as const).map((t) => <button key={t} role="tab" aria-selected={side === t} className={cx(s.btn, s.sm, side === t && s.dark)} onClick={() => setSide(t)}>{t}</button>)}</div>
       <div className="mt-3 grid gap-3">{FIELDS.map(([k, label, ph]) => (
         <label key={k} className="grid gap-1.5"><span className={s.label}>{label}</span>
           {k === "other" ? <textarea className={cx(s.field, "h-auto min-h-[80px] py-2")} value={f[k]} disabled={!can("editor")} onChange={(e) => setF({ ...f, [k]: e.target.value })} /> : <input className={s.field} placeholder={ph} value={f[k]} disabled={!can("editor")} onChange={(e) => setF({ ...f, [k]: e.target.value })} />}
@@ -416,22 +422,6 @@ export function buildSnapshot(runs: Run[], qs: Question[], self: Entity, rivals:
     leaderboard: [self, ...rivals].map((e) => { const x = shareOfVoice(runs, qs, e, self); return { name: e.kind === "self" ? "Antier" : e.name, named: x.named, total: x.total, you: e.kind === "self" }; }).sort((a, b) => b.named - a.named),
     recs: recs.filter((r) => r.status !== "dismissed").map((r) => { const l = lift(r.baseline, scoreOn(r.question_ids)); return { kind: r.kind, title: r.title, status: r.status, lift: l ? `${l.before}% to ${l.after}% named` : "" }; }),
   };
-}
-
-export function ReportOverlay({ snap, onClose, onShare }: { snap: ReportSnapshot; onClose: () => void; onShare: () => void }) {
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
-  return (
-    <div id="prax-report" className={cx(s.reportLayer, "fixed inset-0 z-[60] overflow-auto bg-[#f6f6f6]")}>
-      {/* Printing shows the report only. */}
-      <style>{"@media print { body * { visibility: hidden; } #prax-report, #prax-report * { visibility: visible; } #prax-report { position: absolute; inset: 0; overflow: visible; background: #fff; } }"}</style>
-      <div className={cx(s.noPrint, "sticky top-0 z-10 flex items-center justify-end gap-2 border-b border-[#e8e8e8] bg-white px-4 py-3")}>
-        <button className={cx(s.btn, s.sm)} onClick={onShare}>Share link</button>
-        <button className={cx(s.btn, s.sm, s.dark)} onClick={() => window.print()}>Print or save as PDF</button>
-        <button className={cx(s.btn, s.sm)} onClick={onClose} aria-label="Close"><X size={14} /></button>
-      </div>
-      <div className={s.printArea}><ReportView r={snap} /></div>
-    </div>
-  );
 }
 
 type ShareRow = { token_hash: string; expires_at: string; revoked: boolean; created_at: string };

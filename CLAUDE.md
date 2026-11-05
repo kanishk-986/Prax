@@ -12,7 +12,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 ## Commands
 
 - `npm run dev` / `npm run build`. Lint and types: `npx tsc --noEmit && npx eslint src`.
-- Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score), `node scripts/test-citations.ts` (AI citations parsing, detection, maths, repeats, tone and facts, alerts, lift, share links) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
+- Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score), `node scripts/test-citations.ts` (AI citations parsing incl. Perplexity, detection, strict person matching, audiences, keywords, weekly trend, gaps, the PDF writer, maths, repeats, tone and facts, alerts, lift, share links) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
 - Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths).
 - Campaign logic tests: `node scripts/test-campaigns.ts` (plan per objective, date slots, re-plan, time budget, warnings, halfway check, report).
 - Content Studio logic tests: `node scripts/test-content-studio.ts` (fold, formatter round trips, lists, Markdown, claims check, URL safety, AI reply parsing, point of view, newsletter dates, What works, carousel PDF).
@@ -21,7 +21,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 
 ## Database changes
 
-Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/012_*.sql`. New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
+Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/012_*.sql` (011 splits AI citations into Shashi as a person and Antier as a company, adds prompt audience and keywords, and adds `posts.channel`; 012 adds the Content Studio fields and also guards `posts.channel`). New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
 
 The extension never touches tables directly. It calls `/api/ext/[action]` with a per-browser token; the API calls `security definer` functions (`ext_*`) that check the token hash.
 

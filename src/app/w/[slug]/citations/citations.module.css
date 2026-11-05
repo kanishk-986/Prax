@@ -59,4 +59,42 @@
   .noPrint { display: none; }
 }
 .menuBtn { width: 38px; padding: 0; }
+
+/* Entry moment, once per session */
+@keyframes veilIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes markIn { from { opacity: 0; transform: translateY(14px) scale(.96) } to { opacity: 1; transform: none } }
+@keyframes lineIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+@keyframes barGrow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+.veil { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(255,255,255,.62); backdrop-filter: blur(18px) saturate(1.1); -webkit-backdrop-filter: blur(18px) saturate(1.1); animation: veilIn .35s ease both; transition: opacity .45s ease; }
+.veilOut { opacity: 0; }
+.veilMark { animation: markIn .6s cubic-bezier(.2,.8,.2,1) .1s both; }
+.veilL1 { animation: lineIn .5s ease .35s both; }
+.veilL2 { animation: lineIn .5s ease .5s both; }
+.veilL3 { animation: lineIn .5s ease .65s both; }
+.veilBar { display: block; width: 100%; height: 100%; background: var(--k); transform-origin: left; animation: barGrow 2s linear .2s both; }
+@media (prefers-reduced-motion: reduce) { .veil, .veilMark, .veilL1, .veilL2, .veilL3, .veilBar { animation: none; } .veil { transition: none; } }
+
+/* Guided tour: the page blurs, the focused part sits above it */
+.tourScrim { position: fixed; inset: 0; z-index: 65; background: rgba(255,255,255,.35); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+.tourFocus { position: relative; z-index: 66; box-shadow: 0 0 0 3px var(--r), 0 0 0 10px rgba(214,69,69,.18); border-radius: 14px; }
+.tourCard { position: fixed; left: 24px; bottom: 24px; z-index: 70; width: min(380px, calc(100vw - 48px)); box-sizing: border-box; padding: 18px; border-radius: 16px; background: var(--k); color: var(--w); box-shadow: 0 20px 50px rgba(20,20,20,.35); display: flex; flex-direction: column; gap: 10px; }
+.ghostDark { height: 34px; padding: 0 12px; border: 1px solid rgba(255,255,255,.25); border-radius: 9px; background: transparent; color: var(--w); font-weight: 600; font-size: 13px; cursor: pointer; }
+.ghostDark:disabled { opacity: .4; cursor: default; }
+
+/* Charts */
+.chartWrap { position: relative; }
+.tip { position: absolute; top: 6px; z-index: 3; min-width: 190px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--w); border: 1px solid #d0d0d0; box-shadow: 0 10px 24px rgba(20,20,20,.12); pointer-events: none; font-size: 12.5px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+
+/* KPI tiles */
+.kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 16px 18px; border-radius: 16px; text-align: left; border: 1px solid var(--ln); background: var(--w); color: var(--k); cursor: pointer; }
+.kpi:hover { border-color: var(--k); }
+.kpiDark { background: var(--k); color: var(--w); border-color: var(--k); }
+.kpiRed { border: 2px solid var(--r); color: var(--r); }
+.big { font-family: var(--font-mono); font-size: 30px; line-height: 1.05; }
+
+/* Report */
+.report { border-radius: 6px; background: var(--w); border: 1px solid #e3e3e3; overflow: hidden; line-height: 1.6; }
+.reportCover { padding: 40px 44px 32px; border-top: 6px solid var(--r); }
+.finding { padding: 10px 14px; border-left: 3px solid var(--r); background: var(--sf); font-size: 13.5px; }
 .tiny { font-size: 11px; font-weight: 600; letter-spacing: .02em; }

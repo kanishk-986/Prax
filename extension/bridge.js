@@ -10,7 +10,7 @@
     const c = (await chrome.storage.local.get("cfg")).cfg || {};
     // Which engines AI citations can use: an extra search key, or the main key when it is for that provider.
     const main = c.provider || "claude";
-    const searchKeys = Object.fromEntries(["claude", "openai", "gemini"].map((p) => [p, !!((c.keys && c.keys[p]) || (main === p && c.apiKey))]));
+    const searchKeys = Object.fromEntries(["claude", "openai", "gemini", "perplexity"].map((p) => [p, !!((c.keys && c.keys[p]) || (main === p && c.apiKey))]));
     return { installed: true, version: VERSION, connected: !!c.praxToken, provider: main, model: c.model || "", hasKey: !!c.apiKey, quiet: !!c.quiet, searchKeys, extraKeys: Object.keys(c.keys || {}).filter((p) => c.keys[p]) };
   }
 

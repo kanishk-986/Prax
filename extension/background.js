@@ -105,7 +105,8 @@ async function remember(items) {
 // ---------- AI citations ----------
 // Asks one buyer question on one engine with web search on, using that provider's key in this browser.
 // Returns the raw provider response; the Prax page parses it. The question goes as written, with no system prompt.
-const SEARCH_MODEL = { claude: "claude-opus-5-5", openai: "gpt-5", gemini: "gemini-3.8-flash" };
+const SEARCH_MODEL = { claude: "claude-opus-5-5", openai: "gpt-5", gemini: "gemini-3.8-flash", perplexity: "sonar" };
+const KEY_NAME = { claude: "Claude", openai: "OpenAI", gemini: "Gemini", perplexity: "Perplexity" };
 const keyFor = (c, p) => (c.keys && c.keys[p]) || ((c.provider || "claude") === p ? c.apiKey : "") || "";
 
 async function post(url, headers, body) {
@@ -116,10 +117,9 @@ async function post(url, headers, body) {
 }
 
 async function search({ engine, prompt, country }) {
-  if (engine === "perplexity") throw new Error("Perplexity is not connected yet.");
   const c = await cfg();
   const key = keyFor(c, engine);
-  if (!key) throw new Error(`No ${engine === "openai" ? "OpenAI" : engine === "gemini" ? "Gemini" : "Claude"} key in this browser. Add one on the Prax Extension page.`);
+  if (!key) throw new Error(`No ${KEY_NAME[engine] || engine} key in this browser. Add one on the AI citations page or the Extension page.`);
   const model = (c.searchModels && c.searchModels[engine]) || SEARCH_MODEL[engine];
   const loc = country ? { user_location: { type: "approximate", country } } : {};
   const raws = [];
@@ -134,6 +134,9 @@ async function search({ engine, prompt, country }) {
       if (j.stop_reason !== "pause_turn") break;
       messages.push({ role: "assistant", content: j.content });
     }
+  } else if (engine === "perplexity") {
+    // Perplexity Chat Completions with Sonar: searches by default and returns search_results and citations.
+    raws.push(await post("https://api.perplexity.ai/chat/completions", { authorization: "Bearer " + key }, { model, messages: [{ role: "user", content: prompt }] }));
   } else if (engine === "openai") {
     raws.push(await post("https://api.openai.com/v1/responses", { authorization: "Bearer " + key }, { model, input: prompt, tools: [{ type: "web_search", ...loc }] }));
   } else {

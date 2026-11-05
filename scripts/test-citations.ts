@@ -1,6 +1,7 @@
 // Checks AI citation parsing, detection and maths against sample responses shaped like each provider's API.
 // Run: node scripts/test-citations.ts
-import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, type Entity, type Run, type Question } from "../src/lib/citations.ts";
+import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, detectPerson, personContext, audienceOf, subjectShare, keywordStats, weeklyTrend, sameDirection, promptGaps, gapTopic, runWeeks, parsePerplexity, type Entity, type Run, type Question } from "../src/lib/citations.ts";
+import { buildPdf } from "../src/lib/pdf.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -149,6 +150,79 @@ eq("twenty starter questions, none branded", [starterQuestions().length, starter
 const campQs: Question[] = [{ ...qs[0], topic: "Agentic Finance" }, { ...qs[1], topic: "Custody" }];
 const campRuns = [run("c1", campQs[0].id, "claude", "2026-10-01T10:00:00Z", "Ledgerline."), run("c2", campQs[0].id, "claude", "2026-11-03T10:00:00Z", "Antier.")];
 eq("campaign lift before and after", campaignLift(campRuns, campQs, self, { id: "x", start: "2026-10-15", topic: "Agentic Finance" }), { questions: 1, before: 0, after: 100 });
+
+// ---------- Perplexity ----------
+const px = parsePerplexity({ model: "sonar", choices: [{ message: { content: " Antier builds rails [1]. " } }], search_results: [{ title: "Antier", url: "https://www.antiersolutions.com/a" }, { title: "Other", url: "https://ledgerline.io/b" }], citations: ["https://www.antiersolutions.com/a"], usage: { prompt_tokens: 12, completion_tokens: 30 } });
+eq("Perplexity answer, model and tokens", [px.answer, px.model, px.input_tokens, px.output_tokens], ["Antier builds rails [1].", "sonar", 12, 30]);
+eq("Perplexity sources, cited ones marked", px.sources.map((x) => [x.domain, x.cited]), [["antiersolutions.com", true], ["ledgerline.io", false]]);
+
+// ---------- person and company ----------
+const person: Entity = { id: "p", kind: "self", subject: "person", name: "Shashi Pal", aliases: ["Shashi Pal"], domains: ["linkedin.com/in/shashipal"] };
+const company: Entity = { id: "co", kind: "self", subject: "company", name: "Antier", aliases: ["Antier", "Antier Solutions"], domains: ["antiersolutions.com"] };
+const peer: Entity = { id: "x1", kind: "competitor", subject: "person", name: "Rina Okafor", aliases: ["Rina Okafor"], domains: [] };
+const ctx = personContext([{ ...qs[0], keywords: ["Stablecoin rails"] }], company);
+const say = (answer: string, person_review = "") => ({ answer, person_review });
+const hit = (a: string, r = "") => { const h = detectPerson(say(a, r), person, company, ctx); return [h.named, h.review, h.attributed]; };
+eq("full name with Antier: named and attributed", hit("Shashi Pal of Antier writes on this."), [true, false, true]);
+eq("full name with his role: named, not attributed", hit("Shashi Pal, a co-founder, speaks often."), [true, false, false]);
+eq("full name with one of his topics: named", hit("Shashi Pal writes about stablecoin rails."), [true, false, false]);
+eq("full name, no context: needs review", hit("Shashi Pal is a cricket coach in Delhi."), [false, true, false]);
+eq("context in another paragraph does not count", hit("Shashi Pal coaches cricket.\n\nAntier builds blockchain products."), [false, true, false]);
+eq("Shashi alone never counts", hit("Shashi from Antier said so."), [false, false, false]);
+eq("Pal alone never counts", hit("Pal at Antier, the co-founder, said so."), [false, false, false]);
+eq("another Shashi Pal, confirmed by hand, counts", hit("Shashi Pal is a cricket coach.", "confirmed"), [true, false, false]);
+eq("rejected by hand never counts", hit("Shashi Pal of Antier", "rejected"), [false, false, false]);
+eq("a single-word alias is ignored for people", detectPerson(say("Shashi of Antier"), { aliases: ["Shashi", "Shashi Pal"] }, company, ctx).named, false);
+
+eq("audience from stored value", audienceOf({ question: "Who builds rails?", audience: "expert" }), "expert");
+eq("audience guessed: expert", audienceOf({ question: "Which experts should I follow on stablecoins?" }), "expert");
+eq("audience guessed: leadership", audienceOf({ question: "Who leads Antier's delivery?" }), "leadership");
+eq("audience guessed: vendor", audienceOf({ question: "Who builds tokenisation platforms for banks?" }), "vendor");
+
+const pq: Question[] = [
+  { id: "e1", question: "Which experts write about stablecoin rails in the UAE?", topic: "", region: "UAE", language: "English", status: "active", audience: "expert", keywords: ["stablecoin", "UAE"] },
+  { id: "v1", question: "Who builds stablecoin rails for banks?", topic: "", region: "UAE", language: "English", status: "active", audience: "vendor", keywords: ["stablecoin"] },
+];
+const pr = [
+  run("pa", "e1", "claude", "2026-11-03T10:00:00Z", "Shashi Pal, co-founder of Antier, writes on this. Rina Okafor too."),
+  run("pb", "e1", "openai", "2026-11-03T10:00:00Z", "Rina Okafor is the best known voice."),
+  run("pc", "v1", "claude", "2026-11-03T10:00:00Z", "Ledgerline builds these. Antier also does."),
+  run("pd", "v1", "openai", "2026-11-03T10:00:00Z", "Ledgerline is the main vendor."),
+  run("pe", "e1", "claude", "2026-10-27T10:00:00Z", "Rina Okafor leads this conversation."),
+];
+const ps = subjectShare(pr, pq, "person", person, company, ctx, ["expert", "leadership"]);
+const cs = subjectShare(pr, pq, "company", company, company, ctx, ["vendor", "leadership"]);
+eq("Shashi share counts expert prompts only", [ps.named, ps.total], [1, 2]);
+eq("Antier share counts vendor prompts only", [cs.named, cs.total], [1, 2]);
+eq("a company mention does not count as Shashi", subjectShare([run("pf", "e1", "gemini", "2026-11-03T10:00:00Z", "Antier is active here.")], pq, "person", person, company, ctx, ["expert"]).named, 0);
+eq("keyword stats: named in X of Y", keywordStats(pr, pq, person, company, ctx), [{ keyword: "stablecoin", prompts: 2, named: 2 }, { keyword: "UAE", prompts: 1, named: 1 }]);
+
+const tr = weeklyTrend(pr, pq, person, company, [rival, peer], ctx, new Date("2026-11-06T12:00:00Z"));
+eq("trend has eight weeks ending this week", [tr.length, tr[7].week, tr[6].week], [8, "2026-11-02", "2026-10-26"]);
+eq("trend per engine this week", [tr[7].engines.claude, tr[7].engines.openai, tr[7].engines.gemini], [2, 0, null]);
+eq("trend last week, and empty weeks stay empty", [tr[6].engines.claude, tr[6].person, tr[0].engines.claude], [0, 0, undefined]);
+eq("trend splits Shashi and Antier", [tr[7].person, tr[7].company], [1, 1]);
+eq("competitor median", tr[7].median, 2);
+eq("competitor median of an even pool", weeklyTrend(pr.filter((r) => r.id !== "pd"), pq, person, company, [rival, peer], ctx, new Date("2026-11-06T12:00:00Z"))[7].median, 1.5);
+eq("moving together", sameDirection([0, 1], [1, 2]), true);
+eq("moving apart", sameDirection([0, 2], [3, 1]), false);
+eq("no direction from one week", sameDirection([null, 1], [null, 2]), null);
+
+const gaps = promptGaps(pr, pq, person, company, [peer], [rival], ctx);
+eq("gaps: vendor goes to company, expert to Shashi", gaps.map((g) => [g.question.id, g.channel, g.rivals, g.engines]), [["e1", "shashi", ["Rina Okafor"], ["openai"]], ["v1", "company", ["Ledgerline"], ["openai"]]]);
+eq("gap topic wording", gaps.map(gapTopic), ["Answer it as Shashi: Which experts write about stablecoin rails in the UAE", "Company content: Who builds stablecoin rails for banks"]);
+eq("weeks with runs, newest first", runWeeks(pr), ["2026-11-02", "2026-10-26"]);
+
+// ---------- PDF ----------
+const pdfText = (b: Uint8Array) => String.fromCharCode(...b);
+const doc = { kicker: "AI CITATIONS REPORT", title: "Test report", subtitle: "A week", coverMeta: [["PERIOD", "Week of 2 Nov"]] as [string, string][], footer: "Prax test", sections: [{ title: "Summary", lead: "Shashi named in 1 of 2.", findings: ["One gap."] }, { title: "Table", tables: [{ head: ["A", "B"], widths: [0.5, 0.5], rows: [["1", "2"]] }] }] };
+const small = pdfText(buildPdf(doc));
+eq("PDF starts with %PDF and ends with %%EOF", [small.startsWith("%PDF-1.4"), small.trimEnd().endsWith("%%EOF")], [true, true]);
+eq("PDF page count: cover, contents, sections", [(small.match(/\/Type \/Page /g) ?? []).length, /\/Count 3 /.test(small), small.includes("Page 3 of 3")], [3, true, true]);
+const big = pdfText(buildPdf({ ...doc, sections: [{ title: "Long", tables: [{ head: ["A", "B"], widths: [0.5, 0.5], rows: Array.from({ length: 120 }, (_, i) => [`Row ${i}`, "x"]) }] }] }));
+const pages = (big.match(/\/Type \/Page /g) ?? []).length;
+eq("long tables flow onto more pages, numbered", [pages > 3, big.includes(`Page ${pages} of ${pages}`)], [true, true]);
+eq("PDF text is escaped", pdfText(buildPdf({ ...doc, title: "A (b) c" })).includes("A \\(b\\) c"), true);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);
