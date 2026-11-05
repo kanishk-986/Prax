@@ -102,6 +102,13 @@ Pipeline: no drag and drop; list plus lead panel (full page on demand) with Lead
 
 AI citations: automated runs through the extension with the user's keys (ChatGPT, Gemini, Claude with web search; Perplexity when keyed), named, linked and ranked kept separate, every cited source logged with owned ones marked, evidence drill-down, honest counts (branded questions and failed runs excluded), competitor leaderboard, citation gaps as tasks, Arabic and Hindi questions, dropped-out alerts; then accuracy check and AI-suggested questions; later lift, repeats, reports. Results are labelled API plus web search.
 
+Content Studio additions agreed on 6 Nov 2026 (next build, with Write and Formatter):
+- Point-of-view bank (Q61): Shashi's approved stances, cleared proof points, stories and allowed numbers; every draft and campaign proposal draws only from it.
+- Regulated-claims check (Q64): before approval, flag promises on returns or timelines, client names without a permission tick, harsh lines about a regulator, confidential deal details.
+- LinkedIn newsletter track (Q66): mark articles for a newsletter (for example Operator Notes) with its own cadence in Plan; feeds AI citations.
+- What works (Q67): from his own post results, which types, pillars, days, times and hooks land with target segments; nudges proposed plans. Shows "not enough results yet" until there is data.
+- Declined: first-hour engagement block (Q62), mobile one-tap approval (Q63), tag check (Q65).
+
 Order: Content Studio, then Pipeline, then AI citations, then restyle the remaining pages.
 ## Content Studio, first build (Campaigns, Plan, Library)
 
