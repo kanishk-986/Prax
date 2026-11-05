@@ -1,16 +1,23 @@
 "use client";
+// Dashboard: the command centre. Greeting and one sentence on the week, four headline numbers, what needs
+// doing now (ranked by urgency), the week across every section, LinkedIn reach and recent activity.
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { ArrowUpRight, Activity as ActivityIcon } from "lucide-react";
 import { useLive } from "@/lib/live";
-import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, SEGMENTS, KINDS } from "@/lib/workspace";
-import { Section, type TourStep } from "@/components/shell";
+import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
+import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, reveal, type TourStep, type Need } from "@/components/shell";
+import { LinkedInMcpButton } from "@/components/linkedin-mcp";
+import { deltaOf, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, type NeedInput } from "@/lib/dashboard";
+import { personContext, promptGaps, subjectShare, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
-type Prospect = { id: string; name: string; company: string; stage: string; segment: string; next_action: string; next_date: string | null };
-type Snap = { metric: string; value: number; captured_at: string; source: string };
+type Prospect = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; created_at: string };
+type Snap = { metric: string; value: number; captured_at: string };
 type Act = { id: number; at: string; kind: string; label: string };
+type Post = { id: string; title: string; format: string; publish_date: string | null; status: string };
+type RunRow = Run & { citation_sources?: (Run["sources"][number] & { sort: number })[] };
 
 const REACH = [
   { key: "impressions_7d", label: "Post impressions", sub: "last 7 days" },
@@ -20,133 +27,175 @@ const REACH = [
 ];
 
 const DASH_TOUR: TourStep[] = [
-  { target: "kpis", title: "The numbers for this week", body: "Today's progress, comments and requests against quota, conversations, calls, your streak and warm paths. Click warm paths to open Network." },
-  { target: "next", title: "Next actions", body: "What needs doing now: today's items, follow-ups that are due, prospects ready for a request, and posts still in the works." },
-  { target: "execution", title: "Daily execution", body: "Fourteen days of items done against planned, so a slipping week shows early." },
-  { target: "funnel", title: "Pipeline at a glance", body: "How many people sit in each stage. Open Pipeline to move them." },
+  { target: "header", title: "What the dashboard is for", body: "One place to see how the week is going for this profile and what to do next. Every number comes from the work logged in Prax." },
+  { target: "kpis", title: "The four numbers that matter", body: "People in the pipeline, warm paths from Network, posts out this week and comments against the weekly target. Small chips show the change on last week. Click a tile to open that section." },
+  { target: "needs", title: "Needs you now", body: "Everything waiting on you, most urgent first: overdue follow-ups and posts lead, then approvals, today's plan and housekeeping." },
+  { target: "glance", title: "This week at a glance", body: "One line for each part of Prax: Today, Content Studio, Comment Studio, Pipeline, Network and AI citations. Click a line to go there." },
   { target: "reach", title: "LinkedIn reach", body: "Impressions, followers, profile viewers and search appearances, captured when you open his LinkedIn analytics with the extension." },
-  { target: "activity", title: "Live activity", body: "Ticks on Today and pipeline moves appear here as the team works." },
-  { target: "followups", title: "Follow-ups due", body: "People whose next action date has arrived. Nothing here means nobody is waiting on you." },
+  { target: "activity", title: "Recent activity", body: "Ticks on Today and pipeline moves, newest first, as the team works." },
+  { target: "open-today", title: "Start the day", body: "Open Today for the plan: comments, posts, follow-ups and connections, in that order." },
+  { target: "mcp", title: "LinkedIn MCP", body: "A direct LinkedIn connection is coming soon. Nothing is connected yet, and Prax will still never post or send for you." },
 ];
 
-export default function Dashboard() {
-  const { ws } = useWorkspace();
-  const t = today();
-  const since = addDays(t, -27);
-  const items = useLive<Item>("daily_items", ws.id, { filter: (q) => q.gte("day", since) });
-  const prospects = useLive<Prospect>("prospects", ws.id);
-  const snaps = useLive<Snap>("snapshots", ws.id, { order: "captured_at", asc: false });
-  const acts = useLive<Act>("activity", ws.id, { order: "at", asc: false, filter: (q) => q.limit(25) });
-  const posts = useLive<{ id: string; title: string; format: string; publish_date: string | null; status: string }>("posts", ws.id, { order: "publish_date", filter: (q) => q.gte("publish_date", t).lte("publish_date", addDays(t, 7)) });
+const NOT_POSTED = ["Posted", "On hold", "Published"];
 
-  // Open prospects with a linked connection or a connection at their company (db/006_network.sql).
+export default function Dashboard() {
+  const { ws, can } = useWorkspace();
+  const t = today();
+  const wk = weekStart(t);
+  const lastWk = addDays(wk, -7);
+  const items = useLive<Item>("daily_items", ws.id, { filter: (q) => q.gte("day", addDays(t, -27)) });
+  const prospects = useLive<Prospect>("prospects", ws.id);
+  const snaps = useLive<Snap>("snapshots", ws.id, { order: "captured_at", asc: false, filter: (q) => q.limit(200) });
+  const acts = useLive<Act>("activity", ws.id, { order: "at", asc: false, filter: (q) => q.limit(8) });
+  const posts = useLive<Post>("posts", ws.id, { filter: (q) => q.or(`publish_date.gte.${addDays(t, -28)},status.eq."In review"`) });
+  const drafts = useLive<{ created_at: string }>("saved_drafts", ws.id, { filter: (q) => q.gte("created_at", lastWk) });
+  const logged = useLive<{ day: string }>("comment_log", ws.id, { filter: (q) => q.gte("day", lastWk) });
+  const cq = useLive<Question>("citation_questions", ws.id);
+  const ents = useLive<Entity>("citation_entities", ws.id);
+
+  // Open prospects with a linked connection or a connection at their company (db/006_network.sql); null when there is no export.
   const [warm, setWarm] = useState<number | null>(null);
   useEffect(() => { supabase().rpc("network_warm_count", { ws: ws.id }).then(({ data, error }: { data: unknown; error: unknown }) => setWarm(error ? null : (data as number))); }, [ws.id, prospects.rows.length]);
+  const [people, setPeople] = useState<number | null>(null);
+  useEffect(() => { supabase().from("network_people").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).then(({ count, error }: { count: number | null; error: unknown }) => setPeople(error ? null : count ?? 0)); }, [ws.id]);
+  const [runs, setRuns] = useState<Run[]>([]);
+  useEffect(() => {
+    const since = new Date(Date.now() - 28 * 864e5).toISOString();
+    supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id).gte("run_at", since).order("run_at", { ascending: false }).limit(1500)
+      .then(({ data }: { data: RunRow[] | null }) => setRuns((data ?? []).map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) }))));
+  }, [ws.id]);
 
-  const wk = weekStart(t);
-  const stats = useMemo(() => {
+  const wkDays = Math.min(5, daysBetween(wk, t) + 1);
+  const week = useMemo(() => {
     const rows = items.rows;
     const tod = rows.filter((r) => r.day === t);
-    const week = rows.filter((r) => r.day >= wk && r.day <= t);
-    const by = (k: string, arr: Item[]) => ({ done: arr.filter((r) => r.kind === k && r.done).length, total: arr.filter((r) => r.kind === k).length });
+    const commentDays = rows.filter((r) => r.kind === "comment" && r.done).map((r) => r.day);
+    const cw = weekOverWeek(commentDays, t);
     const days = Array.from({ length: 14 }, (_, i) => addDays(t, i - 13)).map((d) => { const a = rows.filter((r) => r.day === d); return { d, done: a.filter((r) => r.done).length, total: a.length }; });
-    let streak = 0;
-    for (let i = days.length - 1; i >= 0; i--) { const x = days[i]; if (x.total && x.done / x.total >= 0.8) streak++; else if (x.d !== t) break; }
-    return { today: { done: tod.filter((r) => r.done).length, total: tod.length }, comment: by("comment", week), request: by("request", week), dm: by("dm", week), days, streak };
-  }, [items.rows, t, wk]);
+    return { today: { done: tod.filter((r) => r.done).length, total: tod.length }, comments: cw, commentSpark: dailySeries(commentDays, t, 14), days };
+  }, [items.rows, t]);
 
   const pipe = useMemo(() => {
-    const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<string, number>;
-    prospects.rows.forEach((p) => { counts[p.stage] = (counts[p.stage] ?? 0) + 1; });
-    const reached = (s: string) => { const i = STAGES.indexOf(s as (typeof STAGES)[number]); return prospects.rows.filter((p) => STAGES.indexOf(p.stage as (typeof STAGES)[number]) >= i && p.stage !== "Parked").length; };
-    const due = prospects.rows.filter((p) => p.next_date && p.next_date <= t && !["Parked", "Won"].includes(p.stage)).sort((a, b) => (a.next_date! < b.next_date! ? -1 : 1));
-    return { counts, total: prospects.rows.length, conv: reached("In conversation"), calls: reached("Call booked"), due };
+    const rows = prospects.rows;
+    const reached = (s: string) => rows.filter((p) => p.stage !== "Parked" && STAGES.indexOf(p.stage as never) >= STAGES.indexOf(s as never)).length;
+    const due = rows.filter((p) => p.next_date && p.next_date <= t && !["Parked", "Won"].includes(p.stage)).sort((a, b) => (a.next_date! < b.next_date! ? -1 : 1));
+    return { open: rows.filter((p) => p.stage !== "Parked").length, added: weekOverWeek(rows.map((p) => p.created_at), t).now, conv: reached("In conversation"), calls: reached("Call booked"),
+      due, overdue: due.filter((p) => p.next_date! < t).length, warming: rows.filter((p) => p.stage === "Warming").length };
   }, [prospects.rows, t]);
 
-  const latest = useMemo(() => {
+  const content = useMemo(() => {
+    const rows = posts.rows;
+    const end = addDays(wk, 6);
+    const thisWeek = rows.filter((p) => p.publish_date && p.publish_date >= wk && p.publish_date <= end && p.status !== "On hold");
+    const posted = weekOverWeek(rows.filter((p) => p.status === "Posted" || p.status === "Published").map((p) => p.publish_date), t);
+    const soon = rows.filter((p) => p.publish_date && p.publish_date <= addDays(t, 2) && !NOT_POSTED.includes(p.status) && !(p.status === "Ready" && p.publish_date > t))
+      .sort((a, b) => (a.publish_date! < b.publish_date! ? -1 : 1));
+    return { planned: thisWeek.length, posted, review: rows.filter((p) => p.status === "In review").length, soon };
+  }, [posts.rows, wk, t]);
+
+  const studio = useMemo(() => ({ drafts: weekOverWeek(drafts.rows.map((d) => d.created_at), t), logged: weekOverWeek(logged.rows.map((l) => l.day), t) }), [drafts.rows, logged.rows, t]);
+
+  const cit = useMemo(() => {
+    const active = cq.rows.filter((q) => q.status === "active").length;
+    const selves = ents.rows.filter((e) => e.kind === "self");
+    const person = selves.find((e) => e.subject === "person");
+    const company = selves.find((e) => e.subject !== "person");
+    const ctx = personContext(cq.rows, company);
+    const rivals = ents.rows.filter((e) => e.kind === "competitor" && e.status !== "suggested");
+    const share = subjectShare(runs, cq.rows, "person", person, company, ctx, ["expert", "leadership"]);
+    const gaps = promptGaps(runs, cq.rows, person, company, rivals.filter((e) => e.subject === "person"), rivals.filter((e) => e.subject !== "person"), ctx).length;
+    const last = runs[0]?.run_at;
+    return { active, share, gaps, lastDays: last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null, last };
+  }, [cq.rows, ents.rows, runs]);
+
+  const reach = useMemo(() => {
     const m: Record<string, { now?: Snap; prev?: Snap }> = {};
     snaps.rows.forEach((s) => { const e = (m[s.metric] ||= {}); if (!e.now) e.now = s; else if (!e.prev) e.prev = s; });
     return m;
   }, [snaps.rows]);
 
-  const q = ws.quotas;
-  const wkDays = Math.min(5, Math.round((new Date(t + "T12:00:00").getTime() - new Date(wk + "T12:00:00").getTime()) / 864e5) + 1);
-  const hour = new Date().getHours();
+  const base = `/w/${ws.slug}`;
+  const needs = useMemo(() => {
+    const list: (NeedInput & Need)[] = [];
+    pipe.due.forEach((p) => list.push({ kind: "followup", due: p.next_date, title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `${p.stage} · ${p.next_action || "Next step due"}`, cta: "Open", href: `${base}/pipeline?p=${p.id}`, tone: "red" }));
+    content.soon.forEach((p) => list.push({ kind: "post", due: p.publish_date, title: p.title || "Untitled post", sub: `${p.format} · ${p.status}${p.publish_date && p.publish_date < t ? " · planned date has passed" : ""}`, cta: p.status === "Ready" ? "Open" : "Finish", href: `${base}/studio-content?tab=plan`, tone: "red" }));
+    if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : "Waiting for Shashi to approve", cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
+    if (!week.today.total) list.push({ kind: "today", title: "Open today's plan", sub: "It builds from the daily quota", cta: "Start", href: `${base}/today`, tone: "dark" });
+    else if (week.today.done < week.today.total) list.push({ kind: "today", title: `${week.today.total - week.today.done} of ${week.today.total} tasks left today`, sub: "Comments, posts, follow-ups and connections", cta: "Continue", href: `${base}/today`, tone: "dark" });
+    if (cit.active && (cit.lastDays == null || cit.lastDays >= 7)) list.push({ kind: "citations", title: "Run the AI citation prompts", sub: cit.lastDays == null ? `${cit.active} prompts have never been run` : `Last run ${cit.lastDays} days ago`, cta: "Run", href: `${base}/citations`, tone: "dim" });
+    if (pipe.warming) list.push({ kind: "warming", title: `${pipe.warming} ${pipe.warming === 1 ? "person" : "people"} warming up`, sub: "Two comments each, then a connection note", cta: "Open", href: `${base}/pipeline`, tone: "dim" });
+    if (warm == null) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
+    return rankNeeds(list, t);
+  }, [pipe, content, week.today, cit, warm, base, t, can]);
 
-  const left = stats.today.total - stats.today.done;
+  const hour = new Date().getHours();
+  const loading = items.loading || prospects.loading;
+  const sentence = weekSentence({ comments: week.comments.now, commentTarget: ws.quotas.comment * wkDays, posted: content.posted.now, planned: content.planned, overdue: pipe.overdue, conversations: pipe.conv });
+  const commentDelta = deltaOf(week.comments.now, week.comments.prev);
+  const postDelta = deltaOf(content.posted.now, content.posted.prev);
+  const draftDelta = deltaOf(studio.drafts.now, studio.drafts.prev);
+
   return (
-    <Section id="dashboard" title={`Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}`} status={`${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}`}
-      entryStatus={stats.today.total ? `${left} of ${stats.today.total} items left today. ${pipe.due.length} follow-ups due.` : `${pipe.due.length} follow-ups due. Today's checklist is not opened yet.`}
-      actions={<Link href={`/w/${ws.slug}/today`} className="btn btn-primary h-10 px-4">Open today’s checklist <ArrowUpRight size={14} /></Link>}
+    <Section id="dashboard" title={`Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}`} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
+      entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
+      actions={<>
+        <LinkedInMcpButton tour="mcp" />
+        <Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link>
+      </>}
       steps={DASH_TOUR}>
 
-      <div data-tour="kpis" className="grid grid-cols-2 gap-3 rounded-2xl sm:grid-cols-4 lg:grid-cols-7">
-        <Kpi label="Today" value={`${stats.today.done}/${stats.today.total || 0}`} foot={stats.today.total ? `${Math.round((stats.today.done / stats.today.total) * 100)}% done` : "Not opened yet"} tone={stats.today.total && stats.today.done >= stats.today.total ? "good" : undefined} />
-        <Kpi label="Comments this week" value={stats.comment.done} foot={`target ${q.comment * wkDays}`} />
-        <Kpi label="Requests this week" value={stats.request.done} foot={`target ${q.request * wkDays}`} />
-        <Kpi label="In conversation" value={pipe.conv} foot={`of ${pipe.total} in pipeline`} />
-        <Kpi label="Calls booked" value={pipe.calls} foot="all time" tone={pipe.calls ? "good" : undefined} />
-        <Kpi label="Streak" value={`${stats.streak}d`} foot="days at 80%+ of quota" />
-        <Link href={`/w/${ws.slug}/network`} className="contents"><Kpi label="Warm paths" value={warm ?? "–"} foot={warm == null ? "upload the export" : "open prospects"} tone={warm ? "good" : undefined} /></Link>
-      </div>
+      {loading ? <Skeleton /> : (<>
+        <KpiTiles tour="kpis" items={[
+          { label: "In pipeline", value: pipe.open, tone: "dark", href: `${base}/pipeline`,
+            delta: pipe.added ? { text: `+${pipe.added}`, dir: "up", label: "added this week" } : null, sub: pipe.added ? undefined : `${pipe.conv} in conversation` },
+          { label: "Warm paths", value: warm ?? "None", href: `${base}/network`, sub: warm == null ? "Upload the LinkedIn export" : "open prospects with a way in" },
+          { label: "Posts this week", value: content.posted.now, of: content.planned ? `of ${content.planned} planned` : undefined, href: `${base}/studio-content?tab=plan`,
+            delta: postDelta && (content.posted.now || content.posted.prev) ? { ...postDelta, label: "vs last week" } : null, sub: content.planned || content.posted.now ? undefined : "Nothing planned yet" },
+          { label: "Comments this week", value: week.comments.now, of: `of ${ws.quotas.comment * wkDays}`, href: `${base}/today`, spark: week.commentSpark,
+            delta: commentDelta && (week.comments.now || week.comments.prev) ? { ...commentDelta, label: "vs last week" } : null, sub: week.comments.now || week.comments.prev ? undefined : "None yet this week" },
+        ]} />
 
-      <div data-tour="next"><NextActions slug={ws.slug} todayLeft={stats.today.total - stats.today.done} todayTotal={stats.today.total} due={pipe.due.length}
-        ready={prospects.rows.filter((p) => p.stage === "Warming").length} posts={posts.rows.filter((p) => !["Posted", "Ready", "On hold", "Published", "Approved", "Scheduled"].includes(p.status))} /></div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <section data-tour="execution" className="card p-5 lg:col-span-2">
-          <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Daily execution</h2><span className="text-[12px] text-muted">last 14 days · items done vs planned</span></div>
-          <Bars days={stats.days} today={t} />
-        </section>
-        <section data-tour="funnel" className="card p-5">
-          <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Pipeline</h2><Link href={`/w/${ws.slug}/pipeline`} className="text-[12px] text-accent">Open</Link></div>
-          <Funnel counts={pipe.counts} />
-        </section>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <section data-tour="reach" className="card p-5 lg:col-span-2">
-          <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">LinkedIn reach</h2><span className="text-[12px] text-muted">captured from LinkedIn with the Prax extension</span></div>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {REACH.map((r) => { const e = latest[r.key]; const delta = e?.now && e?.prev ? e.now.value - e.prev.value : null; return (
-              <div key={r.key}>
-                <div className="label">{r.label}</div>
-                <div className="num mt-1 text-[22px] font-semibold">{e?.now ? Number(e.now.value).toLocaleString() : "—"}</div>
-                <div className="text-[12px] text-muted">{e?.now ? <>{delta !== null && <span className={delta >= 0 ? "text-good" : "text-bad"}>{delta >= 0 ? "+" : ""}{delta.toLocaleString()} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : "Capture from LinkedIn analytics"}</div>
-              </div>
-            ); })}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div {...reveal(4)}>
+            <NeedsYou tour="needs" title="Needs you now" items={needs.slice(0, 7).map((n) => ({ ...n, when: n.kind === "followup" || n.kind === "post" ? whenLabel(n.due, t) : undefined }))} count={needs.length}
+              empty="Nothing is waiting on you. Overdue follow-ups, posts due and approvals show here first." />
           </div>
-        </section>
-        <section data-tour="activity" className="card p-5">
-          <h2 className="flex items-center gap-2 text-[14px] font-semibold"><ActivityIcon size={14} /> Live activity</h2>
-          <ul className="mt-3 flex max-h-[220px] flex-col gap-2 overflow-auto">
-            {acts.rows.length === 0 && <li className="text-[13px] text-muted">Ticks on Today and pipeline moves appear here as they happen.</li>}
-            {acts.rows.map((a) => (
-              <li key={a.id} className="flex items-start gap-2 text-[13px]">
-                <span className="dot mt-[7px]" style={{ background: a.kind === "stage" ? "var(--accent)" : "var(--good)" }} />
-                <span className="min-w-0 flex-1"><span className="text-ink-2">{labelFor(a)}</span><span className="block text-[11px] text-faint">{new Date(a.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span></span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
+          <div {...reveal(5)}>
+            <Panel tour="glance" title="This week at a glance" meta={`${fmtDay(wk, { day: "numeric", month: "short" })} to ${fmtDay(addDays(wk, 6), { day: "numeric", month: "short" })}`}>
+              <Glance href={`${base}/today`} name="Today" line={week.today.total ? `${week.today.done} of ${week.today.total} done today` : "Today's plan is not opened yet"} aside={<MiniBars days={week.days} today={t} />} />
+              <Glance href={`${base}/studio-content`} name="Content Studio" line={`${content.planned} planned · ${content.posted.now} out · ${content.review} in review`} />
+              <Glance href={`${base}/studio`} name="Comment Studio" line={`${studio.drafts.now} drafts saved · ${studio.logged.now} comments logged`}
+                aside={draftDelta && (studio.drafts.now || studio.drafts.prev) ? <span className="num text-[11.5px] text-faint">{draftDelta.text} drafts</span> : undefined} />
+              <Glance href={`${base}/pipeline`} name="Pipeline" line={`${pipe.conv} in conversation · ${pipe.calls} ${pipe.calls === 1 ? "call" : "calls"} · ${pipe.overdue} overdue`} alert={pipe.overdue > 0} />
+              <Glance href={`${base}/network`} name="Network" line={people ? `${people.toLocaleString("en-GB")} people · ${warm ?? 0} warm paths` : "No LinkedIn export uploaded yet"} />
+              <Glance href={`${base}/citations`} name="AI citations" alert={cit.gaps > 0}
+                line={!cit.active ? "No prompts set up yet" : cit.share.total ? `Shashi named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
+                aside={cit.last ? <span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span> : undefined} />
+            </Panel>
+          </div>
+        </div>
 
-      <section data-tour="followups" className="card p-5">
-        <div className="flex items-baseline justify-between"><h2 className="text-[14px] font-semibold">Follow-ups due</h2><span className="text-[12px] text-muted">{pipe.due.length} people</span></div>
-        {pipe.due.length === 0 ? <p className="mt-3 text-[13px] text-muted">Nothing due. People whose next-action date has arrived show here.</p> : (
-          <ul className="mt-2 divide-y divide-line">
-            {pipe.due.slice(0, 8).map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center gap-3 py-2 text-[13px]">
-                <span className="h-2 w-2 rounded-full" style={{ background: SEGMENTS[p.segment]?.color ?? "var(--faint)" }} />
-                <span className="font-medium">{p.name}</span><span className="text-muted">{p.company}</span>
-                <span className="chip">{p.stage}</span>
-                <span className="min-w-0 flex-1 truncate text-ink-2">{p.next_action}</span>
-                <span className="num text-[12px] text-muted">{fmtDay(p.next_date!, { day: "numeric", month: "short" })}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div {...reveal(6)}>
+            <Activity tour="activity" items={acts.rows.map((a) => ({ when: relTime(a.at), text: labelFor(a), tag: a.kind === "stage" ? "Pipeline" : "Today" }))}
+              empty="Nothing yet. Ticks on Today and pipeline moves appear here as they happen." />
+          </div>
+          <div {...reveal(7)}>
+            <Panel tour="reach" title="LinkedIn reach" meta="captured with the extension">
+              <div className="grid grid-cols-2 border-t border-line">
+                {REACH.map((r, i) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
+                  <div key={r.key} className={`flex flex-col gap-1 px-[18px] py-3.5 ${i % 2 ? "border-l border-line" : ""} ${i > 1 ? "border-t border-line" : ""}`}>
+                    <span className="text-[11.5px] font-semibold uppercase tracking-[.05em] text-faint">{r.label}</span>
+                    <span className="num text-[22px] font-semibold leading-none tracking-[-0.02em]">{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
+                    <span className="text-[12px] text-muted">{e?.now ? <>{d && d.dir !== "flat" && <span className={`num font-semibold ${d.dir === "up" ? "text-ink" : "text-[#9e1c1c]"}`}>{d.text} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : "Not captured yet"}</span>
+                  </div>
+                ); })}
+              </div>
+            </Panel>
+          </div>
+        </div>
+      </>)}
     </Section>
   );
 }
@@ -157,78 +206,40 @@ function labelFor(a: Act) {
   return `${k ? k.label.replace(/s$/, "") : "Task"} done${a.label && a.label !== a.kind ? `: ${a.label}` : ""}`;
 }
 
-function NextActions({ slug, todayLeft, todayTotal, due, ready, posts }: { slug: string; todayLeft: number; todayTotal: number; due: number; ready: number; posts: { id: string; title: string; format: string; publish_date: string | null; status: string }[] }) {
-  const base = `/w/${slug}`;
-  const acts: { tone: string; title: string; sub: string; href: string; cta: string }[] = [];
-  if (!todayTotal) acts.push({ tone: "var(--accent)", title: "Open today's checklist", sub: "It generates from your daily quota", href: `${base}/today`, cta: "Start" });
-  else if (todayLeft > 0) acts.push({ tone: "var(--accent)", title: `${todayLeft} items left today`, sub: "Comments, requests and messages", href: `${base}/today`, cta: "Continue" });
-  if (due > 0) acts.push({ tone: "var(--bad)", title: `${due} follow-ups due`, sub: "People whose next step is today or overdue", href: `${base}/pipeline`, cta: "Review" });
-  if (ready > 0) acts.push({ tone: "var(--warn)", title: `${ready} people warming up`, sub: "Comment twice, then send the note", href: `${base}/pipeline`, cta: "Open" });
-  posts.slice(0, 2).forEach((p) => acts.push({ tone: "var(--accent)", title: `${p.format} due ${p.publish_date ? fmtDay(p.publish_date, { weekday: "short", day: "numeric" }) : "soon"}`, sub: `${p.title} · ${p.status}`, href: `${base}/content`, cta: "Draft" }));
-  if (!acts.length) return null;
+function Glance({ href, name, line, aside, alert }: { href: string; name: string; line: string; aside?: React.ReactNode; alert?: boolean }) {
   return (
-    <section className="mt-3">
-      <div className="label mb-2">Next best actions</div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {acts.slice(0, 4).map((a, k) => (
-          <Link key={k} href={a.href} className="card lift anim-rise group flex items-center gap-3 p-4" style={{ animationDelay: `${k * 40}ms` }}>
-            <span className="h-9 w-1 shrink-0 rounded-full" style={{ background: a.tone }} />
-            <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold">{a.title}</span><span className="block truncate text-[12px] text-muted">{a.sub}</span></span>
-            <span className="text-[12px] font-semibold text-accent opacity-70 transition-opacity group-hover:opacity-100">{a.cta} →</span>
-          </Link>
-        ))}
-      </div>
-    </section>
+    <Link href={href} className="row-hit group">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-2 text-[13.5px] font-semibold">{name}{alert && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="needs attention" />}</span>
+        <span className="truncate text-[12.5px] text-muted">{line}</span>
+      </span>
+      {aside}
+      <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
+    </Link>
   );
 }
 
-function Kpi({ label, value, foot, tone }: { label: string; value: React.ReactNode; foot: string; tone?: "good" }) {
+/** Fourteen days of tasks done against planned, as tiny bars. */
+function MiniBars({ days, today: t }: { days: { d: string; done: number; total: number }[]; today: string }) {
+  const max = Math.max(1, ...days.map((d) => d.total));
+  if (!days.some((d) => d.total)) return <Spark values={days.map((d) => d.done)} />;
   return (
-    <div className="card lift p-4">
-      <div className="label">{label}</div>
-      <div className={`num mt-1.5 text-[24px] font-semibold leading-none ${tone === "good" ? "text-good" : ""}`}>{value}</div>
-      <div className="mt-1.5 text-[12px] text-muted">{foot}</div>
-    </div>
-  );
-}
-
-function Bars({ days, today: t }: { days: { d: string; done: number; total: number }[]; today: string }) {
-  const W = 680, H = 190, pl = 28, pb = 22, pt = 8;
-  const max = Math.max(10, ...days.map((d) => d.total));
-  const top = Math.ceil(max / 10) * 10;
-  const bw = (W - pl) / days.length;
-  const y = (v: number) => pt + (H - pt - pb) * (1 - v / top);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="mt-4 h-auto w-full" role="img" aria-label="Items done and planned per day, last 14 days">
-      {[0, top / 2, top].map((v) => (
-        <g key={v}><line x1={pl} x2={W} y1={y(v)} y2={y(v)} stroke="var(--line)" /><text x={pl - 6} y={y(v) + 4} textAnchor="end" fontSize="10" fill="var(--faint)" className="num">{v}</text></g>
-      ))}
-      {days.map((d, i) => {
-        const x = pl + i * bw + bw * 0.22, w = bw * 0.56;
-        return (
-          <g key={d.d}>
-            {d.total > 0 && <rect x={x} y={y(d.total)} width={w} height={y(0) - y(d.total)} rx="3" fill="var(--surface-2)" />}
-            {d.done > 0 && <rect x={x} y={y(d.done)} width={w} height={y(0) - y(d.done)} rx="3" fill={d.done >= d.total ? "var(--good)" : "var(--accent)"} />}
-            <text x={x + w / 2} y={H - 6} textAnchor="middle" fontSize="10" fill={d.d === t ? "var(--ink)" : "var(--faint)"} fontWeight={d.d === t ? 600 : 400}>{new Date(d.d + "T12:00:00").getDate()}</text>
-          </g>
-        );
-      })}
+    <svg width="84" height="26" viewBox="0 0 84 26" aria-label="Tasks done per day, last 14 days" role="img" className="shrink-0">
+      {days.map((d, i) => { const x = i * 6, h = Math.max(2, (d.total / max) * 24), hd = d.total ? (d.done / d.total) * h : 0; return (
+        <g key={d.d}>
+          <rect x={x} y={26 - h} width="4" height={h} rx="1" fill="#ececec" />
+          {hd > 0 && <rect x={x} y={26 - hd} width="4" height={hd} rx="1" fill={d.d === t ? "#d64545" : "#141414"} />}
+        </g>
+      ); })}
     </svg>
   );
 }
 
-function Funnel({ counts }: { counts: Record<string, number> }) {
-  const stages = STAGES.filter((s) => s !== "Parked");
-  const max = Math.max(1, ...stages.map((s) => counts[s] ?? 0));
+function Skeleton() {
   return (
-    <ul className="mt-4 flex flex-col gap-2">
-      {stages.map((s) => (
-        <li key={s} className="grid grid-cols-[110px_1fr_28px] items-center gap-2 text-[12px]">
-          <span className="truncate text-ink-2">{s}</span>
-          <span className="h-[8px] rounded-full bg-surface-2"><span className="block h-full rounded-full" style={{ width: `${((counts[s] ?? 0) / max) * 100}%`, background: s === "Call booked" || s === "Won" ? "var(--good)" : "var(--accent)" }} /></span>
-          <span className="num text-right text-muted">{counts[s] ?? 0}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-4" aria-busy="true">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((k) => <div key={k} className="h-[118px] animate-pulse rounded-2xl bg-[#ececec]" />)}</div>
+      <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr]"><div className="h-[320px] animate-pulse rounded-2xl bg-[#ececec]" /><div className="h-[320px] animate-pulse rounded-2xl bg-[#ececec]" /></div>
+    </div>
   );
 }

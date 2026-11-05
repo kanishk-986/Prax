@@ -163,6 +163,16 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Keys: "Connect AI keys" writes OpenAI, Google, Anthropic and Perplexity keys to the extension through the bridge and never reads them back. Perplexity runs through Chat Completions with model `sonar` (docs.perplexity.ai API reference: `search_results`, `citations`, `usage`). Extension 0.7.0.
 - Entry screen once per browser session; guided tour of 15 steps starts once per user and reopens from Guide.
 
+## Dashboard and Today redesign (6 Nov 2026, branch `dashboard-today`)
+
+- Dashboard (`/w/[slug]`): greeting plus one sentence on the week (`weekSentence`), four headline tiles (In pipeline with people added this week, Warm paths, Posts this week against planned, Comments this week against target with a 14-day line), Needs you now ranked by `rankNeeds` (overdue follow-ups and posts first, growing with age; then approvals, today's plan, the weekly AI citation run, people warming up, the Network upload), This week at a glance (Today, Content Studio, Comment Studio, Pipeline, Network, AI citations), recent activity and LinkedIn reach. Tour of 8 steps. Prax has no Discovery section, so the glance has no row for it.
+- LinkedIn MCP button (`src/components/linkedin-mcp.tsx`): LinkedIn blue #0A66C2 with the simple-icons mark as inline SVG and a Coming soon tag. It only shows an info toast; nothing connects.
+- Today (`/today`): no tabs any more, one agenda. Progress ring with per-group bars, a Due and overdue strip (pipeline follow-ups and posts whose date has come), then groups in a fixed order: Comment, Post, Follow up, Connect, Other (`groupOf` maps the campaign index bands). Each row: type, who or what, link, one action (`primaryAction`: the saved link, else the LinkedIn feed for comments, Pipeline for requests and messages; never posts or sends), Done and Skip. When nothing is left, a dark Day complete summary replaces the progress card. Keys: J and K move, X done, S skip (new). Tour of 8 steps.
+- Skip is stored in `daily_items.note` behind a `skip:` prefix (`skipNote`, `unskipNote`), so no SQL change was needed. Done and skipped both clear an item; only done counts on the Dashboard. If the extension later ticks a skipped item it overwrites the note, which also clears the skip.
+- Shell additions every section gets: `KpiTiles` take optional `delta` and `spark`, numbers count up once on first view, clickable tiles lift on hover; `NeedsYou` takes `when` and `count`; `Activity` takes `action`; new `Panel`, `ProgressRing`, `Spark`, `CountUp`, `useCountUp` and `reveal(i)` for the staggered entrance. The toaster takes `{ info: true }` for a neutral message. The entry moment no longer sticks in dev under React strict mode. All motion is off under reduced motion.
+- Logic in `src/lib/dashboard.ts`, checked by `node scripts/test-dashboard.ts`.
+- Checked in a browser against sample data through a temporary local harness (not committed); not checked signed in against Supabase.
+
 ## Known gaps
 
 - Sign-in email uses Supabase's built-in sender, which is rate-limited. Fix: custom SMTP (Resend) set up by Alok.
