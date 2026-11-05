@@ -16,7 +16,8 @@ export async function middleware(req: NextRequest) {
   });
   const { data: { user } } = await sb.auth.getUser();
   const p = req.nextUrl.pathname;
-  const open = p.startsWith("/login") || p.startsWith("/auth") || p.startsWith("/api/ext");
+  // /share shows a view-only AI citations snapshot; the database checks the token.
+  const open = p.startsWith("/login") || p.startsWith("/auth") || p.startsWith("/api/ext") || p.startsWith("/share/");
   if (!user && !open) {
     const url = req.nextUrl.clone(); url.pathname = "/login"; url.searchParams.set("next", p);
     return NextResponse.redirect(url);

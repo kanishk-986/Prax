@@ -112,6 +112,20 @@ Order: Content Studio, then Pipeline, then AI citations, then restyle the remain
 - Approval: team drafts go In review; owners approve or ask for changes with a note; one weekly approval session item on Today.
 - Not built yet: the seven-step Write flow and the Formatter (tabs say so). Not verified against Supabase: needs 008 and 009 run first.
 
+## AI citations, complete (Q60)
+
+- Page `/w/[slug]/citations`: tabs Overview, Questions, Answers, Sources, Competitors, Actions. Top right: Ask (right-side chat over your own runs), Draft test, a three-dot menu (Facts sheet, Report, Share a view-only link) and Run questions.
+- Overview: headline count, per-engine rows, Alerts (dropped out, newly named, wrong fact, competitor overtook), Your next moves, His LinkedIn profile (facts sheet against headline and About).
+- Questions: Quick setup drafts 20 questions (AI, or a fixed starter list without a key) as Suggested; Suggested list with approve or dismiss and Suggest more; question sets with roll-ups; asks per run 1 to 3 per question.
+- Answers: grid on the latest batch (repeats within 3 hours count as one; named when more than half of usable repeats name him), tone, wrong-fact marker; evidence drawer with "Check tone and facts". Run history below.
+- Sources: sites, citation gaps, Comment targets (LinkedIn people and pages the AI cites; Add as VIP writes Comment Studio safety.vips and a Today task), his LinkedIn in answers with "Suggest a LinkedIn article".
+- Actions: recommendations On his profile and Elsewhere, from the data plus "Suggest more with AI"; Accept stores a baseline and creates a post Idea or a Today task; lift is the named share on the target questions then and now.
+- Draft test also opens from Content Studio's post editor ("Is this citable?", saved drafts over 80 characters).
+- Report overlay prints only the report; share links store a sha256 token and a snapshot, expire in 1 to 30 days, can be turned off, and are read at `/share/[token]` through `citation_share()`.
+- Campaign report reads real numbers: `campaignLift` picks questions by campaign topic, keywords or `citation_questions.campaign_id`.
+- Today adds one "Run the AI citation questions" task when the last run is 7 days old or there has never been one.
+- `db/010_citations_more.sql` (after 009). Tone and wrong facts are stored on `citation_runs` when the check runs; alerts are computed on the page. Not verified against Supabase yet.
+
 ## Known gaps
 
 - Sign-in email uses Supabase's built-in sender, which is rate-limited. Fix: custom SMTP (Resend) set up by Alok.

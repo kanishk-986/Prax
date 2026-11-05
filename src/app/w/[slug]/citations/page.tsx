@@ -1,21 +1,24 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, MoreHorizontal } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ActionMenu } from "@/components/content/shared";
+import { AlertsCard, NextMoves, ProfileCard, QuickSetup, Suggested, SetsBar, Actions, DraftTest, AskPanel, FactsDrawer, ReportOverlay, ShareDialog, CommentTargets, buildSnapshot, judgeRun, type RecRow, type SetRow } from "./extras";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, useExtension } from "@/lib/bridge";
 import {
-  ENGINES, ESTIMATE, COUNTRY, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, latestPairs, promptFor, findMatches,
-  type Engine, type Entity, type Run, type Question, type Source,
+  ENGINES, ESTIMATE, COUNTRY, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, latestBatches, aggregate, promptFor, findMatches, recommend, sentimentOf,
+  type Engine, type Entity, type Run, type Question, type Source, type Facts, type FactIssue,
 } from "@/lib/citations";
 import s from "./citations.module.css";
 
-type RunRow = Omit<Run, "sources"> & { error: string; question_text: string; input_tokens: number; output_tokens: number; citation_sources: (Source & { sort: number })[] };
+type RunRow = Omit<Run, "sources"> & { error: string; question_text: string; input_tokens: number; output_tokens: number; citation_sources: (Source & { sort: number })[]; sentiment: string; fact_issues: FactIssue[] | null; judged_at: string | null };
 type Manual = { question_id: string; week_start: string; tool: string; cited: boolean };
-const TABS = ["Overview", "Questions", "Runs", "Sources", "Competitors"] as const;
+const TABS = ["Overview", "Questions", "Answers", "Sources", "Competitors", "Actions"] as const;
 type Tab = (typeof TABS)[number];
 const LIVE = ENGINES.filter((e) => e.live);
 const engineName = (e: string) => ENGINES.find((x) => x.id === e)?.name ?? e;
@@ -27,7 +30,22 @@ export default function Citations() {
   const { ws, can } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("Overview");
+  const params = useSearchParams();
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "Overview");
+  const sets = useLive<SetRow>("citation_sets", ws.id, { order: "sort" });
+  const recs = useLive<RecRow>("citation_recs", ws.id, { order: "created_at", asc: false });
+  const [facts, setFacts] = useState<Partial<Facts>>({});
+  const [panel, setPanel] = useState<"" | "ask" | "draft" | "facts" | "report" | "share">("");
+  const [draftInit, setDraftInit] = useState("");
+  const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const loadFacts = useCallback(() => { supabase().from("citation_facts").select("facts").eq("workspace_id", ws.id).maybeSingle().then(({ data }: { data: { facts: Partial<Facts> } | null }) => setFacts(data?.facts ?? {})); }, [ws.id]);
+  useEffect(() => { loadFacts(); }, [loadFacts]);
+  // Content Studio's "Is this citable?" opens the draft test with that post's text.
+  useEffect(() => {
+    const id = params.get("draft");
+    if (!id) return;
+    supabase().from("posts").select("title,draft").eq("id", id).maybeSingle().then(({ data }: { data: { title: string; draft: string } | null }) => { if (data) { setDraftInit(data.draft || data.title); setPanel("draft"); } });
+  }, [params]);
   const qs = useLive<Question & { sort: number }>("citation_questions", ws.id, { order: "sort" });
   const ents = useLive<Entity & { sort: number }>("citation_entities", ws.id, { order: "sort" });
   const manual = useLive<Manual>("citation_results", ws.id, { order: "week_start", asc: false });
@@ -57,25 +75,40 @@ export default function Citations() {
           <h1 className="text-[26px] font-semibold tracking-tight">AI citations</h1>
           <p className={s.sub}>Whether AI models name and link Shashi and Antier when buyers ask. Every result is the model&apos;s API with web search on: close to, not the same as, what someone sees in the app.</p>
         </div>
-        {editable && <button className={cx(s.btn, s.red)} disabled={!self || !active.length} onClick={() => setRunOpen(true)}>Run questions</button>}
+        {self && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button className={s.btn} onClick={() => setPanel("ask")} disabled={!runs.length}>Ask</button>
+            <button className={s.btn} onClick={() => { setDraftInit(""); setPanel("draft"); }}>Draft test</button>
+            <button className={cx(s.btn, s.menuBtn)} aria-label="More" title="Facts sheet, report and share link" onClick={(e) => setMenu(e.currentTarget)}><MoreHorizontal size={16} /></button>
+            {editable && <button className={cx(s.btn, s.red)} disabled={!active.length} onClick={() => setRunOpen(true)}>Run questions</button>}
+          </div>
+        )}
       </header>
+      {menu && <ActionMenu anchor={menu} onClose={() => setMenu(null)} items={[{ label: "Facts sheet", run: () => setPanel("facts") }, { label: "Report", run: () => setPanel("report") }, { label: "Share a view-only link", run: () => setPanel("share") }]} />}
       <nav className={s.tabs} role="tablist" aria-label="AI citations">
         {TABS.map((t) => {
-          const n = t === "Questions" ? active.length : t === "Runs" ? runs.length : t === "Competitors" ? rivals.length : 0;
+          const sug = qs.rows.filter((q) => q.status === "suggested").length, openRecs = recs.rows.filter((r) => r.status === "open" || r.status === "accepted").length;
+          const n = t === "Questions" ? active.length + sug : t === "Answers" ? runs.length : t === "Competitors" ? rivals.length : t === "Actions" ? openRecs : 0;
           return <button key={t} role="tab" aria-selected={tab === t} className={cx(s.tab, tab === t && s.tabOn)} onClick={() => setTab(t)}>{t}{n > 0 && <span className={s.count}>{n}</span>}</button>;
         })}
       </nav>
 
       {!ents.loading && !self ? <Setup editable={editable} />
         : !loaded || qs.loading || !self ? <div className={cx(s.box, "h-64 animate-pulse")} />
-        : tab === "Overview" ? <Overview runs={runs} qs={qs.rows} self={self} rivals={rivals} onOpen={(id) => setOpen(runRows.find((r) => r.id === id) ?? null)} onRun={() => setRunOpen(true)} editable={editable} />
-        : tab === "Questions" ? <Questions qs={qs.rows} self={self} editable={editable} />
-        : tab === "Runs" ? <Runs rows={runRows} qById={qById} self={self} manual={manual.rows} onOpen={setOpen} />
+        : tab === "Overview" ? <Overview runs={runs} qs={qs.rows} self={self} rivals={rivals} recs={recs.rows} facts={facts} onRun={() => setRunOpen(true)} onAll={() => setTab("Actions")} onFacts={() => setPanel("facts")} editable={editable} />
+        : tab === "Questions" ? <Questions qs={qs.rows} sets={sets.rows} runs={runs} self={self} editable={editable} />
+        : tab === "Answers" ? <Answers runs={runs} rows={runRows} qs={qs.rows} qById={qById} self={self} rivals={rivals} manual={manual.rows} onOpen={setOpen} />
         : tab === "Sources" ? <Sources runs={runs} self={self} rivals={rivals} editable={editable} />
-        : <Competitors ents={ents.rows} runs={runs} qs={qs.rows} self={self} editable={editable} />}
+        : tab === "Competitors" ? <Competitors ents={ents.rows} runs={runs} qs={qs.rows} self={self} editable={editable} />
+        : <Actions recs={recs.rows} runs={runs} qs={qs.rows} self={self} rivals={rivals} />}
 
-      {open && self && <Evidence run={open} q={qById.get(open.question_id)} self={self} rivals={rivals} onClose={() => setOpen(null)} />}
-      {runOpen && self && <RunPanel qs={active} onClose={() => setRunOpen(false)} onDone={() => { loadRuns(); toast("Run finished"); }} />}
+      {open && self && <Evidence run={open} q={qById.get(open.question_id)} self={self} rivals={rivals} facts={facts} editable={editable} onJudged={loadRuns} onClose={() => setOpen(null)} />}
+      {runOpen && self && <RunPanel qs={active} self={self} facts={facts} onClose={() => setRunOpen(false)} onDone={() => { loadRuns(); toast("Run finished"); }} />}
+      {panel === "ask" && self && <AskPanel runs={runs} qs={qs.rows} self={self} rivals={rivals} onClose={() => setPanel("")} />}
+      {panel === "draft" && self && <DraftTest qs={qs.rows} self={self} initial={draftInit} onClose={() => setPanel("")} />}
+      {panel === "facts" && <FactsDrawer facts={facts} onClose={() => { setPanel(""); loadFacts(); }} />}
+      {(panel === "report" || panel === "share") && self && <ReportOverlay snap={buildSnapshot(runs, qs.rows, self, rivals, recs.rows, ws.name)} onClose={() => setPanel("")} onShare={() => setPanel("share")} />}
+      {panel === "share" && self && <ShareDialog snap={buildSnapshot(runs, qs.rows, self, rivals, recs.rows, ws.name)} onClose={() => setPanel("report")} />}
     </div>
   );
 }
@@ -105,13 +138,14 @@ function Setup({ editable }: { editable: boolean }) {
 }
 
 // ---------------- overview ----------------
-function Overview({ runs, qs, self, rivals, onOpen, onRun, editable }: { runs: Run[]; qs: Question[]; self: Entity; rivals: Entity[]; onOpen: (id: string) => void; onRun: () => void; editable: boolean }) {
+function Overview({ runs, qs, self, rivals, recs, facts, onRun, onAll, onFacts, editable }: { runs: Run[]; qs: Question[]; self: Entity; rivals: Entity[]; recs: RecRow[]; facts: Partial<Facts>; onRun: () => void; onAll: () => void; onFacts: () => void; editable: boolean }) {
   const active = qs.filter((q) => q.status === "active");
-  const pairs = useMemo(() => latestPairs(runs), [runs]);
+  const batches = useMemo(() => latestBatches(runs), [runs]);
+  const computed = useMemo(() => recommend(runs, qs, self, rivals), [runs, qs, self, rivals]);
   const ch = useMemo(() => changes(runs, self), [runs, self]);
   const li = useMemo(() => linkedinCited(runs, self), [runs, self]);
-  const qText = (id: string) => qs.find((q) => q.id === id)?.question ?? "Removed question";
 
+  if (!active.length && !qs.some((q) => q.status === "suggested")) return <QuickSetup count={qs.length} />;
   if (!runs.length) return (
     <div className={cx(s.box, "grid min-h-[240px] place-items-center p-8 text-center")}>
       <div className="max-w-[460px]">
@@ -140,7 +174,7 @@ function Overview({ runs, qs, self, rivals, onOpen, onRun, editable }: { runs: R
         <table className={s.table}>
           <thead><tr><th>Engine</th><th>Named</th><th>Linked</th><th>Best position</th><th>Changes since last run</th></tr></thead>
           <tbody>{byEngine.map(({ e, sov }) => {
-            const best = Math.min(...[...pairs.values()].filter((p) => p.now.engine === e.id && p.now.status !== "failed").map((p) => detect(p.now, self).position ?? Infinity));
+            const best = Math.min(...[...batches.entries()].filter(([k]) => k.endsWith("|" + e.id)).map(([, b]) => aggregate(b.now, self)?.position ?? Infinity));
             const c = ch.filter((x) => x.engine === e.id), nNew = c.filter((x) => x.kind === "new").length, nDrop = c.length - nNew;
             return (
               <tr key={e.id}>
@@ -155,31 +189,44 @@ function Overview({ runs, qs, self, rivals, onOpen, onRun, editable }: { runs: R
         </table>
       </section>
 
-      {ch.length > 0 && (
-        <section className={cx(s.box, "p-4")}>
-          <div className={s.label}>Dropped out and newly named</div>
-          <ul className="mt-2 grid gap-1.5">{ch.slice(0, 8).map((c) => (
-            <li key={c.question_id + c.engine} className="flex flex-wrap items-center gap-2 text-[13px]"><span className={cx(s.pill, c.kind === "new" ? s.pRed : s.pDark)}>{c.kind === "new" ? "Newly named" : "Dropped out"}</span><span className="font-medium">{qText(c.question_id)}</span><span className={s.small}>on {engineName(c.engine)}</span></li>
-          ))}</ul>
-        </section>
-      )}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <AlertsCard runs={runs} qs={qs} self={self} rivals={rivals} />
+        <NextMoves recs={recs} computed={computed} onAll={onAll} />
+        <ProfileCard facts={facts} onFacts={onFacts} />
+      </div>
+    </div>
+  );
+}
 
+// ---------------- answers ----------------
+function Answers({ runs, rows, qs, qById, self, rivals, manual, onOpen }: { runs: Run[]; rows: RunRow[]; qs: Question[]; qById: Map<string, Question>; self: Entity; rivals: Entity[]; manual: Manual[]; onOpen: (r: RunRow) => void }) {
+  const active = qs.filter((q) => q.status === "active");
+  const batches = useMemo(() => latestBatches(runs), [runs]);
+  const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+  return (
+    <div className="flex flex-col gap-5">
       <section className={cx(s.box, "overflow-x-auto")}>
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"><span className="font-semibold">Every question, latest answer</span><span className={s.small}>Red: named and linked. Red outline: named, not linked. Click a cell to read the answer.</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"><span className="font-semibold">Every question, latest answer</span><span className={s.small}>Red: named and linked. Red outline: named, not linked. A dot marks a wrong fact. Click a cell to read the answer.</span></div>
         <table className={s.table}>
-          <thead><tr><th>Question</th>{LIVE.map((e) => <th key={e.id} style={{ width: 150 }}>{e.name.split(" ")[0]}</th>)}</tr></thead>
+          <thead><tr><th>Question</th>{LIVE.map((e) => <th key={e.id} style={{ width: 160 }}>{e.name.split(" ")[0]}</th>)}</tr></thead>
           <tbody>{active.map((q) => (
             <tr key={q.id}>
               <td><div className="font-medium">{q.question}</div><div className={s.small}>{[q.region, q.language !== "English" && q.language, isBranded(q, self) && "Branded, not counted"].filter(Boolean).join(" · ")}</div></td>
               {LIVE.map((e) => {
-                const p = pairs.get(`${q.id}|${e.id}`);
-                if (!p) return <td key={e.id}><span className={cx(s.cell, s.cEmpty, "inline-block cursor-default")}>Not run</span></td>;
-                const d = detect(p.now, self), rivalsNamed = rivals.filter((r) => detect(p.now, r).named).length;
-                const label = p.now.status === "failed" ? "Failed" : d.named ? `Named${d.position ? ` #${d.position}` : ""}${d.linked ? " · linked" : d.linked === null ? " · no sources" : ""}` : "Not named";
+                const b = batches.get(`${q.id}|${e.id}`);
+                if (!b) return <td key={e.id}><span className={cx(s.cell, s.cEmpty, "inline-block cursor-default")}>Not run</span></td>;
+                const a = aggregate(b.now, self), first = b.now.find((r) => r.status !== "failed") ?? b.now[0];
+                const rivalsNamed = rivals.filter((r) => aggregate(b.now, r)?.named).length;
+                const wrong = b.now.some((r) => (r.fact_issues ?? []).length);
+                const tone = first.sentiment || (a?.named ? sentimentOf(first.answer, self.aliases) : null);
+                const label = !a ? "Failed" : a.named ? `Named${a.position ? ` #${a.position}` : ""}${a.linked ? " · linked" : a.linked === null ? " · no sources" : ""}` : "Not named";
                 return (
                   <td key={e.id}>
-                    <button className={cx(s.cell, p.now.status === "failed" && s.cFailed, d.named && (d.linked ? s.cNamed : s.cNamedNoLink))} onClick={() => onOpen(p.now.id)} aria-label={`${q.question} on ${e.name}: ${label}`}>
-                      {label}{rivalsNamed > 0 && <span className="block opacity-75">{rivalsNamed} competitor{rivalsNamed > 1 ? "s" : ""}</span>}
+                    <button className={cx(s.cell, !a && s.cFailed, a?.named && (a.linked ? s.cNamed : s.cNamedNoLink))} onClick={() => { const r = byId.get(first.id); if (r) onOpen(r); }} aria-label={`${q.question} on ${e.name}: ${label}`}>
+                      {label}{wrong && <span aria-label="wrong fact" title="An answer gets a fact wrong"> ●</span>}
+                      {a && a.n > 1 && <span className="block opacity-75">{a.k} of {a.n} repeats{a.mixed ? ", mixed" : ""}</span>}
+                      {a?.named && tone && tone !== "neutral" && <span className="block opacity-75">{tone === "positive" ? "Positive" : "Negative"} tone</span>}
+                      {rivalsNamed > 0 && <span className="block opacity-75">{rivalsNamed} competitor{rivalsNamed > 1 ? "s" : ""}</span>}
                     </button>
                   </td>
                 );
@@ -187,13 +234,15 @@ function Overview({ runs, qs, self, rivals, onOpen, onRun, editable }: { runs: R
             </tr>
           ))}</tbody>
         </table>
+        {!active.length && <p className={cx(s.small, "p-6 text-center")}>No active questions.</p>}
       </section>
+      <Runs rows={rows} qById={qById} self={self} manual={manual} onOpen={onOpen} />
     </div>
   );
 }
 
 // ---------------- run panel ----------------
-function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void; onDone: () => void }) {
+function RunPanel({ qs, self, facts, onClose, onDone }: { qs: Question[]; self: Entity; facts: Partial<Facts>; onClose: () => void; onDone: () => void }) {
   const { ws } = useWorkspace();
   const { status } = useExtension();
   const toast = useToast();
@@ -201,13 +250,16 @@ function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void
   const [pick, setPick] = useState<Engine[] | null>(null);
   const [prog, setProg] = useState<{ done: number; total: number; failed: number; stopped: boolean } | null>(null);
   const stop = useRef(false);
+  const [check, setCheck] = useState(true);
+  const reps = (q: Question) => Math.max(1, Math.min(3, q.repeats ?? 1));
+  const nRuns = qs.reduce((a, q) => a + reps(q), 0);
   const chosen = pick ?? LIVE.map((e) => e.id).filter((e) => status?.searchKeys?.[e]);
-  const total = qs.length * chosen.length;
-  const est = chosen.reduce((a, e) => ({ inTok: a.inTok + ESTIMATE[e].inTok * qs.length, outTok: a.outTok + ESTIMATE[e].outTok * qs.length, usd: a.usd + ESTIMATE[e].usd * qs.length }), { inTok: 0, outTok: 0, usd: 0 });
+  const total = nRuns * chosen.length;
+  const est = chosen.reduce((a, e) => ({ inTok: a.inTok + ESTIMATE[e].inTok * nRuns, outTok: a.outTok + ESTIMATE[e].outTok * nRuns, usd: a.usd + ESTIMATE[e].usd * nRuns }), { inTok: 0, outTok: 0, usd: 0 });
 
-  async function one(q: Question, engine: Engine) {
+  async function one(q: Question, engine: Engine, rep: number) {
     const prompt = promptFor(q, engine), country = engine === "gemini" ? "" : COUNTRY[q.region] ?? "";
-    const base = { workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language };
+    const base = { workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language, repeat_index: rep };
     try {
       const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country }, 240000);
       const p = parseEngine(engine, res.raws);
@@ -215,6 +267,8 @@ function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void
       const { data, error } = await supabase().from("citation_runs").insert({ ...base, model: p.model || res.model, status: st, answer: p.answer, input_tokens: p.input_tokens, output_tokens: p.output_tokens, error: p.refused ? "The model declined to answer" : "" }).select("id").single();
       if (error) throw error;
       if (p.sources.length) await supabase().from("citation_sources").insert(p.sources.map((x, i) => ({ workspace_id: ws.id, run_id: data.id, url: x.url, title: x.title, domain: x.domain, cited: x.cited, sort: i })));
+      // Tone and facts only matter when he is named; one small call on the main AI key.
+      if (check && st !== "failed" && detect({ answer: p.answer, sources: p.sources, status: st }, self).named) await judgeRun({ id: data.id, answer: p.answer }, facts, self);
       return st !== "failed";
     } catch (e) {
       // A failed run is stored so it shows on the Runs tab; it never counts as "not named".
@@ -225,15 +279,15 @@ function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void
 
   async function start() {
     stop.current = false;
-    const queue = qs.flatMap((q) => chosen.map((e) => [q, e] as const));
+    const queue = qs.flatMap((q) => chosen.flatMap((e) => Array.from({ length: reps(q) }, (_, i) => [q, e, i] as const)));
     const n = queue.length;
     let done = 0, failed = 0;
     setProg({ done, total: n, failed, stopped: false });
     // Three at a time, so no provider is hit in a burst.
     await Promise.all([0, 1, 2].map(async () => {
       while (queue.length && !stop.current) {
-        const [q, e] = queue.shift()!;
-        if (!(await one(q, e))) failed++;
+        const [q, e, i] = queue.shift()!;
+        if (!(await one(q, e, i))) failed++;
         done++;
         setProg({ done, total: n, failed, stopped: stop.current });
       }
@@ -248,7 +302,7 @@ function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void
     <div className={s.scrim} onMouseDown={() => !running && onClose()}>
       <aside className={s.drawer} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Run questions">
         <div className="flex items-center justify-between"><h2 className="text-[19px] font-semibold">Run questions</h2><button className={cx(s.btn, s.sm)} onClick={onClose} disabled={running} aria-label="Close"><X size={14} /></button></div>
-        <p className={s.small}>Each of the {qs.length} active questions is asked as written, with web search on, from this browser with your own keys. Answers and sources are saved; keys are not.</p>
+        <p className={s.small}>Each of the {qs.length} active questions is asked as written, with web search on, from this browser with your own keys{nRuns > qs.length ? `, some more than once (${nRuns} asks per engine)` : ""}. Answers and sources are saved; keys are not.</p>
         <div className="mt-4 grid gap-2">
           {ENGINES.map((e) => (
             <label key={e.id} className={cx(s.box, "flex items-center gap-3 p-3", (!e.live || !ready(e.id)) && "opacity-60")}>
@@ -258,6 +312,7 @@ function RunPanel({ qs, onClose, onDone }: { qs: Question[]; onClose: () => void
             </label>
           ))}
         </div>
+        <label className={cx(s.box, "mt-3 flex items-start gap-3 p-3")}><input type="checkbox" checked={check} disabled={!!prog} onChange={(e) => setCheck(e.target.checked)} /><span><span className="block font-semibold">Check tone and facts</span><span className={s.small}>When an answer names him, one small call on your main AI key reads its tone and compares it with the facts sheet.</span></span></label>
         {status && !status.installed && <p className="mt-3 text-[13px] text-[#d64545]">The Prax extension is not installed in this browser. Install 0.5.0 from the Extension page.</p>}
         <div className={cx(s.box, "mt-4 p-4")}>
           <div className={s.label}>Before you start</div>
@@ -289,9 +344,12 @@ function Highlight({ text, self, rivals }: { text: string; self: Entity; rivals:
   return <div className={s.answer}>{out}</div>;
 }
 
-function Evidence({ run, q, self, rivals, onClose }: { run: RunRow; q?: Question; self: Entity; rivals: Entity[]; onClose: () => void }) {
+function Evidence({ run, q, self, rivals, facts, editable, onJudged, onClose }: { run: RunRow; q?: Question; self: Entity; rivals: Entity[]; facts: Partial<Facts>; editable: boolean; onJudged: () => void; onClose: () => void }) {
   const r: Run = { ...run, sources: [...(run.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) };
   const d = detect(r, self);
+  const [judged, setJudged] = useState<{ sentiment: string; issues: FactIssue[] } | null>(run.judged_at ? { sentiment: run.sentiment, issues: run.fact_issues ?? [] } : null);
+  const [busy, setBusy] = useState(false);
+  const tone = judged?.sentiment || (d.named ? sentimentOf(run.answer, self.aliases) : null);
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   return (
     <div className={s.scrim} onMouseDown={onClose}>
@@ -306,7 +364,16 @@ function Evidence({ run, q, self, rivals, onClose }: { run: RunRow; q?: Question
           {d.position && <span className={cx(s.pill, s.pDark)}>Position #{d.position}</span>}
           {rivals.filter((x) => detect(r, x).named).map((x) => <span key={x.id} className={cx(s.pill, s.pDark)}>{x.name}</span>)}
           {run.status === "failed" && <span className={cx(s.pill, s.pDark)}>Failed</span>}
+          {d.named && tone && <span className={cx(s.pill, tone === "negative" ? s.pDark : s.pLine)}>{tone[0].toUpperCase() + tone.slice(1)} tone{judged?.sentiment ? "" : ", quick read"}</span>}
         </div>
+        {d.named && (
+          <div className={cx(s.box, "mt-3 p-3")}>
+            <div className="flex items-center justify-between gap-2"><span className={s.label}>Facts</span>{editable && run.status !== "failed" && <button className={cx(s.btn, s.sm)} disabled={busy} onClick={async () => { setBusy(true); setJudged(await judgeRun({ id: run.id, answer: run.answer }, facts, self)); setBusy(false); onJudged(); }}>{busy ? "Checking" : judged ? "Check again" : "Check tone and facts"}</button>}</div>
+            {!judged ? <p className={s.small}>Not checked yet. The check compares the answer with the facts sheet.</p>
+              : judged.issues.length ? <ul className="mt-1.5 grid gap-1.5">{judged.issues.map((i, k) => <li key={k} className="text-[13px]"><span className={cx(s.pill, s.pRed)}>Wrong</span> <b>{i.fact}</b><span className={cx(s.small, "block")}>It said: {i.said}</span></li>)}</ul>
+              : <p className="mt-1 text-[13px]">Nothing contradicts the facts sheet.</p>}
+          </div>
+        )}
         {q && run.question_text && run.question_text !== q.question && <p className={cx(s.small, "mt-2")}>Sent as: {run.question_text}</p>}
         <div className={cx(s.box, "mt-4 p-4")}>{run.status === "failed" && !run.answer ? <p className={s.small}>{run.error || "No answer came back."}</p> : <Highlight text={run.answer} self={self} rivals={rivals} />}</div>
         <div className="mt-4">
@@ -327,23 +394,31 @@ function Evidence({ run, q, self, rivals, onClose }: { run: RunRow; q?: Question
 }
 
 // ---------------- questions ----------------
-function Questions({ qs, self, editable }: { qs: (Question & { sort: number })[]; self: Entity; editable: boolean }) {
+function Questions({ qs, sets, runs, self, editable }: { qs: (Question & { sort: number })[]; sets: SetRow[]; runs: Run[]; self: Entity; editable: boolean }) {
   const { ws } = useWorkspace();
   const toast = useToast();
+  const [setView, setSetView] = useState("all");
+  async function patchQ(id: string, patch: Record<string, unknown>, msg: string) {
+    const { error } = await supabase().from("citation_questions").update(patch).eq("id", id);
+    if (error) toast(error.message); else { haptic(); toast(msg); }
+  }
   const [f, setF] = useState({ question: "", topic: "", region: "Global", language: "English" });
   const [show, setShow] = useState<"active" | "archived">("active");
   async function add(e: React.FormEvent) {
     e.preventDefault(); if (!f.question.trim()) return;
-    const { error } = await supabase().from("citation_questions").insert({ workspace_id: ws.id, question: f.question.trim(), topic: f.topic, region: f.region === "Global" ? "" : f.region, language: f.language, status: "active", sort: qs.length + 1 });
+    const { error } = await supabase().from("citation_questions").insert({ workspace_id: ws.id, question: f.question.trim(), topic: f.topic, region: f.region === "Global" ? "" : f.region, language: f.language, status: "active", sort: qs.length + 1, set_id: setView !== "all" && setView !== "none" ? setView : null });
     if (error) toast(error.message); else { haptic(); toast("Question added"); setF({ ...f, question: "" }); }
   }
   async function setStatus(id: string, status: string) {
     const { error } = await supabase().from("citation_questions").update({ status }).eq("id", id);
     if (error) toast(error.message); else { haptic(); toast(status === "archived" ? "Archived. Its past runs stay." : "Active again", status === "archived" ? () => setStatus(id, "active") : undefined); }
   }
-  const shown = qs.filter((q) => (show === "active" ? q.status === "active" : q.status !== "active"));
+  const shown = qs.filter((q) => (show === "active" ? q.status === "active" : q.status === "archived") && (setView === "all" || (setView === "none" ? !q.set_id : q.set_id === setView)));
   return (
     <div className="flex flex-col gap-4">
+      {!qs.length && editable && <QuickSetup count={0} />}
+      <Suggested qs={qs} />
+      <SetsBar sets={sets} qs={qs} runs={runs} self={self} value={setView} onChange={setSetView} />
       {editable && (
         <form onSubmit={add} className={cx(s.box, "grid gap-3 p-4 md:grid-cols-[1fr_160px_150px_130px_auto] md:items-end")}>
           <label className="grid gap-1.5"><span className={s.label}>Buyer question</span><input className={s.field} placeholder="Who builds stablecoin payment infrastructure for banks in the UAE?" value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></label>
@@ -357,11 +432,13 @@ function Questions({ qs, self, editable }: { qs: (Question & { sort: number })[]
       <div className="flex gap-2">{(["active", "archived"] as const).map((v) => <button key={v} className={cx(s.btn, s.sm, show === v && s.dark)} onClick={() => setShow(v)}>{v === "active" ? "Active" : "Archived"}</button>)}</div>
       <div className={cx(s.box, "overflow-x-auto")}>
         <table className={s.table}>
-          <thead><tr><th>Question</th><th>Topic</th><th>Region</th><th>Language</th><th /></tr></thead>
+          <thead><tr><th>Question</th><th>Topic</th><th>Region</th><th>Language</th><th>Set</th><th>Asks per run</th><th /></tr></thead>
           <tbody>{shown.map((q) => (
             <tr key={q.id}>
               <td className="font-medium">{q.question}{isBranded(q, self) && <span className={cx(s.pill, s.pLine, "ml-2")}>Branded, not scored</span>}</td>
               <td className={s.small}>{q.topic}</td><td className={s.small}>{q.region || "Global"}</td><td className={s.small}>{q.language}</td>
+              <td><select aria-label="Question set" className={cx(s.field, "h-[30px] w-36 text-[12.5px]")} disabled={!editable} value={q.set_id ?? ""} onChange={(e) => patchQ(q.id, { set_id: e.target.value || null }, "Moved to the set")}><option value="">No set</option>{sets.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
+              <td><select aria-label="Asks per run" title="AI answers vary; asking 2 or 3 times gives a steadier read and costs more" className={cx(s.field, "h-[30px] w-20 text-[12.5px]")} disabled={!editable} value={q.repeats ?? 1} onChange={(e) => patchQ(q.id, { repeats: Number(e.target.value) }, "Saved")}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}</select></td>
               <td className="text-right">{editable && <button className={cx(s.btn, s.sm)} onClick={() => setStatus(q.id, q.status === "active" ? "archived" : "active")}>{q.status === "active" ? "Archive" : "Restore"}</button>}</td>
             </tr>
           ))}</tbody>
@@ -427,9 +504,19 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
   const li = useMemo(() => linkedinCited(runs, self), [runs, self]);
   const owned = (d: string) => self.domains.some((x) => { const h = x.split("/")[0]; return !x.includes("/") && (d === h || d.endsWith("." + h)); });
 
+  // The question his LinkedIn is cited for most often becomes an article idea.
+  async function suggestArticle() {
+    const counts = new Map<string, number>();
+    li.forEach(({ run }) => { const t = run.question_id; counts.set(t, (counts.get(t) ?? 0) + 1); });
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const { data } = best ? await supabase().from("citation_questions").select("question,topic").eq("id", best).maybeSingle() : { data: null };
+    const title = data ? `LinkedIn article: ${data.question}` : "LinkedIn article on the topic AI cites him for";
+    const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title, format: "Article", status: "Idea", topic: data?.topic || "AI citations", resource: "AI answers already cite his LinkedIn on this topic. A full article gives them more to cite." });
+    if (error) toast(error.message); else { haptic(); setMade(new Set([...made, "li-article"])); toast("Article idea added in Content Studio, Library"); }
+  }
   async function toIdea(g: { domain: string; competitors: string[] }) {
     const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title: `Earn a mention on ${g.domain}`, status: "Idea", topic: "AI citations", resource: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. Pitch a guest piece, a quote or data there, or post on the topic it covers.` });
-    if (error) toast(error.message); else { haptic(); setMade(new Set([...made, g.domain])); toast("Added as an idea in Content"); }
+    if (error) toast(error.message); else { haptic(); setMade(new Set([...made, g.domain])); toast("Added as an idea in Content Studio, Library"); }
   }
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -456,8 +543,10 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
             ))}</ul>
           )}
         </section>
+        <CommentTargets runs={runs} self={self} />
         <section className={cx(s.box, "p-4")}>
-          <div className={s.label}>His LinkedIn in AI answers</div>
+          <div className="flex items-center justify-between gap-2"><span className={s.label}>His LinkedIn in AI answers</span>{editable && <button className={cx(s.btn, s.sm, s.dark)} disabled={made.has("li-article")} onClick={suggestArticle}>{made.has("li-article") ? "Added" : "Suggest a LinkedIn article"}</button>}</div>
+          <p className={s.small}>Long LinkedIn articles get read and cited by AI tools more than short posts. Topics where his LinkedIn already gets cited are the best ones to write up next.</p>
           {li.length ? <ul className="mt-2 grid gap-1.5">{li.slice(0, 10).map(({ run, source }, i) => <li key={i} className="text-[13px]"><a className="font-medium hover:underline" href={source.url} target="_blank" rel="noopener noreferrer">{source.title || source.url.replace(/^https?:\/\/(www\.)?/, "")}</a><span className={cx(s.small, "block")}>{engineName(run.engine)} · {fmtDay(ymd(new Date(run.run_at)), { day: "numeric", month: "short" })}</span></li>)}</ul>
             : <p className={cx(s.small, "mt-1")}>No answer has cited his LinkedIn posts or articles yet. His profile URL must be in the owned list under Competitors.</p>}
         </section>
