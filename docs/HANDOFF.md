@@ -119,6 +119,15 @@ Order: Content Studio, then Pipeline, then AI citations, then restyle the remain
 - Approval: team drafts go In review; owners approve or ask for changes with a note; one weekly approval session item on Today.
 - Not built yet: the seven-step Write flow and the Formatter (tabs say so). Not verified against Supabase: needs 008 and 009 run first.
 
+## Content Studio, full build (branch content-studio-full, 6 Nov 2026)
+
+- `db/012_content_studio.sql` (after 010; 011 belongs to AI citations): new `posts` columns `channel` (shashi or company), `newsletter`, `source_kind`, `source_ref`, `hook`, `script`, `visual`, `claims_ack`, and table `content_settings` (point-of-view bank and newsletter per workspace).
+- Tabs: Home (tiles, Needs you, Start something, What works), Write a post (seven steps), Campaigns, Plan, Library, Formatter. Entry moment once per session; guided tour of 14 steps once per browser, replayed from Guide.
+- `/api/fetch-url` reads public pages for the Link source: http and https only, never LinkedIn, private and local addresses refused (checked after DNS too and on each redirect), 10 s, 2 MB, scripts stripped, nothing stored.
+- Images come from the extension's new `image` job (0.6.0) with the OpenAI or Google key already saved on the Extension page. Generated images stay in the browser to download; only the brief is stored. Carousels download as a PDF built in `src/lib/pdf.ts`.
+- Claims check (`claimsCheck` in `src/lib/content.ts`) runs before approval in Write and in the post editor; it needs a tick to go on. Company content is flagged in every view.
+- Not verified against Supabase or in a browser yet: needs 012 run and extension 0.6.0 installed.
+
 ## AI citations, complete (Q60)
 
 - Page `/w/[slug]/citations`: tabs Overview, Questions, Answers, Sources, Competitors, Actions. Top right: Ask (right-side chat over your own runs), Draft test, a three-dot menu (Facts sheet, Report, Share a view-only link) and Run questions.

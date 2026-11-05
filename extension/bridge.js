@@ -17,7 +17,8 @@
   // Comment Studio on the Prax site asks for AI work and the local draft history through here.
   // The request goes to the extension's background, which calls the AI with the key kept in this browser.
   const ASK = { ai: (d) => ({ type: "draft", rules: d.rules || "", user: String(d.user || ""), kind: d.kind || "studio", plain: !!d.plain }), history: () => ({ type: "history" }), clearHistory: () => ({ type: "clearHistory" }),
-    search: (d) => ({ type: "search", engine: String(d.engine || ""), prompt: String(d.prompt || ""), country: String(d.country || "") }) };
+    search: (d) => ({ type: "search", engine: String(d.engine || ""), prompt: String(d.prompt || ""), country: String(d.country || "") }),
+    image: (d) => ({ type: "image", provider: String(d.provider || "openai"), prompt: String(d.prompt || "").slice(0, 4000), size: String(d.size || "") }) };
 
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.origin !== location.origin || !e.data?.praxWeb) return;

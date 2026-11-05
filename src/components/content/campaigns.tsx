@@ -12,10 +12,12 @@ import {
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
 } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, statusOf, logActivity, upsertToday, Modal } from "./shared";
+import { povText } from "@/lib/content";
+import type { ContentSettings } from "./settings";
 
 type Prospect = ProspectLite & { warmth: string };
 type Comment = { id: string; author: string; reply: boolean; day: string; prospect_id: string | null };
-type Props = { posts: Post[]; campaigns: Campaign[]; targets: Target[]; requests: Request[]; prospects: Prospect[]; comments: Comment[]; openPost: (p: Post) => void; editPost: (p: Post) => void; start?: { view: "brief" | "fast" | "event"; n: number } };
+type Props = { posts: Post[]; campaigns: Campaign[]; targets: Target[]; requests: Request[]; prospects: Prospect[]; comments: Comment[]; openPost: (p: Post) => void; editPost: (p: Post) => void; start?: { view: "brief" | "fast" | "event"; n: number }; settings?: ContentSettings };
 
 const KEYS: Record<string, string[]> = {
   "Money That Moves Itself": ["stablecoin settlement", "reconciliation", "treasury operations", "tokenised deposits", "cross-border payments"],
@@ -28,7 +30,7 @@ const KEYS: Record<string, string[]> = {
 const chipCls = (on: boolean) => `h-8 rounded-full px-3 text-[12.5px] font-semibold transition-colors ${on ? "bg-[#d64545] text-white" : "border border-line-strong bg-white text-ink hover:border-[#141414]"}`;
 const Label = ({ children, req }: { children: React.ReactNode; req?: boolean }) => <span className="label">{children}{req && <span className="text-[#d64545]"> *</span>}</span>;
 
-export function CampaignsTab({ posts, campaigns, targets, requests, prospects, comments, openPost, editPost, start }: Props) {
+export function CampaignsTab({ posts, campaigns, targets, requests, prospects, comments, openPost, editPost, start, settings }: Props) {
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const editable = can("editor");
@@ -64,7 +66,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     setBusy("propose");
     try {
       const o = objective(brief.objective);
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => SEGMENTS[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\nReturn only JSON: {"titles": ["...", "..."]}` }, 60000);
+      const out = await askExtension<string>("ai", { kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => SEGMENTS[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\n${settings ? `${povText(settings.pov)}\n` : ""}Return only JSON: {"titles": ["...", "..."]}` }, 60000);
       const j = parseJSON<{ titles: string[] }>(out);
       if (j?.titles?.length) setPlan(skeleton.map((s, i) => ({ ...s, title: j.titles[i] || s.title })));
     } catch { toast("Planned without AI: connect the extension and a key for sharper titles"); }

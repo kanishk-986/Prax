@@ -1,23 +1,30 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Compass, Quote } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, fmtDay, addDays, weekStart } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { FORMATS, balanceWarnings } from "@/lib/campaigns";
-import { type Post, type Campaign, type Target, type Request, StatusPill, statusOf, DayPopover, ActionMenu, Modal } from "@/components/content/shared";
+import { type Post, type Campaign, type Target, type Request, StatusPill, ChannelFlag, statusOf, DayPopover, ActionMenu, Modal } from "@/components/content/shared";
 import { PostView, PostEditor } from "@/components/content/post";
 import { CampaignsTab } from "@/components/content/campaigns";
+import { HomeTab } from "@/components/content/home";
+import { WriteFlow } from "@/components/content/write";
+import { Formatter } from "@/components/content/formatter";
+import { EntryMoment, Tour, tourPending, type TourStep } from "@/components/content/guide";
+import { useContentSettings, PovModal, type ContentSettings } from "@/components/content/settings";
+import { nextIssue } from "@/lib/content";
 import type { ProspectLite } from "@/lib/network";
 
-const TABS = [["campaigns", "Campaigns"], ["plan", "Plan"], ["library", "Library"], ["write", "Write"], ["formatter", "Formatter"]] as const;
+const TABS = [["home", "Home"], ["write", "Write a post"], ["campaigns", "Campaigns"], ["plan", "Plan"], ["library", "Library"], ["formatter", "Formatter"]] as const;
 type Tab = (typeof TABS)[number][0];
 const SUB: Record<Tab, string> = {
+  home: "What needs you today, and where to start.",
   campaigns: "Plan a run of posts around one goal, aimed at the people who matter.",
   plan: "The week as it stands today. Prax reminds Shashi on Today at each planned time.",
   library: "Every idea, draft and posted piece, with its campaign and status.",
-  write: "Write a post from any starting point.",
+  write: "Seven steps from any starting point to a post Shashi approves.",
   formatter: "Bold, italic, lists and spacing that survive the paste into LinkedIn.",
 };
 
@@ -25,7 +32,15 @@ export default function ContentStudio() {
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const editable = can("editor");
-  const [tab, setTab] = useState<Tab>("campaigns");
+  const [tab, setTab] = useState<Tab>("home");
+  const { settings, save: saveSettings } = useContentSettings();
+  const [seed, setSeed] = useState<Post | null>(null);
+  const [pov, setPov] = useState(false);
+  const [tour, setTour] = useState(false);
+  const onTab = useCallback((t: string) => setTab(t as Tab), []);
+  const clearSeed = useCallback(() => setSeed(null), []);
+  // The tour starts once per browser, after the entry moment has cleared.
+  useEffect(() => { if (!tourPending("content-studio")) return; const t = setTimeout(() => setTour(true), 2700); return () => clearTimeout(t); }, []);
   const [startCamp, setStartCamp] = useState<{ view: "brief"; n: number } | undefined>();
   const posts = useLive<Post>("posts", ws.id, { order: "publish_date" });
   const campaigns = useLive<Campaign>("campaigns", ws.id, { order: "created_at" });
@@ -33,6 +48,7 @@ export default function ContentStudio() {
   const requests = useLive<Request>("resource_requests", ws.id, { order: "created_at", asc: false });
   const prospects = useLive<ProspectLite & { warmth: string }>("prospects", ws.id, { order: "name" });
   const comments = useLive<{ id: string; author: string; reply: boolean; day: string; prospect_id: string | null }>("comment_log", ws.id);
+  const companies = useMemo(() => [...new Set(prospects.rows.map((p) => p.company).filter(Boolean))], [prospects.rows]);
   const [members, setMembers] = useState<Record<string, string>>({});
   const [view, setView] = useState<Post | null>(null);
   const [edit, setEdit] = useState<Post | null>(null);
@@ -55,6 +71,8 @@ export default function ContentStudio() {
     if (error) { toast(error.message); return; }
     haptic(); setTab("library"); setEdit(data as Post);
   }
+  const writeFrom = (p: Post) => { setSeed(p); setTab("write"); };
+  const planCampaign = () => { setTab("campaigns"); setStartCamp({ view: "brief", n: Date.now() }); };
 
   return (
     <div className="cs -mx-4 -my-6 min-h-screen bg-[var(--canvas)] px-4 py-6 md:-mx-10 md:-my-8 md:px-10 md:py-8">
@@ -62,29 +80,36 @@ export default function ContentStudio() {
         <header className="flex flex-col gap-4 pl-10 md:pl-0">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h1 className="m-0 text-[26px] font-semibold tracking-tight">Content Studio</h1><p className="m-0 mt-1 text-[14px] text-muted">{SUB[tab]}</p></div>
-            {editable && <div className="flex flex-wrap gap-2">
-              <button className="btn h-10 px-4" onClick={() => { setTab("campaigns"); setStartCamp({ view: "brief", n: Date.now() }); }}>Plan a campaign</button>
-              <button className="btn btn-primary h-10 px-4" onClick={newPost}>New post</button>
-            </div>}
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-ghost h-10 px-3" data-tour="guide" onClick={() => setTour(true)}><Compass size={15} /> Guide</button>
+              <button className="btn h-10 px-4" data-tour="pov" onClick={() => setPov(true)}><Quote size={14} /> Point of view</button>
+              {editable && <button className="btn h-10 px-4" onClick={planCampaign}>Plan a campaign</button>}
+              {editable && <button className="btn btn-primary h-10 px-4" onClick={() => { setSeed(null); setTab("write"); }}>Write a post</button>}
+            </div>
           </div>
-          <div role="tablist" aria-label="Content Studio" className="flex flex-wrap gap-6 border-b border-line">
+          <div role="tablist" aria-label="Content Studio" data-tour="tabs" className="flex flex-wrap gap-6 border-b border-line">
             {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{l}{k === "library" && <span className="num ml-1.5 rounded-full bg-[#ececec] px-1.5 text-[11px] text-muted">{posts.rows.length}</span>}</button>)}
           </div>
         </header>
 
         {posts.loading || campaigns.loading ? <div className="card h-64 animate-pulse bg-surface-2" />
-          : tab === "campaigns" ? <CampaignsTab posts={posts.rows} campaigns={campaigns.rows} targets={targets.rows} requests={requests.rows} prospects={prospects.rows} comments={comments.rows} openPost={setView} editPost={setEdit} start={startCamp} />
-          : tab === "plan" ? <PlanTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} />
-          : tab === "library" ? <LibraryTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} status={libStatus} setStatus={setLibStatus} />
-          : <div className="card grid min-h-[240px] place-items-center p-10 text-center"><div><p className="m-0 text-[15px] font-semibold">Coming in the next build</p><p className="m-0 mt-1 max-w-[420px] text-[13px] text-muted">{tab === "write" ? "The seven-step Write a post flow: source, type, idea, hook, draft, visual and plan. Until then, New post opens the editor with an AI draft." : "The LinkedIn formatter for any text. Until then, write in the post editor."}</p></div></div>}
+          : tab === "home" ? <HomeTab posts={posts.rows} campaigns={campaigns.rows} settings={settings} go={onTab} openPost={setView} writeFrom={writeFrom} planCampaign={planCampaign} />
+          : tab === "write" ? <WriteFlow posts={posts.rows} campaigns={campaigns.rows} settings={settings} seed={seed} clearSeed={clearSeed} openPost={setView} />
+          : tab === "formatter" ? <Formatter />
+          : tab === "campaigns" ? <div data-tour="campaigns"><CampaignsTab posts={posts.rows} campaigns={campaigns.rows} targets={targets.rows} requests={requests.rows} prospects={prospects.rows} comments={comments.rows} openPost={setView} editPost={setEdit} start={startCamp} settings={settings} /></div>
+          : tab === "plan" ? <PlanTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} settings={settings} />
+          : <LibraryTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} status={libStatus} setStatus={setLibStatus} newPost={newPost} />}
       </div>
       {view && <PostView post={fresh(view)!} campaigns={campaigns.rows} members={members} onClose={() => setView(null)} onEdit={() => { setEdit(fresh(view)); setView(null); }} />}
-      {edit && <PostEditor post={fresh(edit)!} campaigns={campaigns.rows} posts={posts.rows} onClose={() => setEdit(null)} />}
+      {edit && <PostEditor post={fresh(edit)!} campaigns={campaigns.rows} posts={posts.rows} settings={settings} companies={companies} onClose={() => setEdit(null)} />}
+      {pov && <PovModal settings={settings} save={saveSettings} onClose={() => setPov(false)} />}
+      <EntryMoment id="content-studio" title="Content Studio" line="Posts, campaigns and the plan for Shashi's profile, in one place." />
+      <Tour id="content-studio" steps={STEPS} open={tour} onClose={() => setTour(false)} onTab={onTab} />
     </div>
   );
 }
 
-function PlanTab({ posts, campaigns, openPost }: { posts: Post[]; campaigns: Campaign[]; openPost: (p: Post) => void }) {
+function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; campaigns: Campaign[]; openPost: (p: Post) => void; settings: ContentSettings }) {
   const { can } = useWorkspace();
   const toast = useToast();
   const t = today();
@@ -108,7 +133,7 @@ function PlanTab({ posts, campaigns, openPost }: { posts: Post[]; campaigns: Cam
   }
   return (
     <div className="flex flex-wrap items-start gap-5">
-      <section className="flex min-w-0 flex-[3_1_560px] flex-col gap-3">
+      <section className="flex min-w-0 flex-[3_1_560px] flex-col gap-3" data-tour="plan">
         <div className="flex items-center justify-between gap-2">
           <button className="btn h-9 w-9 p-0" aria-label="Previous week" onClick={() => setWeek(addDays(week, -7))}><ChevronLeft size={16} /></button>
           <span className="flex flex-col items-center"><span className="text-[16px] font-semibold">Week of {fmtDay(week, { day: "numeric", month: "long" })}</span>{week !== weekStart(t) && <button className="text-[12px] font-semibold text-[#d64545]" onClick={() => { setWeek(weekStart(t)); setDay(t); }}>Back to this week</button>}</span>
@@ -132,13 +157,17 @@ function PlanTab({ posts, campaigns, openPost }: { posts: Post[]; campaigns: Cam
             return (
               <button key={p.id} onClick={() => openPost(p)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-[#fafafa] ${i ? "border-t border-line" : ""}`} style={p.publish_date === day ? { boxShadow: "inset 3px 0 0 #d64545" } : undefined}>
                 <span className="flex w-[74px] shrink-0 flex-col"><span className="text-[12px] font-semibold" style={{ color: p.publish_date === t ? "#d64545" : past ? "#8c8c8c" : "#141414" }}>{p.publish_date === t ? "Today" : fmtDay(p.publish_date!, { weekday: "short", day: "numeric" })}</span><span className="num text-[12px] text-muted">{p.planned_time}</span></span>
-                <span className="min-w-0 flex-1"><span className={`block truncate text-[14px] font-semibold ${past ? "text-muted" : ""}`}>{p.title}</span><span className="text-[12px] text-muted">{p.format} · {p.pillar || "No pillar"} · {campName(p.campaign_id)}</span></span>
+                <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className={`truncate text-[14px] font-semibold ${past ? "text-muted" : ""}`}>{p.title}</span><ChannelFlag p={p} /></span><span className="text-[12px] text-muted">{p.format}{p.newsletter ? " · Newsletter" : ""} · {p.pillar || "No pillar"} · {campName(p.campaign_id)}</span></span>
                 {s === "Missed" ? <span className="pill border border-[#d4d4d4] bg-white text-muted">Not posted</span> : <StatusPill s={s} />}
               </button>
             );
           })}
           {!inWeek.length && <p className="p-7 text-center text-[13px] text-muted">Nothing planned this week.</p>}
         </div>
+        {settings.newsletter.name && (() => {
+          const next = nextIssue(settings.newsletter, t), has = posts.some((p) => p.newsletter && p.publish_date && p.publish_date >= t && statusOf(p.status) !== "Posted");
+          return <p className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-[13px]"><span className="mr-2 font-semibold text-[#d64545]">Newsletter</span>{settings.newsletter.name}, every {settings.newsletter.cadence === "weekly" ? "week" : settings.newsletter.cadence === "fortnightly" ? "two weeks" : "four weeks"}. Next issue {fmtDay(next, { weekday: "long", day: "numeric", month: "short" })}{has ? ", an article is planned." : ", no article planned for it yet."}</p>;
+        })()}
         {warnings.map((w) => <p key={w} className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-[13px]"><span className="mr-2 font-semibold text-[#d64545]">Balance</span>{w}</p>)}
       </section>
       <aside className="flex min-w-0 flex-[2_1_300px] flex-col gap-2">
@@ -149,7 +178,7 @@ function PlanTab({ posts, campaigns, openPost }: { posts: Post[]; campaigns: Cam
         <div className="label mt-2">Not yet planned</div>
         {unplanned.map((p) => (
           <div key={p.id} className="flex items-center gap-3 rounded-xl border border-line bg-white px-3.5 py-3">
-            <button className="min-w-0 flex-1 text-left" onClick={() => openPost(p)}><span className="block truncate text-[13.5px] font-semibold">{p.title}</span><span className="text-[12px] text-muted">{p.format} · {campName(p.campaign_id)}</span></button>
+            <button className="min-w-0 flex-1 text-left" onClick={() => openPost(p)}><span className="flex items-center gap-2"><span className="truncate text-[13.5px] font-semibold">{p.title}</span><ChannelFlag p={p} /></span><span className="text-[12px] text-muted">{p.format} · {campName(p.campaign_id)}</span></button>
             {can("editor") && <button className="btn btn-primary h-8 shrink-0" onClick={(e) => setPop({ post: p, el: e.currentTarget })}>Plan</button>}
           </div>
         ))}
@@ -160,7 +189,7 @@ function PlanTab({ posts, campaigns, openPost }: { posts: Post[]; campaigns: Cam
   );
 }
 
-function LibraryTab({ posts, campaigns, openPost, status, setStatus }: { posts: Post[]; campaigns: Campaign[]; openPost: (p: Post) => void; status: string; setStatus: (s: string) => void }) {
+function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: { posts: Post[]; campaigns: Campaign[]; openPost: (p: Post) => void; status: string; setStatus: (s: string) => void; newPost: () => void }) {
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const editable = can("editor");
@@ -223,7 +252,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus }: { posts: 
   }
   const cols = "grid-cols-[minmax(0,2.4fr)_minmax(0,.9fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,.9fr)_minmax(0,1.1fr)_212px]";
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" data-tour="library">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap rounded-lg border border-line bg-white p-0.5">
           {[["all", "All"], ["Idea", "Ideas"], ["Drafting", "Drafting"], ["In review", "In review"], ["Ready", "Ready"], ["Posted", "Posted"], ["On hold", "On hold"]].map(([k, l]) => (
@@ -233,6 +262,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus }: { posts: 
         <select className="field h-9 w-auto" value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="all">All types</option>{FORMATS.map((f) => <option key={f}>{f}</option>)}</select>
         <select className="field h-9 w-auto" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign"><option value="all">All campaigns</option><option value="none">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <input className="field ml-auto h-9 w-full sm:w-64" placeholder="Search posts and pillars" value={q} onChange={(e) => setQ(e.target.value)} />
+        {editable && <button className="btn h-9" onClick={newPost}>Blank post</button>}
       </div>
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -242,7 +272,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus }: { posts: 
               const s = statusOf(p.status), cn = campName(p.campaign_id);
               return (
                 <div key={p.id} className={`grid ${cols} items-center gap-3 border-t border-line px-4 py-3 text-[13px] hover:bg-[#fafafa]`}>
-                  <span className="truncate font-semibold">{p.title}</span>
+                  <span className="flex min-w-0 items-center gap-2"><span className="truncate font-semibold">{p.title}</span><ChannelFlag p={p} /></span>
                   <span>{p.format || "Text post"}</span>
                   <span className="truncate text-muted">{p.pillar || p.topic || "Not set"}</span>
                   <span className="truncate text-[12.5px] font-semibold" style={{ color: cn ? "#d64545" : "#8c8c8c" }}>{cn ?? "Independent"}</span>
@@ -277,3 +307,20 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus }: { posts: 
     </div>
   );
 }
+
+const STEPS: TourStep[] = [
+  { target: "tabs", tab: "home", title: "Six parts, one studio", body: "Home, Write a post, Campaigns, Plan, Library and Formatter. Everything about Shashi's posts lives here." },
+  { target: "tiles", tab: "home", title: "The week at a glance", body: "What is due, what waits for Shashi, what is ready and which campaigns are running. Press any number to go there." },
+  { target: "needs", tab: "home", title: "Needs you", body: "Approvals, posts due today or tomorrow, ideas not written yet and new topics from AI citations." },
+  { target: "start", tab: "home", title: "Start something", body: "Write a post, plan a campaign, check the week or format any text." },
+  { target: "works", tab: "home", title: "What works", body: "Once five posted pieces have results, this shows the formats, pillars, days and openings that work best." },
+  { target: "steps", tab: "write", title: "Seven steps to a post", body: "Start, type, idea, hook, draft, visual and plan. Move back and forth freely; nothing is lost." },
+  { target: "sources", tab: "write", title: "Start from anything", body: "An idea, a link, a PDF, a rough draft, one of his comments or a topic gap. Links are read by Prax, never LinkedIn pages." },
+  { target: "preview", tab: "write", title: "The live preview", body: "The post as it reads in the feed, on mobile or desktop, with the real see more cut at 140 or 210 characters." },
+  { target: "campaigns", tab: "campaigns", title: "Campaigns", body: "A run of posts around one goal, aimed at named people, with a time budget Shashi can keep." },
+  { target: "plan", tab: "plan", title: "The plan", body: "The week as it stands. Only approved posts go on it, and Today reminds Shashi at each planned time." },
+  { target: "library", tab: "library", title: "The library", body: "Every idea, draft and posted piece. Company content is flagged so it never goes on Shashi's profile." },
+  { target: "formatter", tab: "formatter", title: "The formatter", body: "Bold, italic, lists and spacing that survive the paste into LinkedIn, with shortcuts and a 3,000 counter." },
+  { target: "pov", title: "Point of view", body: "His stances, cleared proof points and the numbers he allows. Every draft uses only what is here." },
+  { target: "guide", title: "Open this again any time", body: "The Guide button replays this tour. Prax never posts for Shashi; he presses Post on LinkedIn himself." },
+];

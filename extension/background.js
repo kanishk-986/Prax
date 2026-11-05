@@ -144,6 +144,30 @@ async function search({ engine, prompt, country }) {
   return { engine, model, raws };
 }
 
+// ---------- Content Studio images ----------
+// One image from a short brief, with the OpenAI or Google key saved in this browser. Returns a data URL; nothing is stored.
+const IMAGE_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.5-flash-image" };
+async function image({ provider, prompt, size }) {
+  const c = await cfg();
+  const p = provider === "gemini" ? "gemini" : "openai";
+  const key = keyFor(c, p);
+  if (!key) throw new Error(`No ${p === "openai" ? "OpenAI" : "Google"} key in this browser. Add one on the Prax Extension page.`);
+  const model = (c.imageModels && c.imageModels[p]) || IMAGE_MODEL[p];
+  let url = "";
+  if (p === "openai") {
+    const j = await post("https://api.openai.com/v1/images/generations", { authorization: "Bearer " + key }, { model, prompt, size: size || "1024x1024", n: 1 });
+    const d = j.data && j.data[0];
+    url = d && d.b64_json ? "data:image/png;base64," + d.b64_json : (d && d.url) || "";
+  } else {
+    const j = await post(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { "x-goog-api-key": key }, { contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    const part = (j.candidates?.[0]?.content?.parts || []).find((x) => x.inlineData);
+    url = part ? `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}` : "";
+  }
+  if (!url) throw new Error("No image came back. Try a simpler description.");
+  prax("usage", { kind: "image", provider: p, model, input_tokens: 0, output_tokens: 0 }).catch(() => {});
+  return { provider: p, model, url };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const jobs = {
     me: () => me(msg.fresh),
@@ -154,6 +178,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     history: async () => (await chrome.storage.local.get("history")).history || [],
     clearHistory: async () => { await chrome.storage.local.remove("history"); return []; },
     search: () => search(msg),
+    image: () => image(msg),
   };
   const job = jobs[msg.type];
   if (!job) return false;

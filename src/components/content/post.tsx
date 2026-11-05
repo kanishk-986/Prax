@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Copy, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, fmtDay } from "@/lib/workspace";
@@ -7,7 +7,9 @@ import { useToast, haptic } from "@/components/toaster";
 import { Threads } from "@/components/threads";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { FORMATS, PILLARS, reshareFallback } from "@/lib/campaigns";
-import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession, Modal } from "./shared";
+import { claimsCheck, povText } from "@/lib/content";
+import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf, logActivity, syncApprovalSession, Modal } from "./shared";
+import type { ContentSettings } from "./settings";
 
 const when = (p: Post) => (p.publish_date ? `${fmtDay(p.publish_date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned");
 const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -19,11 +21,12 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-[13px] last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
     <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
+      {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] font-semibold text-white">Company content, not for Shashi&apos;s profile</p>}
       <div className="grid gap-5 md:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="label mb-2">Draft, as it reads on LinkedIn</div>
           <div className="rounded-xl border border-line bg-white p-4 shadow-[var(--shadow)]">
-            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-[13px] font-semibold text-white">SP</span><span className="flex flex-col"><span className="text-[14px] font-semibold">Shashi Pal</span><span className="text-[12px] text-muted">Co-Founder and COO, Antier</span></span></div>
+            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-[13px] font-semibold text-white">{post.channel === "company" ? "A" : "SP"}</span><span className="flex flex-col"><span className="text-[14px] font-semibold">{post.channel === "company" ? "Antier" : "Shashi Pal"}</span><span className="text-[12px] text-muted">{post.channel === "company" ? "Company page" : "Co-Founder and COO, Antier"}</span></span></div>
             <p className="m-0 whitespace-pre-wrap text-[14px] leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
           </div>
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
@@ -31,6 +34,8 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
         <aside>
           <Row k="Campaign" v={camp ? <span className="text-[#d64545]">{camp.name}</span> : "Independent"} />
           <Row k="Type" v={post.format || "Text post"} />
+          <Row k="Where" v={post.channel === "company" ? <ChannelFlag p={post} /> : "Shashi's profile"} />
+          {post.newsletter && <Row k="Newsletter" v="Yes" />}
           <Row k="Pillar" v={post.pillar || post.topic || "Not set"} />
           <Row k="Status" v={<StatusPill s={post.status} />} />
           <Row k="Planned" v={when(post)} />
@@ -50,7 +55,7 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
 }
 
 /** Edit a post: text, type, pillar, campaign, AI draft, approval, plan, hand off, reshare notes. Never posts. */
-export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; campaigns: Campaign[]; posts: Post[]; onClose: () => void }) {
+export function PostEditor({ post, campaigns, posts, settings, companies, onClose }: { post: Post; campaigns: Campaign[]; posts: Post[]; settings?: ContentSettings; companies?: string[]; onClose: () => void }) {
   const { ws, can, userId } = useWorkspace();
   const toast = useToast();
   const [f, setF] = useState<Post>(post);
@@ -61,13 +66,16 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
   const camp = campaigns.find((c) => c.id === f.campaign_id);
   const paused = campaigns.filter((c) => c.status === "paused").map((c) => c.id);
   const st = statusOf(f.status);
+  const [ack, setAck] = useState(!!post.claims_ack);
+  const flags = useMemo(() => claimsCheck(f.draft, { companies, permitted: settings?.pov.clients ?? [] }), [f.draft, companies, settings?.pov.clients]);
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   const set = <K extends keyof Post>(k: K, v: Post[K]) => setF((x) => ({ ...x, [k]: v }));
 
   async function save(patch: Partial<Post> = {}, msg = "Saved", undo?: Partial<Post>) {
     const next = { ...f, ...patch };
     const body = { title: next.title, format: next.format, pillar: next.pillar, campaign_id: next.campaign_id, draft: next.draft, publish_date: next.publish_date || null, planned_time: next.planned_time, status: next.status,
-      requested_by: next.requested_by, requested_at: next.requested_at, decided_by: next.decided_by, decided_at: next.decided_at, decision: next.decision, decision_note: next.decision_note, phase: next.phase };
+      requested_by: next.requested_by, requested_at: next.requested_at, decided_by: next.decided_by, decided_at: next.decided_at, decision: next.decision, decision_note: next.decision_note, phase: next.phase,
+      channel: next.channel ?? "shashi", newsletter: next.format === "Article" && !!next.newsletter, claims_ack: ack };
     const { error } = await supabase().from("posts").update(body).eq("id", post.id);
     if (error) { toast(error.message); return false; }
     setF(next); haptic();
@@ -80,7 +88,7 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
     setBusy("draft");
     try {
       const brief = camp?.brief;
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Write a LinkedIn ${f.format || "text post"} for this profile.\nTitle or idea: ${f.title}\nPillar: ${f.pillar || f.topic}\n${brief ? `Campaign: ${camp!.name}. Phase: ${f.phase || "any"}. Core message: ${brief.message}. Call to action: ${brief.cta}. Keywords: ${brief.keywords.join(", ")}.` : ""}\n${f.draft ? `Current draft to improve:\n${f.draft}\n` : ""}Open with a line under 140 characters that stands alone. 120 to 220 words for a text post; for a carousel give slide lines; for a video give a short script with what to say and show. Use only facts given here.\nReturn only JSON: {"draft": "..."}` });
+      const out = await askExtension<string>("ai", { kind: "studio", user: `Write a LinkedIn ${f.format || "text post"} for this profile.\nTitle or idea: ${f.title}\nPillar: ${f.pillar || f.topic}\n${brief ? `Campaign: ${camp!.name}. Phase: ${f.phase || "any"}. Core message: ${brief.message}. Call to action: ${brief.cta}. Keywords: ${brief.keywords.join(", ")}.` : ""}\n${settings ? povText(settings.pov) + "\n" : ""}${f.channel === "company" ? "Write it for the Antier company page, as the company.\n" : ""}${f.draft ? `Current draft to improve:\n${f.draft}\n` : ""}Open with a line under 140 characters that stands alone. 120 to 220 words for a text post; for a carousel give slide lines; for a video give a short script with what to say and show. Use only facts given here.\nReturn only JSON: {"draft": "..."}` });
       const j = parseJSON<{ draft: string }>(out);
       if (!j?.draft) throw new Error("No draft came back. Try again.");
       const prev = f.draft;
@@ -92,12 +100,14 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
 
   async function sendForApproval() {
     if (!f.draft.trim()) { toast("Write the draft first"); return; }
+    if (flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
     const undo = { status: f.status, requested_by: f.requested_by, requested_at: f.requested_at, decision: f.decision, decision_note: f.decision_note };
     if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "" }, "Sent to Shashi. It is in his weekly approval session on Today.", undo))
       logActivity(ws.id, "approval", `Sent for approval: ${f.title}`, post.id);
   }
   async function decide(approved: boolean) {
     if (!approved && !note.trim()) { toast("Add a short note so the team knows what to change"); return; }
+    if (approved && flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
     const undo = { status: f.status, decided_by: f.decided_by, decided_at: f.decided_at, decision: f.decision, decision_note: f.decision_note };
     if (await save({ status: approved ? "Ready" : "Drafting", decided_by: userId, decided_at: new Date().toISOString(), decision: approved ? "approved" : "changes", decision_note: note.trim() }, approved ? "Approved. It is Ready." : "Changes asked. The team sees your note.", undo)) {
       logActivity(ws.id, "approval", `${approved ? "Approved" : "Changes asked"}: ${f.title}`, post.id); setNote("");
@@ -124,7 +134,7 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
     <div className="fixed inset-0 z-[56] flex justify-end bg-black/30" onMouseDown={onClose}>
       <aside role="dialog" aria-label="Edit post" className="cs flex h-full w-full max-w-[560px] flex-col border-l border-line bg-white shadow-[var(--shadow-lg)]" onMouseDown={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-          <div className="flex min-w-0 items-center gap-2"><StatusPill s={f.status} /><span className="truncate text-[13px] text-muted">{camp ? camp.name : "Independent"}</span></div>
+          <div className="flex min-w-0 items-center gap-2"><StatusPill s={f.status} /><ChannelFlag p={f} /><span className="truncate text-[13px] text-muted">{camp ? camp.name : "Independent"}</span></div>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </header>
         <div className="flex-1 overflow-auto px-5 py-4">
@@ -132,6 +142,9 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Title or idea</span><input className="field" value={f.title} onChange={(e) => set("title", e.target.value)} /></label>
             <label className="flex flex-col gap-1"><span className="label">Type</span><select className="field" value={f.format || "Text post"} onChange={(e) => set("format", e.target.value)}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="flex flex-col gap-1"><span className="label">Pillar</span><select className="field" value={f.pillar} onChange={(e) => set("pillar", e.target.value)}><option value="">Not set</option>{PILLARS.map((x) => <option key={x}>{x}</option>)}</select></label>
+            <label className="flex flex-col gap-1"><span className="label">Where it goes</span><select className="field" value={f.channel ?? "shashi"} onChange={(e) => set("channel", e.target.value as "shashi" | "company")}><option value="shashi">Shashi&apos;s own profile</option><option value="company">Antier company page</option></select></label>
+            <label className="flex items-end gap-2 pb-2 text-[13px]">{f.format === "Article" && settings?.newsletter.name ? <><input type="checkbox" checked={!!f.newsletter} onChange={(e) => set("newsletter", e.target.checked)} />Part of {settings.newsletter.name}</> : null}</label>
+            {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-[#141414] px-3 py-2 text-[12.5px] font-semibold text-white">Company content, not for Shashi&apos;s profile</p>}
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Campaign</span><select className="field" value={f.campaign_id ?? ""} onChange={(e) => set("campaign_id", e.target.value || null)}><option value="">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <div className="col-span-2 flex flex-col gap-1">
               <div className="flex items-center justify-between gap-2"><span className="label">Draft</span>{post.id && f.draft.trim().length > 80 && <a className="ml-auto text-[12px] font-semibold underline underline-offset-2" href={`/w/${ws.slug}/citations?draft=${post.id}`} title="Test whether AI tools would cite this draft. Save first.">Is this citable?</a>}<button type="button" className="btn btn-dark h-7 text-[12px]" disabled={!!busy} onClick={aiDraft}><Sparkles size={13} /> {busy === "draft" ? "Writing" : f.draft ? "Improve with AI" : "AI draft"}</button></div>
@@ -142,6 +155,12 @@ export function PostEditor({ post, campaigns, posts, onClose }: { post: Post; ca
             <label className="flex flex-col gap-1"><span className="label">Time, Dubai</span><input type="time" className="field" value={f.planned_time} onChange={(e) => set("planned_time", e.target.value)} /></label>
           </fieldset>
           {editable && <div className="mt-3 flex justify-end"><button className="btn btn-primary" onClick={() => save({}, "Saved")}>Save</button></div>}
+
+          {!!flags.length && st !== "Posted" && <section className="mt-5 rounded-xl border-2 border-[#d64545] p-4">
+            <div className="mb-2 text-[13px] font-semibold">Claims check before approval</div>
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{flags.map((x, i) => <li key={i} className="text-[13px]"><span className="font-semibold text-[#d64545]">{x.kind === "returns" ? "Returns" : x.kind === "timeline" ? "Timeline" : x.kind === "client" ? "Client named" : x.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{x.text}&rdquo;<span className="block text-[12px] text-muted">{x.why}</span></li>)}</ul>
+            <label className="mt-2.5 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={ack} disabled={!editable} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
+          </section>}
 
           <section className="mt-5 rounded-xl border border-line p-4">
             <div className="mb-2 flex items-center justify-between"><span className="label">Approval</span><StatusPill s={f.status} /></div>

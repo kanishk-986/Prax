@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 // Talks to the Prax extension through its bridge script on this page. Settings sent here go
 // straight into the extension's storage in this browser; the AI key never reaches the server.
 export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[] };
-export const LATEST_EXT = "0.5.0";
+export const LATEST_EXT = "0.6.0";
 
 export function useExtension() {
   const [status, setStatus] = useState<ExtStatus | null>(null);
@@ -29,7 +29,7 @@ export function useExtension() {
 }
 
 /** AI work and local draft history from the extension. The AI key stays in the extension. */
-export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
     const on = (e: MessageEvent) => {
@@ -37,7 +37,7 @@ export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory
       window.removeEventListener("message", on); clearTimeout(t);
       if (e.data.ok) resolve(e.data.data as T); else reject(new Error(e.data.error || "The extension could not do that."));
     };
-    const t = setTimeout(() => { window.removeEventListener("message", on); reject(new Error("The extension did not answer. Install Prax for Chrome 0.4.0 and connect it on the Extension page.")); }, ms);
+    const t = setTimeout(() => { window.removeEventListener("message", on); reject(new Error("The extension did not answer. Install Prax for Chrome 0.6.0 and connect it on the Extension page.")); }, ms);
     window.addEventListener("message", on);
     window.postMessage({ praxWeb: true, id, type, data }, location.origin);
   });
