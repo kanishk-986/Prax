@@ -216,3 +216,28 @@ body.touring .anim-rise, body.touring .anim-pop { animation: none; }
 .intro-l3 { animation: introLine .5s ease .65s both; }
 .intro-bar { transform-origin: left; animation: introBar 2s linear .2s both; }
 @media (prefers-reduced-motion: reduce) { .intro-veil, .intro-mark, .intro-l1, .intro-l2, .intro-l3, .intro-bar { animation: none; } .intro-veil { transition: none; } }
+
+/* Pipeline (src/components/pipeline): rows, quiet buttons, filter chips, popovers and side panels. Motion off under reduced motion. */
+.pl-row { transition: background-color .12s ease; }
+.pl-row:hover { background: #fafafa; }
+.pl-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pl-quiet { border: 0; background: transparent; color: var(--ink); transition: background-color .12s ease; }
+.pl-quiet:hover { background: #f2f2f2; }
+.pl-quiet:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pl-chip { height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid #e3e3e3; background: #ffffff; color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; transition: background-color .12s ease, border-color .12s ease, transform .08s ease; }
+.pl-chip.small { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; }
+.pl-chip:hover { border-color: #141414; }
+.pl-chip.on { background: #141414; border-color: #141414; color: #ffffff; }
+.pl-chip:active { transform: translateY(1px) scale(.985); }
+.pl-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pl-chev { transition: transform .18s cubic-bezier(.2,.8,.2,1); }
+.pl-seg { transition: background-color .15s ease, transform .1s ease; }
+.pl-seg:not(:disabled):hover { transform: scaleY(1.5); }
+.pl-seg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@keyframes plSlide { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes plPop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.pl-slide { animation: plSlide .24s cubic-bezier(.2,.8,.2,1) both; }
+.pl-pop { animation: plPop .16s cubic-bezier(.2,.8,.2,1) both; }
+.pl-rise { animation: rise .25s cubic-bezier(.2,.8,.2,1) both; }
+body.touring .pl-rise { animation: none; }
+@media (prefers-reduced-motion: reduce) { .pl-slide, .pl-pop, .pl-rise { animation: none; } .pl-chev, .pl-seg, .pl-row { transition: none; } }

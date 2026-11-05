@@ -1,192 +1,193 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, LayoutGrid, List, Flame } from "lucide-react";
+// Pipeline: loads leads, pipelines and the signals behind heat from Supabase, and hands the screen its actions.
+// The screen itself is src/components/pipeline/screen.tsx; the logic is src/lib/pipeline.ts.
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
-import { useWorkspace, STAGES, SEGMENTS, today, fmtDay } from "@/lib/workspace";
-import { Section, KpiTiles, NeedsYou, type TourStep } from "@/components/shell";
-import { ProspectDrawer, type Prospect } from "@/components/prospect-drawer";
-import { useToast, haptic } from "@/components/toaster";
+import { useWorkspace, today } from "@/lib/workspace";
+import { askExtension } from "@/lib/bridge";
+import type { Person } from "@/lib/network";
+import { FALLBACK_PIPELINE, TEMPLATES, DEFAULT_LOST_REASONS, type Pipeline, type Prospect, type StageMove } from "@/lib/pipeline";
+import { PipelineScreen } from "@/components/pipeline/screen";
+import type { DayItem, LeadComment, LeadDetail, Member, Note, PipelineApi, PipelineData, Result } from "@/components/pipeline/types";
 
-const OPEN = STAGES.filter((s) => s !== "Parked");
-const PIPE_TOUR: TourStep[] = [
-  { target: "kpis", title: "Where the pipeline stands", body: "People in the pipeline, conversations, calls booked and follow-ups that are overdue.", tab: "home" },
-  { target: "stages", title: "Every stage", body: "How many people sit in each stage. Click a stage to see those people.", tab: "home" },
-  { target: "needs", title: "Needs you", body: "Overdue follow-ups first, then people warming up who are ready for a note.", tab: "home" },
-  { target: "rates", title: "Conversion between stages", body: "Where people stall: from warming to request, request to connection, connection to conversation, and conversation to call.", tab: "people" },
-  { target: "filters", title: "Find people", body: "Search, filter by segment or warm only, and switch between the board and the table.", tab: "people" },
-  { target: "board", title: "Open a person", body: "Click anyone to open their record, warm path and notes.", tab: "people" },
-];
+const ok = <T,>(value: T): Result<T> => ({ ok: true, value });
+const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
+const DM_RULES = "You draft short LinkedIn direct messages for a senior executive. Plain, specific and warm, never salesy. No em dashes, no contractions, no emoji.";
+const NET_COLS = "key,url,name,company,position,is_connection,connected_on,msg_count,msg_last,msg_last_from,prospect_id,not_prospects";
 
-export default function Pipeline() {
-  const { ws, can } = useWorkspace();
-  const { rows, setRows, loading } = useLive<Prospect>("prospects", ws.id, { order: "created_at" });
-  const toast = useToast();
-  const [view, setView] = useState<"board" | "table">("board");
-  const [q, setQ] = useState("");
-  const [seg, setSeg] = useState("");
-  const [warm, setWarm] = useState(false);
-  const [sel, setSel] = useState<Prospect | "new" | null>(null);
-  const [drag, setDrag] = useState<string | null>(null);
-  const [over, setOver] = useState<string | null>(null);
-  const editable = can("editor");
-  const t = today();
-  const [tab, setTab] = useState("home");
-  const [warmN, setWarmN] = useState<number | null>(null);
-  useEffect(() => { supabase().rpc("network_warm_count", { ws: ws.id }).then(({ data, error }: { data: unknown; error: unknown }) => setWarmN(error ? null : (data as number))); }, [ws.id, rows.length]);
-  // Open a person's drawer when arriving from the command menu (?p=<id>).
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("p");
-    if (!id || !rows.length) return;
-    const hit = rows.find((r) => r.id === id);
-    if (hit) { setSel(hit); window.history.replaceState(null, "", window.location.pathname); }
-  }, [rows]);
-
-  const list = useMemo(() => rows.filter((p) => (!seg || p.segment === seg) && (!warm || p.warmth === "warm") && (!q || `${p.name} ${p.company} ${p.role} ${p.region}`.toLowerCase().includes(q.toLowerCase()))), [rows, seg, warm, q]);
-  const by = (s: string) => list.filter((p) => p.stage === s);
-  const reached = (s: string) => rows.filter((p) => p.stage !== "Parked" && STAGES.indexOf(p.stage as never) >= STAGES.indexOf(s as never)).length;
-  const conv = (a: string, b: string) => { const x = reached(a); return x ? Math.round((reached(b) / x) * 100) : 0; };
-
-  async function move(id: string, stage: string, undo = true) {
-    const from = rows.find((r) => r.id === id);
-    if (!editable || !from || from.stage === stage) return;
-    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, stage } : r)));
-    haptic(10);
-    const { error } = await supabase().from("prospects").update({ stage }).eq("id", id);
-    if (error) { setRows((rs) => rs.map((r) => (r.id === id ? from : r))); toast(error.message); return; }
-    if (undo) toast(`${from.name} moved to ${stage}`, () => move(id, from.stage, false));
+async function loadNetwork(wsId: string): Promise<Person[]> {
+  const out: Person[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase().from("network_people").select(NET_COLS).eq("workspace_id", wsId).order("key").range(from, from + 999);
+    if (error || !data?.length) break;
+    out.push(...(data as unknown as Person[]));
+    if (data.length < 1000) break;
   }
-
-  const overdue = rows.filter((p) => p.next_date && p.next_date < t && !["Won", "Parked"].includes(p.stage)).sort((a, b) => (a.next_date! < b.next_date! ? -1 : 1));
-  const dueToday = rows.filter((p) => p.next_date === t && !["Won", "Parked"].includes(p.stage));
-  const warming = rows.filter((p) => p.stage === "Warming");
-  return (
-    <Section id="pipeline" title="Pipeline" wide status={`${rows.length} people · ${reached("In conversation")} in conversation · ${reached("Call booked")} calls`}
-      entryStatus={`${overdue.length} follow-ups overdue, ${dueToday.length} due today. ${reached("In conversation")} people in conversation.`}
-      tabs={[{ id: "home", label: "Home" }, { id: "people", label: "People", count: rows.length || undefined }]} tab={tab} onTab={setTab} steps={PIPE_TOUR}
-      actions={editable ? <button className="btn btn-primary h-10 px-4" onClick={() => setSel("new")}><Plus size={14} /> Add prospect</button> : undefined}>
-
-      {tab === "home" && (
-        <div className="flex flex-col gap-4">
-          <KpiTiles tour="kpis" items={[
-            { label: "In the pipeline", value: rows.filter((p) => p.stage !== "Parked").length, sub: "open and won", tone: "dark", onClick: () => setTab("people") },
-            { label: "In conversation", value: reached("In conversation"), sub: "or further" },
-            { label: "Calls booked", value: reached("Call booked"), sub: "or further" },
-            { label: "Overdue", value: overdue.length, sub: `${dueToday.length} due today`, tone: overdue.length ? "red" : undefined },
-          ]} />
-          <div className="flex flex-wrap gap-4">
-            <section data-tour="stages" className="min-w-0 flex-[3_1_520px] overflow-hidden rounded-2xl border border-line bg-surface">
-              <div className="flex items-baseline justify-between px-[18px] py-3.5"><span className="font-semibold">Stages</span><span className="text-[12px] text-muted">{warmN == null ? "Import the LinkedIn export in Network for warm paths" : `${warmN} open prospects have a warm path`}</span></div>
-              {[...OPEN, "Parked"].map((s) => { const n = rows.filter((p) => p.stage === s).length; const max = Math.max(1, ...[...OPEN, "Parked"].map((x) => rows.filter((p) => p.stage === x).length)); return (
-                <button key={s} type="button" onClick={() => { setTab("people"); setView("table"); setQ(""); }} className="grid w-full grid-cols-[150px_1fr_40px] items-center gap-3 border-t border-line px-[18px] py-2.5 text-left text-[13px] hover:bg-[#fafafa]">
-                  <span className="font-medium">{s}</span>
-                  <span className="h-2 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: s === "Parked" ? "#8c8c8c" : s === "Won" || s === "Call booked" ? "#9e1c1c" : "#d64545" }} /></span>
-                  <span className="num text-right">{n}</span>
-                </button>
-              ); })}
-            </section>
-            <div className="min-w-0 flex-[2_1_320px]">
-              <NeedsYou tour="needs" empty="Nothing overdue and nobody waiting. People whose next step is due show here."
-                items={[
-                  ...overdue.slice(0, 6).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `Overdue since ${fmtDay(p.next_date!, { day: "numeric", month: "short" })} · ${p.next_action || p.stage}`, cta: "Open", onClick: () => setSel(p), tone: "red" as const })),
-                  ...dueToday.slice(0, 4).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `Due today · ${p.next_action || p.stage}`, cta: "Open", onClick: () => setSel(p), tone: "dark" as const })),
-                  ...warming.slice(0, 4).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: "Warming: comment twice, then send the note", cta: "Open", onClick: () => setSel(p), tone: "dim" as const })),
-                ]} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "people" && <>
-      <div data-tour="rates" className="mb-4 grid grid-cols-2 gap-3 rounded-2xl md:grid-cols-4">
-        {[["Warmed → requested", conv("Warming", "Requested")], ["Requested → connected", conv("Requested", "Connected")], ["Connected → conversation", conv("Connected", "In conversation")], ["Conversation → call", conv("In conversation", "Call booked")]].map(([l, v]) => (
-          <div key={l as string} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-[20px] font-semibold">{v}%</div></div>
-        ))}
-      </div>
-
-      <div data-tour="filters" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl">
-        <div className="relative w-full max-w-[260px]"><Search size={14} className="absolute left-2.5 top-2.5 text-faint" /><input id="p-search" className="field pl-8" placeholder="Search people, companies" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-        <select id="p-seg" className="field w-auto" value={seg} onChange={(e) => setSeg(e.target.value)} aria-label="Segment">
-          <option value="">All segments</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{k} · {v.label}</option>)}
-        </select>
-        <button className={`btn ${warm ? "border-warn text-warn" : ""}`} onClick={() => setWarm(!warm)}><Flame size={14} /> Warm only</button>
-        <div className="ml-auto flex rounded-lg border border-line-strong bg-surface p-0.5">
-          <button className={`btn h-7 border-0 ${view === "board" ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setView("board")}><LayoutGrid size={14} /> Board</button>
-          <button className={`btn h-7 border-0 ${view === "table" ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setView("table")}><List size={14} /> Table</button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-[320px] w-[260px] shrink-0 animate-pulse rounded-xl bg-surface-2" />)}</div>
-      ) : view === "board" ? (
-        <div data-tour="board" className="flex gap-3 overflow-x-auto rounded-xl pb-4">
-          {[...OPEN, "Parked"].map((s) => {
-            const items = by(s);
-            return (
-              <section key={s} onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(s); } }} onDragLeave={() => setOver(null)}
-                onDrop={(e) => { e.preventDefault(); setOver(null); if (drag) move(drag, s); setDrag(null); }}
-                className={`flex w-[260px] shrink-0 flex-col rounded-xl border p-2 transition-colors ${over === s ? "border-accent bg-accent-soft" : "border-line bg-surface-2/60"}`}>
-                <header className="flex items-center justify-between px-1.5 pb-2 pt-1">
-                  <span className="flex items-center gap-2 text-[12px] font-semibold"><span className="dot" style={{ background: s === "Call booked" || s === "Won" ? "var(--good)" : s === "Parked" ? "var(--faint)" : "var(--accent)" }} />{s}</span>
-                  <span className="num rounded-md bg-surface px-1.5 text-[11px] text-muted ring-1 ring-line">{items.length}</span>
-                </header>
-                <div className="flex min-h-[80px] flex-col gap-2">
-                  {items.map((p) => <Card key={p.id} p={p} t={t} draggable={editable} onDrag={setDrag} onOpen={() => setSel(p)} />)}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      ) : (
-        <div data-tour="board" className="card overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead><tr className="border-b border-line text-left">{["Name", "Company", "Segment", "Region", "Stage", "Next action", "Due"].map((h) => <th key={h} className="label px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
-            <tbody>{list.map((p) => (
-              <tr key={p.id} onClick={() => setSel(p)} className="cursor-pointer border-b border-line last:border-0 hover:bg-surface-2">
-                <td className="px-3 py-2 font-medium">{p.name}<div className="text-[12px] font-normal text-muted">{p.role}</div></td>
-                <td className="px-3 py-2">{p.company}</td>
-                <td className="px-3 py-2"><SegTag s={p.segment} /></td>
-                <td className="px-3 py-2 text-muted">{p.region}</td>
-                <td className="px-3 py-2"><span className="chip">{p.stage}</span></td>
-                <td className="max-w-[280px] truncate px-3 py-2 text-ink-2">{p.next_action}</td>
-                <td className={`num px-3 py-2 ${p.next_date && p.next_date < t ? "text-bad" : "text-muted"}`}>{p.next_date ? fmtDay(p.next_date, { day: "numeric", month: "short" }) : ""}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-      </>}
-      {sel && <ProspectDrawer p={sel === "new" ? null : sel} onClose={() => setSel(null)} />}
-    </Section>
-  );
+  return out;
 }
 
-function SegTag({ s }: { s: string }) {
-  const m = SEGMENTS[s];
-  return m ? <span className="chip" style={{ background: m.color + "1a", color: m.color }}>{s} · {m.label}</span> : null;
-}
+export default function PipelinePage() {
+  const { ws, can, email } = useWorkspace();
+  const editable = can("editor");
+  const { rows, setRows, loading } = useLive<Prospect>("prospects", ws.id, { order: "created_at" });
+  const comments = useLive<LeadComment>("comment_log", ws.id, { filter: (q) => q.select("id,prospect_id,author,reply,day") });
+  const [pipes, setPipes] = useState<Pipeline[] | null>(null);
+  const [ready, setReady] = useState(false);
+  const [reasons, setReasons] = useState<string[]>(DEFAULT_LOST_REASONS);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [network, setNetwork] = useState<Person[]>([]);
 
-function Card({ p, t, draggable, onDrag, onOpen }: { p: Prospect; t: string; draggable: boolean; onDrag: (id: string | null) => void; onOpen: () => void }) {
-  const color = SEGMENTS[p.segment]?.color ?? "var(--faint)";
-  const initials = p.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase();
-  const days = Math.max(0, Math.floor((Date.now() - new Date(p.stage_changed_at).getTime()) / 864e5));
-  const overdue = p.next_date && p.next_date < t;
-  return (
-    <article draggable={draggable} onDragStart={() => onDrag(p.id)} onDragEnd={() => onDrag(null)} onClick={onOpen}
-      className="card lift cursor-pointer p-3 active:scale-[.985]">
-      <div className="flex items-start gap-2.5">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-semibold text-white" style={{ background: color }}>{initials}</span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">{p.name}</div>
-          <div className="truncate text-[12px] text-muted">{p.role}{p.company ? ` · ${p.company}` : ""}</div>
-        </div>
-        {p.warmth === "warm" && <Flame size={14} className="shrink-0 text-warn" aria-label="Warm" />}
-      </div>
-      {p.next_action && <p className="mt-2 line-clamp-2 text-[12px] text-ink-2">{p.next_action}</p>}
-      <div className="mt-2 flex items-center justify-between text-[11px] text-faint">
-        <span>{p.region || SEGMENTS[p.segment]?.label || ""}</span>
-        <span className="num">{p.next_date ? <span className={overdue ? "text-bad" : ""}>{fmtDay(p.next_date, { day: "numeric", month: "short" })}</span> : `${days}d in stage`}</span>
-      </div>
-    </article>
-  );
+  // Pipelines from db/015; before it has run, everyone sits in one Outreach pipeline.
+  const loadPipes = useCallback(async () => {
+    const { data, error } = await supabase().from("pipelines").select("*").eq("workspace_id", ws.id).order("sort").order("created_at");
+    if (error) { setReady(false); setPipes([FALLBACK_PIPELINE]); return; }
+    let list = (data as Pipeline[]) ?? [];
+    if (!list.length && editable) {
+      const t = TEMPLATES[0];
+      const r = await supabase().from("pipelines").insert({ workspace_id: ws.id, name: t.name, template: t.key, stages: t.stages, won_stage: t.won, lost_stage: t.lost, sort: 0 }).select().single();
+      if (r.data) list = [r.data as Pipeline];
+    }
+    setReady(true); setPipes(list.length ? list : [FALLBACK_PIPELINE]);
+    const lr = await supabase().from("lost_reasons").select("label").eq("workspace_id", ws.id).order("sort").order("created_at");
+    if (!lr.error && lr.data?.length) setReasons((lr.data as { label: string }[]).map((x) => x.label));
+  }, [ws.id, editable]);
+  useEffect(() => { loadPipes(); }, [loadPipes]);
+  useEffect(() => {
+    supabase().from("members").select("user_id,email").eq("workspace_id", ws.id).then(({ data }: { data: unknown }) => setMembers((data as Member[]) ?? []));
+    loadNetwork(ws.id).then(setNetwork);
+  }, [ws.id]);
+
+  const data: PipelineData = useMemo(() => ({
+    ready, loading: loading || !pipes, leads: rows, pipes: pipes ?? [FALLBACK_PIPELINE], reasons, members, comments: comments.rows, network,
+  }), [ready, loading, rows, pipes, reasons, members, comments.rows, network]);
+
+  const patchRow = useCallback((id: string, patch: Partial<Prospect>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r))), [setRows]);
+
+  const api: PipelineApi = useMemo(() => ({
+    async update(id, patch) {
+      const was = rows.find((r) => r.id === id);
+      patchRow(id, patch);
+      const { error } = await supabase().from("prospects").update(patch).eq("id", id);
+      if (error) { if (was) patchRow(id, was); return fail(error.message); }
+      return ok(null);
+    },
+
+    async move(l, m, p) {
+      const stay = m.to === l.stage, lost = m.to === p.lost_stage;
+      const prev: Partial<Prospect> = { stage: l.stage, next_action: l.next_action, next_date: l.next_date, notes: l.notes, ...(ready ? { lost_reason: l.lost_reason ?? "" } : {}) };
+      const patch: Partial<Prospect> = { stage: m.to, next_action: m.action.trim(), next_date: m.date };
+      if (ready) patch.lost_reason = lost ? (stay ? l.lost_reason ?? "" : m.reason) : "";
+      else if (lost && !stay && m.reason) patch.notes = `${l.notes ? l.notes + "\n\n" : ""}${m.to} ${today()}: ${m.reason}`;
+      patchRow(l.id, { ...patch, ...(stay ? {} : { stage_changed_at: new Date().toISOString() }) });
+      const { error } = await supabase().from("prospects").update(patch).eq("id", l.id);
+      if (error) { patchRow(l.id, { ...prev, stage_changed_at: l.stage_changed_at }); return fail(error.message); }
+      // The trigger logs a move; a Done is logged here. Undo removes the log and anything after it.
+      let since: string | null = null;
+      if (ready) {
+        if (stay) {
+          const r = await supabase().from("stage_moves").insert({ workspace_id: ws.id, prospect_id: l.id, pipeline_id: l.pipeline_id ?? p.id, kind: "done", from_stage: l.stage, to_stage: l.stage, prev_action: l.next_action ?? "", next_action: patch.next_action, next_date: m.date }).select("at").single();
+          since = (r.data as { at: string } | null)?.at ?? null;
+        } else {
+          const r = await supabase().from("stage_moves").select("at").eq("prospect_id", l.id).order("at", { ascending: false }).limit(1);
+          since = (r.data as { at: string }[] | null)?.[0]?.at ?? null;
+        }
+      }
+      return ok(async () => {
+        patchRow(l.id, { ...prev, stage_changed_at: l.stage_changed_at });
+        await supabase().from("prospects").update(prev).eq("id", l.id);
+        if (!stay) await supabase().from("prospects").update({ stage_changed_at: l.stage_changed_at }).eq("id", l.id);
+        if (since) await supabase().from("stage_moves").delete().eq("prospect_id", l.id).gte("at", since);
+      });
+    },
+
+    async add(list) {
+      const { data: made, error } = await supabase().from("prospects").insert(list.map((r) => ({ ...r, workspace_id: ws.id }))).select("id");
+      if (error) return fail(error.message);
+      return ok(((made as { id: string }[]) ?? []).map((x) => x.id));
+    },
+    async remove(ids) {
+      setRows((rs) => rs.filter((r) => !ids.includes(r.id)));
+      const { error } = await supabase().from("prospects").delete().in("id", ids);
+      return error ? fail(error.message) : ok(null);
+    },
+    async linkNetwork(pairs) {
+      for (const x of pairs) await supabase().from("network_people").update({ prospect_id: x.prospectId }).eq("workspace_id", ws.id).eq("key", x.key).is("prospect_id", null);
+      setNetwork((n) => n.map((p) => { const hit = pairs.find((x) => x.key === p.key); return hit ? { ...p, prospect_id: hit.prospectId } : p; }));
+    },
+
+    async createPipeline(p) {
+      const { data: made, error } = await supabase().from("pipelines").insert({ ...p, workspace_id: ws.id }).select().single();
+      if (error) return fail(error.message);
+      setPipes((ps) => [...(ps ?? []), made as Pipeline]);
+      return ok(made as Pipeline);
+    },
+    async deletePipeline(id) {
+      const { error } = await supabase().from("pipelines").delete().eq("id", id);
+      if (error) return fail(error.message);
+      setPipes((ps) => (ps ?? []).filter((p) => p.id !== id));
+      return ok(null);
+    },
+    async saveStages(p, stages, renames) {
+      for (const [a, b] of renames) {
+        const { error } = await supabase().rpc("rename_pipeline_stage", { pid: p.id, old_name: a, new_name: b });
+        if (error) return fail(error.message);
+      }
+      const won = stages.includes(p.won_stage) ? p.won_stage : renames.find(([a]) => a === p.won_stage)?.[1] ?? "";
+      const lost = stages.includes(p.lost_stage) ? p.lost_stage : renames.find(([a]) => a === p.lost_stage)?.[1] ?? "";
+      const { error } = await supabase().from("pipelines").update({ stages, won_stage: won, lost_stage: lost }).eq("id", p.id);
+      if (error) return fail(error.message);
+      setPipes((ps) => (ps ?? []).map((x) => (x.id === p.id ? { ...x, stages, won_stage: won, lost_stage: lost } : x)));
+      if (renames.length) setRows((rs) => rs.map((r) => { const hit = (r.pipeline_id ?? "") === p.id && renames.find(([a]) => a === r.stage); return hit ? { ...r, stage: hit[1] } : r; }));
+      return ok(null);
+    },
+    async addReason(label) {
+      if (ready) {
+        const { error } = await supabase().from("lost_reasons").insert({ workspace_id: ws.id, label, sort: reasons.length + 1 });
+        if (error) return fail(error.message);
+      }
+      setReasons((r) => [...r, label]);
+      return ok(null);
+    },
+
+    async detail(l) {
+      const [mv, it, nt] = await Promise.all([
+        ready ? supabase().from("stage_moves").select("*").eq("prospect_id", l.id).order("at")
+          : supabase().from("activity").select("id,label,at").eq("workspace_id", ws.id).eq("kind", "stage").eq("ref_id", l.id).order("at"),
+        supabase().from("daily_items").select("id,day,kind,title,done,note,done_at,created_at").eq("workspace_id", ws.id).eq("prospect_id", l.id).limit(300),
+        supabase().from("threads").select("id,author_email,body,created_at").eq("workspace_id", ws.id).eq("ref_id", l.id).order("created_at"),
+      ]);
+      const moves: StageMove[] = ready ? ((mv.data as StageMove[]) ?? [])
+        : ((mv.data as { id: string; label: string; at: string }[]) ?? []).map((a, i, all) => ({ id: a.id, prospect_id: l.id, kind: "backfill", from_stage: i ? all[i - 1].label.replace(/^.* → /, "") : "", to_stage: a.label.replace(/^.* → /, ""), prev_action: "", next_action: "", next_date: null, reason: "", at: a.at }));
+      return { moves, items: (it.data as DayItem[]) ?? [], notes: (nt.data as Note[]) ?? [] } satisfies LeadDetail;
+    },
+
+    async step(l, key, title, done) {
+      const { data: have } = await supabase().from("daily_items").select("id,done").eq("workspace_id", ws.id).in("note", [key, `skip:${key}`]).limit(1);
+      let id = (have as { id: string }[] | null)?.[0]?.id;
+      if (!id) {
+        // Comment steps sit with comments on Today, the rest with follow-ups (see groupOf in src/lib/dashboard.ts).
+        let h = 0; for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        const base = /comment/i.test(title) ? 2000 : 4000;
+        for (let n = 0; n < 6 && !id; n++) {
+          const r = await supabase().from("daily_items").insert({ workspace_id: ws.id, day: today(), kind: "custom", idx: base + ((h + n) % 1000), title: `${title}: ${l.name}${l.company ? `, ${l.company}` : ""}`, link: `/w/${ws.slug}/pipeline?p=${l.id}`, note: key, prospect_id: l.id }).select("id").single();
+          if (r.error && r.error.code !== "23505") return fail(r.error.message);
+          id = (r.data as { id: string } | null)?.id;
+        }
+        if (!id) return fail("Today is full for this slot. Try again.");
+      }
+      if (done != null) {
+        const { error } = await supabase().from("daily_items").update({ done }).eq("id", id);
+        if (error) return fail(error.message);
+      }
+      return ok(null);
+    },
+    async addNote(l, body) {
+      const { error } = await supabase().from("threads").insert({ workspace_id: ws.id, ref_table: "prospects", ref_id: l.id, body, author_email: email });
+      return error ? fail(error.message) : ok(null);
+    },
+    draft: (prompt) => askExtension<string>("ai", { plain: true, kind: "pipeline", rules: DM_RULES, user: prompt }),
+  }), [rows, ready, ws.id, ws.slug, email, reasons.length, patchRow, setRows]);
+
+  return <PipelineScreen data={data} api={api} />;
 }

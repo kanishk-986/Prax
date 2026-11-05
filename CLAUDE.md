@@ -15,6 +15,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 - Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score), `node scripts/test-citations.ts` (AI citations parsing incl. Perplexity, detection, strict person matching, audiences, keywords, weekly trend, gaps, the PDF writer, maths, repeats, tone and facts, alerts, lift, share links) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
 - Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths).
 - Dashboard tests: `node scripts/test-dashboard.ts` (progress, skips, deltas, week over week, agenda groups, row action, Needs you ranking, settle order, copy).
+- Pipeline tests: `node scripts/test-pipeline.ts` (heat, Do next ranking, the move gate, template stages, days per stage, the migration mapping checked against `db/015_pipelines.sql`).
 - Campaign logic tests: `node scripts/test-campaigns.ts` (plan per objective, date slots, re-plan, time budget, warnings, halfway check, report).
 - Content Studio logic tests: `node scripts/test-content-studio.ts` (fold, formatter round trips, lists, Markdown, claims check, URL safety, AI reply parsing, point of view, newsletter dates, What works, carousel PDF).
 - Deploy: `npx vercel deploy --prod --yes`. Production deploys need Alok's explicit go-ahead each time. After every deploy, commit and push to GitHub.

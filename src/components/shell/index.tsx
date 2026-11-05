@@ -131,9 +131,11 @@ export function UnderlineTabs({ tabs, value, onChange, label }: { tabs: TabDef[]
 }
 
 /** A whole section: entry moment, header with actions and Guide, tabs, content, tour. */
-export function Section({ id, title, status, actions, tabs, tab, onTab, steps = [], entryStatus, children, wide }: {
+export function Section({ id, title, status, actions, before, tabs, tab, onTab, steps = [], entryStatus, children, wide }: {
   id: string; title: string; status?: React.ReactNode; actions?: React.ReactNode; tabs?: TabDef[]; tab?: string; onTab?: (id: string) => void;
   steps?: TourStep[]; entryStatus?: string; children: React.ReactNode; wide?: boolean;
+  /** Sits before Guide, for a control that scopes the whole section (the Pipeline switcher). */
+  before?: React.ReactNode;
 }) {
   const tour = useTour(id, steps, onTab);
   return (
@@ -146,6 +148,7 @@ export function Section({ id, title, status, actions, tabs, tab, onTab, steps = 
             {status && <p className="mt-1 text-[14px] text-muted">{status}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {before}
             {steps.length > 0 && <button type="button" className="btn h-10 px-3.5" onClick={tour.start}>Guide</button>}
             {actions}
           </div>
