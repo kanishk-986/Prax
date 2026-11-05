@@ -269,3 +269,12 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Today and the Dashboard are unchanged and still read `prospects.next_action`, `next_date` and `stage`. They exclude Won and Parked by name, so a due check-in on a closed stage of another pipeline (Signed, Committed, Delivered, Done, Passed, Declined) does show on Today.
 - Found while checking: `.btn` and `.field` in `globals.css` are not in a Tailwind layer, so utilities such as `h-10` or `px-4` on them lose everywhere in the app (every such button is 32 px). The Pipeline components use `!` on those utilities; the app-wide fix is to move the component classes into `@layer components`.
 - Checked in Chrome at 1440 and 390 wide through a temporary local preview with sample data (deleted): tour, Do next, groups, a move to Parked with a reason, Done with Undo, Group by company, More filters, the pipeline menu, the Pipelines panel and stage editor, Import from Network, Add lead, and the lead panel in side and full view. Not checked signed in against Supabase, and 015 has not been run.
+
+## Agreed 6 Nov 2026 (Q107 to Q112)
+
+- Q107: AI citations gets Archive, Switch, New and Delete for a tracked profile set, all four required, placed in a three-dot menu in the header. Archive keeps everything; Switch moves between sets; New starts setup from scratch for another person and LinkedIn profile; Delete is permanent, owner-only, with typed confirmation.
+- Q108 (most important): Strategy becomes an open canvas like n8n: nodes connected by dotted wires, each node showing only its final name (Goal for the month, Who we target, ...), with view (eye), edit and delete; users build custom nodes and flows, including if/else conditions.
+- Q109: the strategy drives the rest of Prax: each node maps to real settings (Today quotas, post mix and pillars, target segments for Pipeline and Discovery, Comment Studio rules); each node shows what it affects; editing it changes those values. Built in two steps: canvas plus links to existing settings, then the if/else rules engine.
+- Q110: fix every extension feature and error: the bar missing on some posts, needing two or three clicks, not reading every post, and the Live tab options (Capture and the rest) not working. No automation; the user clicks.
+- Q111: notes show their author and time.
+- Q112: a deep audit subagent after the fixes, from every angle: design, UI and UX, views, bugs, placement, the LinkedIn workflow end to end; reports bugs, gaps and what to add or remove.
