@@ -183,3 +183,17 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Q81: journalist and analyst source requests on Antier topics, routed to a quick-reply draft. The user sends it.
 - Q82: public tenders and requests for proposals from GCC and Indian banks and regulators, in a separate Sales band; never turned into posts.
 - Q83: competitor moves suggest a "how we see it" post angle in Content Studio, linked to a matching campaign if there is one.
+
+## Discovery Digest and the angle step, agreed (6 Nov 2026, Q84 to Q94)
+
+- Q84: Findings are single articles; Digest is topics, built by merging every article about the same story.
+- Q85: topic priority 0 to 100 = Fit 45 (the seven-dimension score), Coverage 20 (separate sources and publishers, growth over 3 days), Source quality 10 (regulator or primary > major media > blogs), Found both ways 5 (AI search and Crawl), Gap 10 (AI citations gap), Warm 5 (Network), Timing 5 (deadline); minus points for posted recently or crowded. Weights editable in Criteria.
+- Q86: crowded topics stay, marked "Crowded: needs a different angle", with a contrarian or GCC-specific take suggested.
+- Q87: Crawl runs on the server every Monday; AI search starts by itself when Prax is opened that day, with the keys in the browser; both visible live; the Digest builds when both finish.
+- Q88: top 10 topics a week plus a Rising strip; the rest stay in Findings.
+- Q89: unsure merges show "Possible merge" with Merge and Keep separate.
+- Q90: Digest layout: top 3 as large feature cards, #4 to #10 as a ranked list.
+- Q91: tick topics and Send to Content Studio; angle and post type are decided in Content Studio; Discovery's suggested angle is preselected.
+- Q92: Write a post gets an Angle step after the idea and before the opening line, for every starting point: 4 suggested angles (contrarian, GCC and India lens, operator view, numbers and prediction) plus your own; it steers hooks and drafts, is saved on the post and shown in approval.
+- Q93: Library Source filter (Discovery Studio, AI citations, Campaign, Written here) and a "From Discovery · #rank · score" tag linking back to the topic.
+- Q94: Plan gets a To plan tray of undated Discovery and AI citations topics, dragged onto a day.
