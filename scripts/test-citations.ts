@@ -1,6 +1,6 @@
 // Checks AI citation parsing, detection and maths against sample responses shaped like each provider's API.
 // Run: node scripts/test-citations.ts
-import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, type Entity, type Run, type Question } from "../src/lib/citations.ts";
+import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, type Entity, type Run, type Question } from "../src/lib/citations.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -96,6 +96,59 @@ eq("citation gaps exclude domains that also name you", citationGaps(runs, self, 
 const liRuns = [run("h", "q1", "gemini", "t", "x", [{ url: "https://www.linkedin.com/posts/shashipal_stablecoin-activity-1", title: "", domain: "linkedin.com", cited: true }, { url: "https://www.linkedin.com/posts/someoneelse_x", title: "", domain: "linkedin.com", cited: true }])];
 eq("his LinkedIn post cited, others not", linkedinCited(liRuns, self).length, 1);
 eq("region hint only for gemini", [promptFor(qs[0], "gemini").includes("UAE"), promptFor(qs[0], "openai")], [true, qs[0].question]);
+
+// ---------- tone ----------
+eq("tone from sentences naming him", sentimentOf("The weather is bad. Antier is a trusted and experienced partner.", self.aliases), "positive");
+eq("negative tone", sentimentOf("Antier faced a lawsuit and complaints last year.", self.aliases), "negative");
+eq("no tone when not named", sentimentOf("Ledgerline is a leader.", self.aliases), null);
+eq("judge reply parsed", parseJudge('Sure. {"sentiment":"negative","issues":[{"fact":"Founded 2011","said":"Antier was founded in 2019"}]}'), { sentiment: "negative", issues: [{ fact: "Founded 2011", said: "Antier was founded in 2019" }] });
+eq("judge: unknown sentiment becomes neutral, junk issues dropped", parseJudge('{"sentiment":"great","issues":[{"fact":""}]}'), { sentiment: "neutral", issues: [] });
+eq("judge: unreadable reply is null", parseJudge("no json here"), null);
+
+// ---------- facts ----------
+eq("wrong founding year next to the name", factIssues("Antier was founded in 2019 in India. Others started in 2005.", { founded: "2011" }, self.aliases).map((x) => x.fact), ["Founded 2011"]);
+eq("right founding year is fine", factIssues("Antier, established in 2011, builds rails.", { founded: "2011" }, self.aliases).length, 0);
+eq("a year next to someone else is not his", factIssues("Ledgerline was founded in 2019.", { founded: "2011" }, self.aliases).length, 0);
+eq("profile consistency", profileConsistency({ titles: "Co-Founder, COO", regions: "UAE, India" }, "Co-Founder and COO at Antier. Working across the UAE.").map((r) => `${r.value}:${r.found}`), ["Co-Founder:true", "COO:true", "UAE:true", "India:false"]);
+
+// ---------- repeats ----------
+const t0 = "2026-11-06T10:00:00Z", t1 = "2026-11-06T10:05:00Z", t2 = "2026-11-06T10:10:00Z";
+const reps = [run("r1", "q1", "claude", t0, "Antier is one."), run("r2", "q1", "claude", t1, "Ledgerline only."), run("r3", "q1", "claude", t2, "Antier and Ledgerline.")];
+eq("repeats form one batch", [...latestBatches(reps).values()][0].now.length, 3);
+eq("majority of repeats: named 2 of 3, mixed", (({ named, k, n, mixed }) => ({ named, k, n, mixed }))(aggregate(reps, self)!), { named: true, k: 2, n: 3, mixed: true });
+eq("a 1 of 2 split is not named", aggregate(reps.slice(0, 2), self)!.named, false);
+eq("failed repeats are left out", aggregate([...reps.slice(0, 1), run("r4", "q1", "claude", t1, "", [], "failed")], self)!.n, 1);
+eq("all repeats failed gives no verdict", aggregate([run("r5", "q1", "claude", t0, "", [], "failed")], self), null);
+eq("share of voice counts the batch once", shareOfVoice(reps, qs, self, self).total, 1);
+const older = [run("o1", "q1", "claude", "2026-10-30T10:00:00Z", "Ledgerline only."), run("o2", "q1", "claude", "2026-10-30T10:03:00Z", "Ledgerline again.")];
+eq("previous batch kept apart", [...latestBatches([...reps, ...older]).values()][0].prev.length, 2);
+eq("change between batches", changes([...reps, ...older], self).map((c) => c.kind), ["new"]);
+
+// ---------- sets, lift, recommendations, alerts ----------
+const qsSet: Question[] = [{ ...qs[0], set_id: "gcc" }, { ...qs[1], set_id: null }];
+eq("set roll-up only counts its questions", setRollup(qsSet, "gcc", runs, self).total, setRollup(qsSet, "gcc", runs.filter((r) => r.question_id === qsSet[0].id), self).total);
+eq("lift maths", lift({ named: 1, total: 4 }, { named: 3, total: 4 }), { before: 25, after: 75, delta: 50 });
+eq("no lift without a baseline", lift(null, { named: 1, total: 2 }), null);
+const recs = recommend(runs, qs, self, [rival]);
+eq("recommends an article where he is never named", recs.some((r) => r.kind === "profile" && r.question_ids.includes("q2")), true);
+eq("recommends earning a mention on a gap domain", recs.some((r) => r.kind === "elsewhere" && r.title.includes("fintechreview.example")), true);
+const wrongRun = { ...run("w1", "q1", "openai", "2026-11-06T09:00:00Z", "Antier was founded in 2019."), fact_issues: [{ fact: "Founded 2011", said: "Antier was founded in 2019." }] };
+const al = alerts([...runs, wrongRun], qs, self, [rival]);
+eq("alerts include dropped, new and wrong fact", ["dropped", "new", "wrong_fact"].every((k) => al.some((a) => a.kind === k)), true);
+const overtakeNow = [run("v1", "q1", "gemini", "2026-11-06T10:00:00Z", "Ledgerline leads."), run("v2", "q2", "gemini", "2026-11-06T10:00:00Z", "Ledgerline again.")];
+const overtakeBefore = [run("v3", "q1", "gemini", "2026-10-20T10:00:00Z", "Antier leads."), run("v4", "q2", "gemini", "2026-10-20T10:00:00Z", "Antier again.")];
+eq("competitor overtook", alerts([...overtakeNow, ...overtakeBefore], qs, self, [rival]).some((a) => a.kind === "overtook"), true);
+
+// ---------- share links, starters, campaigns ----------
+const nowMs = Date.parse("2026-11-06T12:00:00Z");
+eq("share link live", shareValid({ expires_at: "2026-11-07T00:00:00Z", revoked: false }, nowMs), true);
+eq("share link expired", shareValid({ expires_at: "2026-11-06T11:00:00Z", revoked: false }, nowMs), false);
+eq("share link turned off", shareValid({ expires_at: "2026-11-09T00:00:00Z", revoked: true }, nowMs), false);
+eq("expiry is capped at 30 days", expiryFrom(90, nowMs), new Date(nowMs + 30 * 864e5).toISOString());
+eq("twenty starter questions, none branded", [starterQuestions().length, starterQuestions().some((q) => isBranded({ question: q.question }, self))], [20, false]);
+const campQs: Question[] = [{ ...qs[0], topic: "Agentic Finance" }, { ...qs[1], topic: "Custody" }];
+const campRuns = [run("c1", campQs[0].id, "claude", "2026-10-01T10:00:00Z", "Ledgerline."), run("c2", campQs[0].id, "claude", "2026-11-03T10:00:00Z", "Antier.")];
+eq("campaign lift before and after", campaignLift(campRuns, campQs, self, { id: "x", start: "2026-10-15", topic: "Agentic Finance" }), { questions: 1, before: 0, after: 100 });
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

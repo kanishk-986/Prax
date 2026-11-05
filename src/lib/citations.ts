@@ -17,8 +17,10 @@ export type Entity = { id: string; kind: "self" | "competitor"; name: string; al
 export type Run = {
   id: string; question_id: string; engine: Engine; model: string; status: "ok" | "failed" | "no_sources";
   answer: string; run_at: string; sources: Source[];
+  repeat_index?: number; sentiment?: string; fact_issues?: FactIssue[] | null;
 };
-export type Question = { id: string; question: string; topic: string; region: string; language: string; status: string };
+export type Question = { id: string; question: string; topic: string; region: string; language: string; status: string; set_id?: string | null; repeats?: number; campaign_id?: string | null };
+export type FactIssue = { fact: string; said: string };
 
 // ---------- URLs ----------
 export function domainOf(url: string): string {
@@ -171,30 +173,59 @@ export function latestPairs(runs: Run[]) {
   return out;
 }
 
-/** "Named in N of M questions" for one entity on one engine (or all), latest run per question; failed runs and branded questions excluded. */
+/** Runs asked together (repeats of one question on one engine) count as one batch: runs within 3 hours of the latest. */
+const BATCH_MS = 3 * 3600e3;
+export function latestBatches(runs: Run[]) {
+  const by = new Map<string, Run[]>();
+  for (const r of runs) { const k = `${r.question_id}|${r.engine}`; const a = by.get(k); if (a) a.push(r); else by.set(k, [r]); }
+  const out = new Map<string, { now: Run[]; prev: Run[] }>();
+  by.forEach((a, k) => {
+    a.sort((x, y) => (x.run_at < y.run_at ? 1 : -1));
+    const t0 = Date.parse(a[0].run_at), now = a.filter((r) => t0 - Date.parse(r.run_at) <= BATCH_MS);
+    const rest = a.slice(now.length), prev = rest.length ? rest.filter((r) => Date.parse(rest[0].run_at) - Date.parse(r.run_at) <= BATCH_MS) : [];
+    out.set(k, { now, prev });
+  });
+  return out;
+}
+
+export type Agg = { named: boolean; linked: boolean | null; position: number | null; k: number; n: number; mixed: boolean };
+/** One verdict per batch: named when more than half of the usable repeats name the entity; "mixed" when the repeats disagree. */
+export function aggregate(batch: Run[], e: Pick<Entity, "aliases" | "domains">): Agg | null {
+  const usable = batch.filter((r) => r.status !== "failed");
+  if (!usable.length) return null;
+  const ds = usable.map((r) => detect(r, e));
+  const k = ds.filter((d) => d.named).length, n = ds.length;
+  const linkedKnown = ds.filter((d) => d.linked !== null);
+  const positions = ds.map((d) => d.position).filter((x): x is number => x != null);
+  return { named: k * 2 > n, linked: linkedKnown.length ? linkedKnown.filter((d) => d.linked).length * 2 > linkedKnown.length : null, position: positions.length ? Math.min(...positions) : null, k, n, mixed: k > 0 && k < n };
+}
+
+/** "Named in N of M questions" for one entity on one engine (or all), latest batch per question; failed runs and branded questions excluded. */
 export function shareOfVoice(runs: Run[], questions: Question[], e: Entity, self: Entity | undefined, engine?: Engine) {
   const qs = new Map(questions.filter((q) => q.status === "active" && !isBranded(q, self)).map((q) => [q.id, q]));
   let named = 0, total = 0, linked = 0;
-  latestPairs(runs).forEach(({ now }) => {
-    if (!qs.has(now.question_id) || now.status === "failed" || (engine && now.engine !== engine)) return;
+  latestBatches(runs).forEach(({ now }, key) => {
+    const [qid, eng] = key.split("|");
+    if (!qs.has(qid) || (engine && eng !== engine)) return;
+    const a = aggregate(now, e);
+    if (!a) return;
     total++;
-    const d = detect(now, e);
-    if (d.named) named++;
-    if (d.linked) linked++;
+    if (a.named) named++;
+    if (a.linked) linked++;
   });
   return { named, linked, total, pct: total ? Math.round((named / total) * 100) : null };
 }
 
 export type Change = { question_id: string; engine: Engine; kind: "dropped" | "new"; at: string };
-/** Compares each question and engine with its previous usable run. */
+/** Compares each question and engine with its previous usable batch. */
 export function changes(runs: Run[], e: Entity): Change[] {
   const usable = runs.filter((r) => r.status !== "failed");
   const out: Change[] = [];
-  latestPairs(usable).forEach(({ now, prev }) => {
-    if (!prev) return;
-    const a = detect(prev, e).named, b = detect(now, e).named;
-    if (a && !b) out.push({ question_id: now.question_id, engine: now.engine, kind: "dropped", at: now.run_at });
-    if (!a && b) out.push({ question_id: now.question_id, engine: now.engine, kind: "new", at: now.run_at });
+  latestBatches(usable).forEach(({ now, prev }) => {
+    if (!prev.length) return;
+    const a = aggregate(prev, e)?.named, b = aggregate(now, e)?.named;
+    if (a && !b) out.push({ question_id: now[0].question_id, engine: now[0].engine, kind: "dropped", at: now[0].run_at });
+    if (!a && b) out.push({ question_id: now[0].question_id, engine: now[0].engine, kind: "new", at: now[0].run_at });
   });
   return out.sort((x, y) => (x.at < y.at ? 1 : -1));
 }
@@ -239,3 +270,167 @@ export const ESTIMATE: Record<Engine, { inTok: number; outTok: number; usd: numb
   gemini: { inTok: 6000, outTok: 900, usd: 0.04, note: "depends on your model; grounded searches are billed per query" },
   perplexity: { inTok: 0, outTok: 0, usd: 0, note: "" },
 };
+
+// ---------- tone and facts ----------
+export type Sentiment = "positive" | "neutral" | "negative";
+const POS = ["leading", "leader", "trusted", "strong", "proven", "reliable", "notable", "recommended", "experienced", "specialist", "well known", "reputable", "established"];
+const NEG = ["controversy", "lawsuit", "fraud", "complaint", "complaints", "unreliable", "criticised", "criticized", "scam", "failed", "delays", "breach", "penalty", "fined", "warning"];
+const sentencesOf = (t: string) => t.split(/(?<=[.!?])\s+|\n+/);
+/** Quick tone read from the sentences that name the entity; the AI check (parseJudge) replaces it once it has run. */
+export function sentimentOf(text: string, aliases: string[]): Sentiment | null {
+  const named = sentencesOf(text).filter((x) => findMatches(x, aliases).length);
+  if (!named.length) return null;
+  const t = named.join(" ").toLowerCase();
+  const has = (w: string) => new RegExp(`(?<![a-z])${w}(?![a-z])`).test(t);
+  const p = POS.filter(has).length, n = NEG.filter(has).length;
+  return n > p ? "negative" : p > n ? "positive" : "neutral";
+}
+/** The AI check's reply: {"sentiment": "...", "issues": [{"fact": "...", "said": "..."}]}. Anything unreadable gives null. */
+export function parseJudge(text: string): { sentiment: Sentiment; issues: FactIssue[] } | null {
+  const m = text.match(/\{[\s\S]*\}/);
+  try {
+    const j = JSON.parse(m ? m[0] : text);
+    const sentiment: Sentiment = ["positive", "neutral", "negative"].includes(j.sentiment) ? j.sentiment : "neutral";
+    const issues: FactIssue[] = Array.isArray(j.issues) ? j.issues.filter((x: FactIssue) => x && x.fact && x.said).map((x: FactIssue) => ({ fact: String(x.fact).slice(0, 200), said: String(x.said).slice(0, 300) })) : [];
+    return { sentiment, issues };
+  } catch { return null; }
+}
+
+export type Facts = { titles: string; company: string; products: string; licences: string; regions: string; founded: string; other: string };
+export const EMPTY_FACTS: Facts = { titles: "", company: "", products: "", licences: "", regions: "", founded: "", other: "" };
+/** The check Prax can do without AI: a wrong founding year in a sentence that names him or Antier. */
+export function factIssues(answer: string, facts: Partial<Facts>, aliases: string[]): FactIssue[] {
+  const out: FactIssue[] = [];
+  const year = (facts.founded ?? "").match(/\d{4}/)?.[0];
+  if (!year) return out;
+  for (const sentence of sentencesOf(answer)) {
+    if (!findMatches(sentence, aliases).length) continue;
+    const m = sentence.match(/(?:founded|established|started|since)\D{0,12}((?:19|20)\d{2})/i);
+    if (m && m[1] !== year) out.push({ fact: `Founded ${year}`, said: sentence.trim().slice(0, 300) });
+  }
+  return out;
+}
+export function judgePrompt(answer: string, facts: Partial<Facts>, name: string) {
+  const lines = Object.entries(facts).filter(([, v]) => v && String(v).trim()).map(([k, v]) => `${k}: ${v}`).join("\n");
+  return `FACTS ABOUT ${name.toUpperCase()} (true):\n${lines || "(none given)"}\n\nAN AI ANSWER:\n${answer.slice(0, 12000)}\n\nJudge how the answer speaks about ${name}: positive, neutral or negative. List any statement about ${name} that contradicts the facts, quoting it. Do not list things the facts do not cover. Return only JSON: {"sentiment": "neutral", "issues": [{"fact": "the true fact", "said": "the quoted wrong statement"}]}`;
+}
+
+/** Profile consistency: each fact should appear in his LinkedIn headline or About text, which AI tools read. */
+export function profileConsistency(facts: Partial<Facts>, profileText: string) {
+  const t = profileText.toLowerCase();
+  const terms = (v?: string) => (v ?? "").split(",").map((x) => x.trim()).filter((x) => x.length > 1);
+  const rows: { fact: string; value: string; found: boolean }[] = [];
+  ([["Title", facts.titles], ["Company", facts.company], ["Products", facts.products], ["Regions", facts.regions], ["Licences", facts.licences]] as const).forEach(([fact, v]) => {
+    terms(v).forEach((value) => rows.push({ fact, value, found: t.includes(value.toLowerCase()) }));
+  });
+  return rows;
+}
+
+// ---------- question sets, recommendations, alerts ----------
+export function setRollup(questions: Question[], setId: string | null, runs: Run[], self: Entity) {
+  return shareOfVoice(runs, questions.filter((q) => (q.set_id ?? null) === setId), self, self);
+}
+
+/** Lift since a recommendation was accepted: the named share on its target questions then and now. */
+export function lift(baseline: { named: number; total: number } | null | undefined, now: { named: number; total: number }) {
+  if (!baseline || !baseline.total || !now.total) return null;
+  const before = Math.round((baseline.named / baseline.total) * 100), after = Math.round((now.named / now.total) * 100);
+  return { before, after, delta: after - before };
+}
+
+export type Rec = { kind: "profile" | "elsewhere"; title: string; detail: string; question_ids: string[] };
+/** Recommendations Prax can make from the data alone; the AI can add more. */
+export function recommend(runs: Run[], questions: Question[], self: Entity, rivals: Entity[]): Rec[] {
+  const out: Rec[] = [];
+  const active = questions.filter((q) => q.status === "active" && !isBranded(q, self));
+  const batches = latestBatches(runs);
+  const verdicts = (qid: string) => [...batches.entries()].filter(([k]) => k.startsWith(qid + "|")).map(([, b]) => aggregate(b.now, self)).filter((a): a is Agg => !!a);
+  for (const q of active) {
+    const v = verdicts(q.id);
+    if (!v.length) continue;
+    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: "No engine names Shashi or Antier for this question. A clear, specific article from him gives the AI something to cite.", question_ids: [q.id] });
+    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link an Antier page when he writes about ${q.topic || "this topic"}`, detail: `He is named for "${q.question}" but no answer links his sites. A post or article that links the right Antier page can turn mentions into links.`, question_ids: [q.id] });
+  }
+  for (const g of citationGaps(runs, self, rivals).slice(0, 5)) {
+    const qids = [...new Set(runs.filter((r) => r.sources.some((x) => x.domain === g.domain)).map((r) => r.question_id))];
+    out.push({ kind: "elsewhere", title: `Get mentioned on ${g.domain}`, detail: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. A guest piece, a quote or data there would help.`, question_ids: qids });
+  }
+  return out;
+}
+
+export type Alert = { kind: "dropped" | "new" | "wrong_fact" | "overtook"; text: string; question_id?: string; engine?: Engine; at: string };
+export function alerts(runs: Run[], questions: Question[], self: Entity, rivals: Entity[]): Alert[] {
+  const qText = (id: string) => questions.find((q) => q.id === id)?.question ?? "a removed question";
+  const out: Alert[] = changes(runs, self).map((c) => ({ kind: c.kind, question_id: c.question_id, engine: c.engine, at: c.at, text: `${c.kind === "new" ? "Newly named" : "Dropped out"}: ${qText(c.question_id)}` }));
+  const batches = [...latestBatches(runs).values()];
+  for (const b of batches) for (const r of b.now) for (const i of r.fact_issues ?? []) out.push({ kind: "wrong_fact", question_id: r.question_id, engine: r.engine, at: r.run_at, text: `Wrong fact (${i.fact}): "${i.said.slice(0, 120)}"` });
+  // A competitor overtook: named on more of the same questions than you now, and not before.
+  const prevRuns = batches.flatMap((b) => b.prev);
+  if (prevRuns.length) {
+    const nowS = shareOfVoice(runs, questions, self, self).named, prevS = shareOfVoice(prevRuns, questions, self, self).named;
+    for (const c of rivals) {
+      const nowC = shareOfVoice(runs, questions, c, self).named, prevC = shareOfVoice(prevRuns, questions, c, self).named;
+      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more questions than Antier (${nowC} against ${nowS})` });
+    }
+  }
+  return out.sort((a, b) => (a.at < b.at ? 1 : -1));
+}
+
+// ---------- share links ----------
+export const shareValid = (row: { expires_at: string; revoked: boolean } | null | undefined, now = Date.now()) => !!row && !row.revoked && Date.parse(row.expires_at) > now;
+export const expiryFrom = (days: number, now = Date.now()) => new Date(now + Math.max(1, Math.min(30, days)) * 864e5).toISOString();
+
+// ---------- starters, campaigns, ask ----------
+/** Used when no AI key is set: twenty buyer questions across the six pillars, phrased the way a buyer asks. */
+export function starterQuestions(region = "the UAE") {
+  const r = region || "the UAE";
+  const qs: [string, string][] = [
+    [`Who builds stablecoin payment infrastructure for banks in ${r}?`, "Money That Moves Itself"],
+    ["Which companies help banks reconcile stablecoin transfers with their ledgers?", "Money That Moves Itself"],
+    ["Best tokenised deposit platform vendors for mid-size banks", "Money That Moves Itself"],
+    ["Who can build a cross-border stablecoin remittance product for a licensed fintech?", "Money That Moves Itself"],
+    ["Which firms help asset managers tokenise a fund?", "The Liquid Balance Sheet"],
+    ["Who builds real-world asset tokenisation platforms for institutions?", "The Liquid Balance Sheet"],
+    ["How do I tokenise private credit, and which vendors do it?", "The Liquid Balance Sheet"],
+    ["Which technology partners understand VARA rules for digital asset products?", "Regulation-to-Architecture"],
+    ["Who helps banks design compliance by design for stablecoins under CBUAE rules?", "Regulation-to-Architecture"],
+    ["Which vendors build travel rule compliance into digital asset platforms?", "Regulation-to-Architecture"],
+    ["Who builds institutional digital asset custody and key management?", "Production-Grade or Nothing"],
+    ["Which blockchain engineering firms are trusted by banks for production systems?", "Production-Grade or Nothing"],
+    ["How should a bank prepare tokenised assets for post-quantum risk?", "Production-Grade or Nothing"],
+    ["Who builds payment infrastructure for AI agents?", "Agentic Finance"],
+    ["Which companies work on agentic payments and know-your-intent controls?", "Agentic Finance"],
+    ["How can a bank let AI agents make payments safely?", "Agentic Finance"],
+    ["Should a bank build or buy its stablecoin stack?", "Build, Buy or Partner"],
+    ["What does it cost to build a tokenisation platform, and who can build one?", "Build, Buy or Partner"],
+    [`Top blockchain development companies for financial institutions in ${r}`, "Build, Buy or Partner"],
+    ["Who are the leading voices on programmable finance in the Middle East?", "Agentic Finance"],
+  ];
+  return qs.map(([question, topic]) => ({ question, topic }));
+}
+
+/** A campaign's AI citation change: its topic and keywords pick the questions; before and after its start date. */
+export function campaignLift(runs: Run[], questions: Question[], self: Entity, c: { id: string; start: string; topic?: string; keywords?: string[] }) {
+  const terms = [c.topic ?? "", ...(c.keywords ?? [])].map((x) => x.toLowerCase().trim()).filter(Boolean);
+  const qs = questions.filter((q) => q.campaign_id === c.id || terms.some((t) => q.topic.toLowerCase() === t || q.question.toLowerCase().includes(t)));
+  const ids = new Set(qs.map((q) => q.id));
+  const mine = runs.filter((r) => ids.has(r.question_id));
+  const before = mine.filter((r) => r.run_at.slice(0, 10) < c.start), after = mine.filter((r) => r.run_at.slice(0, 10) >= c.start);
+  return { questions: qs.length, before: before.length ? shareOfVoice(before, qs, self, self).pct : null, after: after.length ? shareOfVoice(after, qs, self, self).pct : null };
+}
+
+/** The data the Ask panel sends: small, readable, and shown to the user. */
+export function askContext(runs: Run[], questions: Question[], self: Entity, rivals: Entity[]) {
+  const qText = new Map(questions.map((q) => [q.id, q.question]));
+  const rows: string[] = [];
+  latestBatches(runs).forEach(({ now }, key) => {
+    const [qid, eng] = key.split("|"); const a = aggregate(now, self);
+    if (!a || !qText.has(qid)) return;
+    const rv = rivals.filter((c) => aggregate(now, c)?.named).map((c) => c.name);
+    rows.push(`${qText.get(qid)} | ${eng} | ${a.named ? `named${a.position ? ` #${a.position}` : ""}${a.linked ? ", linked" : ""}` : "not named"}${rv.length ? ` | competitors: ${rv.join(", ")}` : ""} | ${now[0].run_at.slice(0, 10)}`);
+  });
+  const sov = shareOfVoice(runs, questions, self, self);
+  const ch = changes(runs, self).slice(0, 15).map((c) => `${c.kind}: ${qText.get(c.question_id)} on ${c.engine} (${c.at.slice(0, 10)})`);
+  const gaps = citationGaps(runs, self, rivals).slice(0, 10).map((g) => `${g.domain} (cites ${g.competitors.join(", ")})`);
+  return `Named in ${sov.named} of ${sov.total} answers (latest batch, branded and failed excluded).\n\nLATEST PER QUESTION AND ENGINE:\n${rows.join("\n") || "(none)"}\n\nCHANGES:\n${ch.join("\n") || "(none)"}\n\nCITATION GAPS:\n${gaps.join("\n") || "(none)"}`;
+}

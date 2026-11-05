@@ -6,6 +6,7 @@ import { useWorkspace, fmtDay, today, SEGMENTS, STAGES } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { warmPaths, indexPeople, type Person, type ProspectLite } from "@/lib/network";
+import { campaignLift, type Run, type Question, type Entity, type Source } from "@/lib/citations";
 import {
   OBJECTIVES, FORMATS, PILLARS, MEASURES, objective, defaultBrief, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
@@ -647,13 +648,17 @@ function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Ca
         const { data } = await supabase().from("activity").select("label,at,ref_id").eq("workspace_id", ws.id).eq("kind", "stage").in("ref_id", ids).gte("at", c.brief.start).lte("at", addDays(end, 1));
         moves = (data ?? []).length; conversations = (data ?? []).filter((a: { label: string }) => /In conversation|Call booked/.test(a.label)).length;
       }
-      // AI citations come from the citations build; read them only if those tables exist.
-      const { data: runs, error } = await supabase().from("citation_runs").select("*").eq("workspace_id", ws.id).limit(5000);
-      if (!error && runs?.length) {
-        const pick = (r: Record<string, unknown>) => ({ d: String(r.run_at ?? r.created_at ?? "").slice(0, 10), named: (r.mentioned ?? r.named) as boolean | null | undefined });
-        const rows = (runs as Record<string, unknown>[]).map(pick).filter((r) => typeof r.named === "boolean");
-        const pct = (xs: typeof rows) => (xs.length ? Math.round((xs.filter((x) => x.named).length / xs.length) * 100) : null);
-        citations = { before: pct(rows.filter((r) => r.d && r.d < c.brief.start)), after: pct(rows.filter((r) => r.d >= c.brief.start)) };
+      // AI citations: the campaign's topic and keywords pick the questions; named share before and after the start.
+      const [runsQ, qsQ, entQ] = await Promise.all([
+        supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id).order("run_at", { ascending: false }).limit(3000),
+        supabase().from("citation_questions").select("*").eq("workspace_id", ws.id),
+        supabase().from("citation_entities").select("*").eq("workspace_id", ws.id).eq("kind", "self").limit(1),
+      ]);
+      const self = (entQ.data as Entity[] | null)?.[0];
+      if (!runsQ.error && self && runsQ.data?.length) {
+        const runs = (runsQ.data as (Run & { citation_sources: Source[] })[]).map((r) => ({ ...r, sources: r.citation_sources ?? [] }));
+        const l = campaignLift(runs, (qsQ.data as Question[]) ?? [], self, { id: c.id, start: c.brief.start, topic: c.brief.topic, keywords: c.brief.keywords });
+        if (l.questions) citations = { before: l.before, after: l.after };
       }
       setExtra({ conversations, moves, citations });
     })();

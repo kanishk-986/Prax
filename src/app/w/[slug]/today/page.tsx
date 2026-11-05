@@ -31,6 +31,22 @@ export default function Today() {
     if (want.length) supabase().from("daily_items").upsert(want, { onConflict: "workspace_id,day,kind,idx", ignoreDuplicates: true }).then(() => reload());
   }, [day, loading, rows, editable, ws, reload]);
 
+  // AI citation runs need this browser open, so once a week Today asks for one (one task, never repeated).
+  useEffect(() => {
+    if (!editable || loading || day !== today()) return;
+    if (rows.some((r) => r.kind === "custom" && r.idx === 3600)) return;
+    (async () => {
+      const { count } = await supabase().from("citation_questions").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).eq("status", "active");
+      if (!count) return;
+      const { data } = await supabase().from("citation_runs").select("run_at").eq("workspace_id", ws.id).order("run_at", { ascending: false }).limit(1);
+      const last = data?.[0]?.run_at as string | undefined;
+      const days = last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null;
+      if (days != null && days < 7) return;
+      await supabase().from("daily_items").upsert({ workspace_id: ws.id, day, kind: "custom", idx: 3600, title: days == null ? `Run the ${count} AI citation questions for the first time` : `Run the AI citation questions (last run ${days} days ago)`, link: `/w/${ws.slug}/citations`, note: "citations:weekly" }, { onConflict: "workspace_id,day,kind,idx", ignoreDuplicates: true });
+      reload();
+    })();
+  }, [day, loading, rows, editable, ws.id, ws.slug, reload]);
+
   const ordered = useMemo(() => SECTIONS.flatMap((s) => rows.filter((r) => r.kind === s.key).sort((a, b) => a.idx - b.idx)), [rows]);
   const total = rows.length, done = rows.filter((r) => r.done).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
