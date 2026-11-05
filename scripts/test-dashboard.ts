@@ -92,6 +92,7 @@ eq("overdue follow-up grows with age", urgency({ kind: "followup", due: "2026-11
 eq("overdue follow-up beats due today", urgency({ kind: "followup", due: "2026-11-05" }, T) > urgency({ kind: "followup", due: T }, T), true);
 eq("post due today beats approval", urgency({ kind: "post", due: T }, T) > urgency({ kind: "approval" }, T), true);
 eq("post in two days sits below approval", urgency({ kind: "post", due: "2026-11-08" }, T) < urgency({ kind: "approval" }, T), true);
+eq("unsent Discovery topics sit below today, above the citations reminder", urgency({ kind: "discovery" }, T) < urgency({ kind: "today" }, T) && urgency({ kind: "discovery" }, T) > urgency({ kind: "citations" }, T), true);
 eq("age is capped", urgency({ kind: "followup", due: "2025-01-01" }, T), 160);
 const ranked = rankNeeds([
   { kind: "network" as const, id: "n" }, { kind: "today" as const, id: "t" }, { kind: "followup" as const, due: T, id: "f0" },

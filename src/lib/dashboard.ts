@@ -146,7 +146,7 @@ export function primaryAction(it: AgendaItem & { link?: string | null }, slug: s
 }
 
 // ---------- Needs you now ----------
-export type NeedKind = "followup" | "post" | "approval" | "today" | "citations" | "warming" | "network";
+export type NeedKind = "followup" | "post" | "approval" | "today" | "discovery" | "citations" | "warming" | "network";
 export type NeedInput = { kind: NeedKind; due?: string | null; count?: number };
 
 /** Higher is more urgent. Overdue follow-ups and posts lead and grow with age; housekeeping sits at the bottom. */
@@ -157,6 +157,7 @@ export function urgency(n: NeedInput, today: string): number {
     case "post": return late > 0 ? 105 + Math.min(late, 30) : 92 + late * 6; // due today 92, tomorrow 86, in two days 80
     case "approval": return 88;
     case "today": return 72;
+    case "discovery": return 45;
     case "citations": return 40;
     case "warming": return 30;
     case "network": return 20;

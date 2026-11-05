@@ -30,7 +30,7 @@ const DASH_TOUR: TourStep[] = [
   { target: "header", title: "What the dashboard is for", body: "One place to see how the week is going for this profile and what to do next. Every number comes from the work logged in Prax." },
   { target: "kpis", title: "The five numbers that matter", body: "People in the pipeline, warm paths from Network, posts out this week, comments against the weekly target, and how often AI answers name Shashi. Small chips show the change on last week. Click a tile to open that section." },
   { target: "needs", title: "Needs you now", body: "Everything waiting on you, most urgent first: overdue follow-ups and posts lead, then approvals, today's plan and housekeeping." },
-  { target: "glance", title: "This week at a glance", body: "One line for each part of Prax: Today, Content Studio, Comment Studio, Pipeline, Network and AI citations. Click a line to go there." },
+  { target: "glance", title: "This week at a glance", body: "One line for each part of Prax: Today, Content Studio, Comment Studio, Pipeline, Network, Discovery Studio and AI citations. Click a line to go there." },
   { target: "reach", title: "LinkedIn reach", body: "Impressions, followers, profile viewers and search appearances, captured when you open his LinkedIn analytics with the extension." },
   { target: "activity", title: "Recent activity", body: "Ticks on Today and pipeline moves, newest first, as the team works." },
   { target: "open-today", title: "Start the day", body: "Open Today for the plan: comments, posts, follow-ups and connections, in that order." },
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const logged = useLive<{ day: string }>("comment_log", ws.id, { filter: (q) => q.gte("day", lastWk) });
   const cq = useLive<Question>("citation_questions", ws.id);
   const ents = useLive<Entity>("citation_entities", ws.id);
+  // This week's Digest (db/013_discovery.sql): ranked topics and the ones already sent to Content Studio.
+  const topics = useLive<{ id: string; title: string; rank: number | null; rising: boolean; sent_at: string | null }>("discovery_topics", ws.id, { filter: (q) => q.eq("week", wk) });
 
   // Open prospects with a linked connection or a connection at their company (db/006_network.sql); null when there is no export.
   const [warm, setWarm] = useState<number | null>(null);
@@ -118,6 +120,11 @@ export default function Dashboard() {
     return m;
   }, [snaps.rows]);
 
+  const disc = useMemo(() => {
+    const ranked = topics.rows.filter((x) => x.rank != null).sort((x, y) => (x.rank ?? 99) - (y.rank ?? 99));
+    return { ranked: ranked.length, sent: ranked.filter((x) => x.sent_at).length, open: ranked.filter((x) => !x.sent_at), rising: topics.rows.filter((x) => x.rising).length };
+  }, [topics.rows]);
+
   const base = `/w/${ws.slug}`;
   const needs = useMemo(() => {
     const list: (NeedInput & Need)[] = [];
@@ -126,11 +133,12 @@ export default function Dashboard() {
     if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : "Waiting for Shashi to approve", cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
     if (!week.today.total) list.push({ kind: "today", title: "Open today's plan", sub: "It builds from the daily quota", cta: "Start", href: `${base}/today`, tone: "dark" });
     else if (week.today.done < week.today.total) list.push({ kind: "today", title: `${week.today.total - week.today.done} of ${week.today.total} tasks left today`, sub: "Comments, posts, follow-ups and connections", cta: "Continue", href: `${base}/today`, tone: "dark" });
+    if (disc.open.length) list.push({ kind: "discovery", title: `${disc.open.length} Digest ${disc.open.length === 1 ? "topic" : "topics"} not sent yet`, sub: `Top: ${disc.open[0].title}`, cta: "Review", href: `${base}/discovery?tab=digest`, tone: "dim" });
     if (cit.active && (cit.lastDays == null || cit.lastDays >= 7)) list.push({ kind: "citations", title: "Run the AI citation prompts", sub: cit.lastDays == null ? `${cit.active} prompts have never been run` : `Last run ${cit.lastDays} days ago`, cta: "Run", href: `${base}/citations`, tone: "dim" });
     if (pipe.warming) list.push({ kind: "warming", title: `${pipe.warming} ${pipe.warming === 1 ? "person" : "people"} warming up`, sub: "Two comments each, then a connection note", cta: "Open", href: `${base}/pipeline`, tone: "dim" });
     if (warm == null) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
     return rankNeeds(list, t);
-  }, [pipe, content, week.today, cit, warm, base, t, can]);
+  }, [pipe, content, week.today, disc, cit, warm, base, t, can]);
 
   const hour = new Date().getHours();
   const loading = items.loading || prospects.loading;
@@ -178,6 +186,8 @@ export default function Dashboard() {
                 aside={draftDelta && (studio.drafts.now || studio.drafts.prev) ? <span className="num text-[11.5px] text-faint">{draftDelta.text} drafts</span> : undefined} />
               <Glance href={`${base}/pipeline`} name="Pipeline" line={`${pipe.conv} in conversation · ${pipe.calls} ${pipe.calls === 1 ? "call" : "calls"} · ${pipe.overdue} overdue`} alert={pipe.overdue > 0} />
               <Glance href={`${base}/network`} name="Network" line={people ? `${people.toLocaleString("en-GB")} people · ${warm ?? 0} warm paths` : "No LinkedIn export uploaded yet"} />
+              <Glance href={`${base}/discovery?tab=digest`} name="Discovery Studio" alert={disc.open.length > 0}
+                line={disc.ranked ? `Digest ready: ${disc.ranked} topics · ${disc.sent} sent to Content Studio${disc.rising ? ` · ${disc.rising} rising` : ""}` : "No Digest for this week yet"} />
               <Glance href={`${base}/citations`} name="AI citations" alert={cit.gaps > 0}
                 line={!cit.active ? "No prompts set up yet" : cit.share.total ? `Shashi named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
                 aside={cit.last ? <span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span> : undefined} />
