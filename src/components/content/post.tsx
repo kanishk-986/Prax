@@ -32,6 +32,8 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
         </div>
         <aside>
+          {post.angle && <p className="m-0 mb-3 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Angle</b> {post.angle}</p>}
+          {post.source_kind === "discovery" && <Row k="From" v={`Discovery Studio${post.discovery?.rank ? ` · #${post.discovery.rank}` : ""}${post.discovery?.score != null ? ` · ${post.discovery.score}` : ""}`} />}
           <Row k="Campaign" v={camp ? <span className="text-[#d64545]">{camp.name}</span> : "Independent"} />
           <Row k="Type" v={post.format || "Text post"} />
           <Row k="Where" v={post.channel === "company" ? <ChannelFlag p={post} /> : "Shashi's profile"} />

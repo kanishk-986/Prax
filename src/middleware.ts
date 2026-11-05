@@ -16,8 +16,8 @@ export async function middleware(req: NextRequest) {
   });
   const { data: { user } } = await sb.auth.getUser();
   const p = req.nextUrl.pathname;
-  // /share shows a view-only AI citations snapshot; the database checks the token.
-  const open = p.startsWith("/login") || p.startsWith("/auth") || p.startsWith("/api/ext") || p.startsWith("/share/");
+  // /share shows a view-only AI citations snapshot; the database checks the token. /api/cron checks CRON_SECRET itself.
+  const open = p.startsWith("/login") || p.startsWith("/auth") || p.startsWith("/api/ext") || p.startsWith("/share/") || p.startsWith("/api/cron/");
   if (!user && !open) {
     const url = req.nextUrl.clone(); url.pathname = "/login"; url.searchParams.set("next", p);
     return NextResponse.redirect(url);

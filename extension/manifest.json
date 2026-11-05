@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prax for LinkedIn",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Draft comments, replies and connection notes in your profile's voice right on LinkedIn, and log what you post to Prax. Acts only when you click.",
   "permissions": [
     "sidePanel",

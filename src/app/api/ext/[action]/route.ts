@@ -34,7 +34,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       case "request": return json(await rpc("ext_log_request", { p: body }));
       case "usage": return json({ ok: await rpc("ext_log_usage", { p: body }) });
       case "replies": return json({ marked: await rpc("ext_replies", { post_url: String(body.url ?? "") }) });
-      case "snapshot": return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
+      // A post the user sent from the Prax bar while reading it: it lands in Discovery Studio as a finding.
+      case "discovery": return json({ id: await rpc("ext_discovery_add", { p: { url: String(body.url ?? "").slice(0, 1000), title: String(body.title ?? "").slice(0, 300), text: String(body.text ?? "").slice(0, 6000), author: String(body.author ?? "").slice(0, 200), author_url: String(body.author_url ?? "").slice(0, 500), company: String(body.company ?? "").slice(0, 200) } }) });
+      case "snapshot":return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
       case "capture": {
         const me = await rpc("ext_me", {});
         const raw = String(body.raw ?? "");
