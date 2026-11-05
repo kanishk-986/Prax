@@ -80,7 +80,7 @@ export default function Dashboard() {
       </div>
 
       <NextActions slug={ws.slug} todayLeft={stats.today.total - stats.today.done} todayTotal={stats.today.total} due={pipe.due.length}
-        ready={prospects.rows.filter((p) => p.stage === "Warming").length} posts={posts.rows.filter((p) => p.status !== "Published" && p.status !== "Approved" && p.status !== "Scheduled")} />
+        ready={prospects.rows.filter((p) => p.stage === "Warming").length} posts={posts.rows.filter((p) => !["Posted", "Ready", "On hold", "Published", "Approved", "Scheduled"].includes(p.status))} />
 
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-2">

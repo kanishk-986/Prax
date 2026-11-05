@@ -72,6 +72,15 @@ Roles: owner, editor, commenter, viewer, enforced by RLS.
 2. **Comment Studio and extension v0.4.0 are built**; waiting for `db/007_studio.sql` and a deploy. Then reinstall the extension from the Extension page.
 3. **Step 4:** Content Studio (post drafts), account map, Inbox view (DMs and follow-ups, also in the extension), weekly report, multi-profile overview, merge Strategy and Notes into a Playbook.
 
+## Content Studio, first build (Campaigns, Plan, Library)
+
+- `/studio-content` replaces the old Content page (`/content` redirects). Palette scoped by `.cs` in `globals.css`; global tokens unchanged.
+- `db/009_campaigns.sql` (after 008): `campaigns` (brief jsonb, kind standard, fast or event, template flag, active, paused or done), `campaign_targets`, `resource_requests`, and new `posts` columns (campaign, pillar, phase, planned time, approval fields, hold status). Old post statuses map to Idea, Drafting, In review, Ready, Posted, On hold.
+- Logic in `src/lib/campaigns.ts`, checked by `scripts/test-campaigns.ts`. UI in `src/components/content/`.
+- Today items made by campaigns are kind `custom` in fixed index bands (2000s comment tasks, 3000 weekly approval session, 3100 fast response, 3200s event follow-ups, 4000s message tasks), so they upsert without duplicates. Paused campaigns create none.
+- Approval: team drafts go In review; owners approve or ask for changes with a note; one weekly approval session item on Today.
+- Not built yet: the seven-step Write flow and the Formatter (tabs say so). Not verified against Supabase: needs 008 and 009 run first.
+
 ## Known gaps
 
 - Sign-in email uses Supabase's built-in sender, which is rate-limited. Fix: custom SMTP (Resend) set up by Alok.
