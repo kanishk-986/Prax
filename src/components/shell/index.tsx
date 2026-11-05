@@ -15,6 +15,7 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
   const [show, setShow] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const done = useRef(false);
+  const started = useRef(false);
   const leave = useCallback(() => {
     if (done.current) return;
     done.current = true; setLeaving(true);
@@ -22,8 +23,12 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
   }, [onDone]);
   useEffect(() => {
     const ss = safe(() => window.sessionStorage);
-    if (!shouldPlayIntro(ss, section, reducedMotion())) { done.current = true; onDone?.(); return; }
-    markIntro(ss, section); setShow(true);
+    // started survives the double effect run of React strict mode, so the veil never sticks.
+    if (!started.current) {
+      if (!shouldPlayIntro(ss, section, reducedMotion())) { done.current = true; onDone?.(); return; }
+      markIntro(ss, section); started.current = true; setShow(true);
+    }
+    if (done.current) return;
     const t = setTimeout(leave, 2300);
     const k = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === "Escape") leave(); };
     window.addEventListener("keydown", k);
@@ -112,7 +117,7 @@ export function UnderlineTabs({ tabs, value, onChange, label }: { tabs: TabDef[]
     const t = tabs[(n + tabs.length) % tabs.length]; onChange(t.id); refs.current[t.id]?.focus();
   };
   return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap gap-[26px] border-b border-[#e3e3e3]">
+    <div role="tablist" aria-label={label} className="tabs-row flex gap-[26px] overflow-x-auto border-b border-[#e3e3e3] md:flex-wrap md:overflow-visible">
       {tabs.map((t, i) => (
         <button key={t.id} ref={(el) => { refs.current[t.id] = el; }} type="button" role="tab" aria-selected={value === t.id} tabIndex={value === t.id ? 0 : -1}
           className="tab" onClick={() => onChange(t.id)} onKeyDown={(e) => key(e, i)}>

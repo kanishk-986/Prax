@@ -16,12 +16,13 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 - Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths).
 - Campaign logic tests: `node scripts/test-campaigns.ts` (plan per objective, date slots, re-plan, time budget, warnings, halfway check, report).
 - Content Studio logic tests: `node scripts/test-content-studio.ts` (fold, formatter round trips, lists, Markdown, claims check, URL safety, AI reply parsing, point of view, newsletter dates, What works, carousel PDF).
+- Discovery Studio logic tests: `node scripts/test-discovery.ts` (seven-dimension scoring and bands, rules scorer, opportunities and deadlines, the crawl URL guard, CSV and Excel lists with hidden hyperlinks, page dates and list pages, AI search replies, topic merge, priority maths, weights total, Digest selection, the post a topic becomes, angles and Library sources).
 - Deploy: `npx vercel deploy --prod --yes`. Production deploys need Alok's explicit go-ahead each time. After every deploy, commit and push to GitHub.
 - After any change in `extension/`: bump `version` in `extension/manifest.json` and `LATEST_EXT` in `src/lib/bridge.ts`, then `npm run ext:zip` before deploying.
 
 ## Database changes
 
-Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/012_*.sql` (011 splits AI citations into Shashi as a person and Antier as a company, adds prompt audience and keywords, and adds `posts.channel`; 012 adds the Content Studio fields and also guards `posts.channel`). New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
+Local Postgres access does not work (direct host is IPv6-only, pooler rejects the password), so `scripts/migrate.mjs` is kept but unused. Apply SQL in the Supabase SQL editor in the browser. Files run in order: `db/schema.sql`, then `db/002_*.sql` to `db/013_*.sql` (011 splits AI citations into Shashi as a person and Antier as a company, adds prompt audience and keywords, and adds `posts.channel`; 012 adds the Content Studio fields and also guards `posts.channel`; 013 adds Discovery Studio and `posts.angle` and `posts.discovery`). New changes go in a new numbered file, written to be re-runnable (`if not exists`, `create or replace`).
 
 The extension never touches tables directly. It calls `/api/ext/[action]` with a per-browser token; the API calls `security definer` functions (`ext_*`) that check the token hash.
 

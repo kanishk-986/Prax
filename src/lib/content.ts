@@ -198,6 +198,30 @@ export function whatWorks(posts: ResultPost[]) {
   return { enough: true as const, have: done.length, byFormat: group((p) => p.format), byPillar: group((p) => p.pillar), byDay: group(day), bySlot: group(slot), byHook: group(hookLen) };
 }
 
+// ---------- the angle step (Q92) ----------
+export const ANGLE_KINDS = ["Contrarian", "GCC and India lens", "Operator view", "Numbers and prediction"] as const;
+/** Four suggested angles built from the topic, for every starting point. The AI can rewrite them; these work without a key. */
+export function suggestAngles(topic: string): { kind: string; text: string }[] {
+  const t = topic.trim().replace(/[.!?]+$/, "") ? `"${topic.trim().replace(/[.!?]+$/, "")}"` : "this";
+  return [
+    { kind: "Contrarian", text: `What most coverage of ${t} misses, and why it matters to a bank COO` },
+    { kind: "GCC and India lens", text: `What ${t} means for mid-size banks in the GCC and India` },
+    { kind: "Operator view", text: `How to actually build for ${t}: the controls and decisions that come first` },
+    { kind: "Numbers and prediction", text: `The numbers behind ${t}, and where they will be in 12 months` },
+  ];
+}
+/** A Discovery angle often starts with its kind ("How we see it: ..."); the step shows only the line. */
+export const angleLine = (a: string) => { const t = a.replace(/^(How we see it|Contrarian|GCC and India lens|Operator view|Numbers and prediction)\s*:\s*/i, "").trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+
+// ---------- where a post came from (Library Source filter, Q93) ----------
+export type PostSource = "discovery" | "citations" | "campaign" | "here";
+export function postSource(p: { source_kind?: string; topic?: string; campaign_id?: string | null }): PostSource {
+  if (p.source_kind === "discovery") return "discovery";
+  if (p.topic === "AI citations" || p.source_kind === "gap") return "citations";
+  if (p.campaign_id) return "campaign";
+  return "here";
+}
+
 // ---------- URL safety for /api/fetch-url ----------
 /** Only http and https, never LinkedIn (rule 1), never a bare IP in a private or local range. */
 export function urlProblem(raw: string): string | null {

@@ -320,10 +320,20 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     const chipNames = studio ? styles().map((x) => x.name) : CHIPS;
     bar.innerHTML = `<button type="button" class="prx-write"><span class="prx-star">✦</span> Write with Prax${vip ? ' <span class="prx-viptag">VIP</span>' : ""}</button>
       <div class="prx-chips">${chipNames.map((m) => `<button type="button" class="prx-chip" data-m="${esc(m)}">${esc(m)}</button>`).join("")}</div>
+      <button type="button" class="prx-chip prx-disc" data-disc="1" title="Send this post to Discovery Studio">Send to Discovery</button>
       <span class="prx-kbd">Alt+P</span>`;
-    bar.addEventListener("click", (e) => {
+    bar.addEventListener("click", async (e) => {
       const b = e.target.closest("button"); if (!b) return;
       e.preventDefault(); e.stopPropagation();
+      if (b.dataset.disc) {
+        // Only when the user presses it, and only the post already on screen. Nothing else is read.
+        const d = readPost(post, row);
+        if (!d.text) return toast("No post text found here.");
+        b.disabled = true;
+        try { await send({ type: "prax", action: "discovery", body: { url: d.url, text: d.text, author: d.author, author_url: d.authorUrl } }); b.textContent = "Sent to Discovery"; toast("Sent to Discovery Studio"); }
+        catch (err) { b.disabled = false; toast(err.message); }
+        return;
+      }
       openCommentPanel(post, row, bar, b.dataset.m || null);
     });
     row.insertAdjacentElement("afterend", bar);

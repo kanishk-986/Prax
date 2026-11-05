@@ -8,7 +8,7 @@ import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { humanScore } from "@/lib/studio";
 import { PILLARS } from "@/lib/campaigns";
-import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD } from "@/lib/content";
+import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS } from "@/lib/content";
 import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
 import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession } from "./shared";
 import { LinkedInPreview } from "./preview";
@@ -38,7 +38,9 @@ const QUICK: [string, string][] = [
   ["Add a question", "End with one specific question the reader can answer from judgment. If it already ends with one, sharpen it."],
   ["Stronger close", "Rewrite only the closing paragraph so it lands the point. Keep the rest."],
 ];
-const STEP_NAMES = (video: boolean) => ["Start", "Type", "Idea", "Hook", video ? "Script" : "Draft", video ? "Cover" : "Visual", "Plan"];
+// Q92: the Angle step sits after the idea and before the opening line, for every starting point.
+const STEP_NAMES = (video: boolean) => ["Start", "Type", "Idea", "Angle", "Hook", video ? "Script" : "Draft", video ? "Cover" : "Visual", "Plan"];
+const S = { start: 0, type: 1, idea: 2, angle: 3, hook: 4, draft: 5, visual: 6, plan: 7 } as const;
 const emptyScript = (): Script => ({ hook: "", beats: [{ say: "", show: "" }, { say: "", show: "" }, { say: "", show: "" }], close: "", caption: "", cover: "dark", captions: "bold" });
 
 export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPost }: {
@@ -60,6 +62,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [idea, setIdea] = useState<Idea | null>(null);
   const [ownIdea, setOwnIdea] = useState("");
+  const [angles, setAngles] = useState<{ kind: string; text: string }[]>([]);
+  const [angle, setAngle] = useState<number | "own">(0);
+  const [ownAngle, setOwnAngle] = useState("");
+  const [topic, setTopic] = useState<{ tag: string; title: string; line: string; sources: { via: string; pub: string; url: string }[] } | null>(null);
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [hook, setHook] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -97,7 +103,17 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     setSrc((seed.source_kind as SourceKind) || "idea"); setSrcText(seed.resource || seed.title); setIdea({ title: seed.title, why: "", pillar: seed.pillar, score: 0 });
     setPillar(seed.pillar || ""); setChannel(seed.channel === "company" ? "company" : "shashi"); setNewsletter(!!seed.newsletter);
     setText(seed.draft || ""); setHook(seed.hook || ""); if (seed.script && seed.script.beats) setScript({ ...emptyScript(), ...seed.script } as Script);
-    setStep(seed.draft ? 4 : 3); clearSeed();
+    // A Discovery or AI citations topic skips the starting point; Discovery's suggested angle comes preselected.
+    const fromDisc = seed.source_kind === "discovery", fromCit = seed.topic === "AI citations" || seed.source_kind === "gap";
+    const base = suggestAngles(seed.title);
+    const disc = seed.discovery?.angle || (fromDisc ? seed.angle ?? "" : "");
+    const list = disc ? [{ kind: "Suggested by Discovery Studio", text: angleLine(disc) }, ...base] : base;
+    setAngles(list);
+    const saved = seed.angle && !fromDisc ? list.findIndex((a) => a.text === seed.angle) : 0;
+    if (seed.angle && !fromDisc && saved < 0) { setAngle("own"); setOwnAngle(seed.angle); } else { setAngle(Math.max(0, saved)); setOwnAngle(""); }
+    setTopic(fromDisc ? { tag: `From Discovery Studio${seed.discovery?.rank ? ` · #${seed.discovery.rank} this week` : ""}${seed.discovery?.score != null ? ` · score ${seed.discovery.score}` : ""}`, title: seed.title, line: `${seed.discovery?.sources?.length ?? 0} sources loaded${seed.discovery?.campaign ? ` · campaign: ${seed.discovery.campaign}` : ""}`, sources: seed.discovery?.sources ?? [] }
+      : fromCit ? { tag: seed.channel === "company" ? "From AI citations · company content" : "From AI citations", title: seed.title, line: "The gap prompt and its rivals are loaded", sources: [] } : null);
+    setStep(seed.draft ? S.draft : S.angle); clearSeed();
   }, [seed, clearSeed]);
 
   useEffect(() => {
@@ -112,6 +128,12 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     supabase().from("prospects").select("company").eq("workspace_id", ws.id).neq("company", "").limit(500)
       .then(({ data }: { data: { company: string }[] | null }) => setCompanies([...new Set((data ?? []).map((x) => x.company))]));
   }, [ws.id]);
+
+  // Suggested angles follow the idea; a Discovery suggestion stays first.
+  useEffect(() => {
+    if (!idea?.title) return;
+    setAngles((cur) => { const disc = cur.filter((a) => a.kind === "Suggested by Discovery Studio"); return [...disc, ...suggestAngles(idea.title)]; });
+  }, [idea?.title]);
 
   // Topic gaps: ideas sent from AI citations, and pillars with nothing posted or planned in 30 days.
   const gaps = useMemo(() => {
@@ -132,6 +154,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (src === "draft") return `HIS ROUGH DRAFT, keep his words where they work:\n${srcText}`;
     return `HIS IDEA: ${srcText}`;
   };
+  const angleText = angle === "own" ? ownAngle.trim() : angles[angle]?.text ?? "";
+  const angleCtx = () => (angleText ? `\nANGLE (what Shashi says about it; every line follows it): ${angleText}` : "");
   const ctx = () => `${material()}\n\nFORMAT: ${type}.\n${povText(settings.pov)}\nContent pillars: ${PILLARS.join("; ")}.${channel === "company" ? "\nThis is for the Antier company page, written as the company, not as Shashi." : ""}`;
   const ai = async <T,>(label: string, user: string): Promise<T | null> => {
     setBusy(label); setErr("");
@@ -165,12 +189,18 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     const j = await ai<unknown>("ideas", `${ctx()}\n\nPropose 4 post ideas for this profile from the source above. Score each 0 to 100 on fit with his pillars, relevance to C-suite buyers at banks and fintechs in MENA and India, and freshness. Give one line on why, and the pillar.\nReturn only JSON: {"ideas": [{"title": "...", "why": "...", "pillar": "...", "score": 80}]}`);
     if (j) { const list = parseIdeas(j); setIdeas(list); if (list[0]) { setIdea(list[0]); setPillar(list[0].pillar); } }
   }
+  async function getAngles() {
+    const j = await ai<{ angles: { kind: string; text: string }[] }>("angles", `${ctx()}\n\nIDEA: ${idea?.title}\n\nWrite one angle of each kind for this post, one line each, under 22 words: ${ANGLE_KINDS.join("; ")}. Each says what Shashi argues, not what the news says. No dashes, no contractions.\nReturn only JSON: {"angles": [{"kind": "Contrarian", "text": "..."}]}`);
+    const isKind = (k: string) => (ANGLE_KINDS as readonly string[]).includes(k);
+    const got = (j?.angles ?? []).filter((a) => a?.text && isKind(a.kind)).map((a) => ({ kind: a.kind, text: String(a.text).trim() }));
+    if (got.length) setAngles((cur) => [...cur.filter((a) => !isKind(a.kind)), ...got]);
+  }
   async function getHooks() {
-    const j = await ai<unknown>("hooks", `${ctx()}\n\nIDEA: ${idea?.title}\n\nWrite 6 opening lines for this ${video ? "video, spoken in the first 3 seconds, at most 14 words" : `post, each under ${FOLD.mobile} characters so it fits the mobile fold`}. Mix contrarian, observation, question, list and story. No dashes, no contractions, no hashtags.\nReturn only JSON: {"hooks": [{"text": "...", "kind": "Contrarian"}]}`);
+    const j = await ai<unknown>("hooks", `${ctx()}${angleCtx()}\n\nIDEA: ${idea?.title}\n\nWrite 6 opening lines for this ${video ? "video, spoken in the first 3 seconds, at most 14 words" : `post, each under ${FOLD.mobile} characters so it fits the mobile fold`}. Mix contrarian, observation, question, list and story. No dashes, no contractions, no hashtags.\nReturn only JSON: {"hooks": [{"text": "...", "kind": "Contrarian"}]}`);
     if (j) { const list = parseHooks(j); setHooks(list); if (list[0]) setHook(list[0].text); }
   }
   async function getDrafts() {
-    const j = await ai<unknown>("drafts", `${ctx()}\n\nIDEA: ${idea?.title}\nOPENING LINE (start every draft with it exactly): ${hook}\n\nWrite 3 drafts of this ${type.toLowerCase()} with different angles${type === "Article" ? ", 800 to 1,200 words, with short headed sections" : type === "Poll" ? ": the poll question as the post, under 140 words, then on the last lines 2 to 4 options prefixed with 'Option: '" : ", 120 to 220 words"}. Use only facts given here. Rate each 1 to 10 for impact: how likely a senior reader is to comment.\nReturn only JSON: {"drafts": [{"angle": "...", "text": "...", "impact": 7}]}`);
+    const j = await ai<unknown>("drafts", `${ctx()}${angleCtx()}\n\nIDEA: ${idea?.title}\nOPENING LINE (start every draft with it exactly): ${hook}\n\nWrite 3 drafts of this ${type.toLowerCase()} with different angles${type === "Article" ? ", 800 to 1,200 words, with short headed sections" : type === "Poll" ? ": the poll question as the post, under 140 words, then on the last lines 2 to 4 options prefixed with 'Option: '" : ", 120 to 220 words"}. Use only facts given here. Rate each 1 to 10 for impact: how likely a senior reader is to comment.\nReturn only JSON: {"drafts": [{"angle": "...", "text": "...", "impact": 7}]}`);
     if (j) {
       const list = parseDrafts(j, hook); setDrafts(list); setDIdx(0);
       if (list[0]) { setText(list[0].text); if (type === "Poll") { const opts = list[0].text.split("\n").filter((l) => l.startsWith("Option: ")).map((l) => l.slice(8)); if (opts.length >= 2) setPollOpts(opts.slice(0, 4)); } }
@@ -182,7 +212,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (j?.text) { setText(j.text); toast(`${label} applied`, () => setText(prev)); }
   }
   async function getScript() {
-    const j = await ai<Partial<Script>>("script", `${ctx()}\n\nIDEA: ${idea?.title}\nFIRST LINE HE SAYS: ${hook}\n\nWrite a 45 to 75 second talking-head script: 3 to 5 beats, each with what he says (one or two sentences) and what shows on screen, a closing line, and a caption of 2 to 3 sentences for the post. No dashes, no contractions.\nReturn only JSON: {"beats": [{"say": "...", "show": "..."}], "close": "...", "caption": "..."}`);
+    const j = await ai<Partial<Script>>("script", `${ctx()}${angleCtx()}\n\nIDEA: ${idea?.title}\nFIRST LINE HE SAYS: ${hook}\n\nWrite a 45 to 75 second talking-head script: 3 to 5 beats, each with what he says (one or two sentences) and what shows on screen, a closing line, and a caption of 2 to 3 sentences for the post. No dashes, no contractions.\nReturn only JSON: {"beats": [{"say": "...", "show": "..."}], "close": "...", "caption": "..."}`);
     if (j) setScript((s) => ({ ...s, hook, beats: (j.beats ?? s.beats).slice(0, 5), close: j.close ?? s.close, caption: j.caption ?? s.caption }));
   }
   async function getSlides() {
@@ -211,9 +241,9 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   async function save(extra: Partial<Post> = {}): Promise<Post | null> {
     const row = {
       workspace_id: ws.id, title: idea?.title || hook || "Untitled post", format: type, pillar, draft: video ? [script.hook || hook, ...script.beats.map((b) => b.say), script.close].join("\n\n") : text,
-      channel, newsletter: type === "Article" && newsletter, source_kind: src, source_ref: src === "link" ? url : src === "pdf" ? pdf?.name ?? "" : "", hook, campaign_id: campaignId,
+      channel, newsletter: type === "Article" && newsletter, source_kind: live?.source_kind === "discovery" ? "discovery" : src, source_ref: src === "link" ? url : src === "pdf" ? pdf?.name ?? "" : live?.source_ref ?? "", hook, campaign_id: campaignId,
       script: video ? { ...script, hook: script.hook || hook } : {}, visual: { mode: type === "Carousel" ? "carousel" : image ? "image" : "", layout, prompt: imgPrompt, slides: type === "Carousel" ? slides : undefined, poll: type === "Poll" ? pollOpts.filter(Boolean) : undefined },
-      claims_ack: ack, ...extra,
+      claims_ack: ack, angle: angleText, ...extra,
     };
     const q = postId ? supabase().from("posts").update(row).eq("id", postId).select().single() : supabase().from("posts").insert({ ...row, status: "Drafting" }).select().single();
     const { data, error } = await q;
@@ -255,15 +285,16 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     window.open("https://www.linkedin.com/feed/", "_blank", "noopener");
     toast("Copied. LinkedIn is open in a new tab: paste, then press Post there.");
   }
-  const reset = () => { setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
+  const reset = () => { setAngles([]); setAngle(0); setOwnAngle(""); setTopic(null); setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
 
   const canNext = [
     src === "link" ? !!page : src === "pdf" ? !!pdf : src === "comment" ? !!commentPick : src === "gap" ? !!gapPick : srcText.trim().length > 3,
-    true, !!idea?.title, !!hook.trim(), video ? !!(script.caption || script.beats.some((b) => b.say)) : !!text.trim(), true, true,
+    true, !!idea?.title, !!angleText, !!hook.trim(), video ? !!(script.caption || script.beats.some((b) => b.say)) : !!text.trim(), true, true,
   ][step];
   const names = STEP_NAMES(video);
   const camp = campaigns.find((c) => c.id === campaignId);
   const pick = (on: boolean) => `pick card-hover flex flex-col items-start gap-1.5 rounded-2xl border bg-white p-3.5 text-left ${on ? "border-2 border-[#d64545]" : "border-line"}`;
+  const AngleBar = () => <div className="flex flex-wrap items-baseline gap-2 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Angle</b><span className="min-w-0 flex-1">{angleText || "Not chosen yet"}</span><button className="text-[12px] font-semibold underline underline-offset-[3px]" onClick={() => setStep(S.angle)}>Change</button></div>;
   const H = ({ t, sub, right }: { t: string; sub: string; right?: React.ReactNode }) => <div className="flex flex-wrap items-end justify-between gap-2"><div><h2 className="m-0 text-[19px] font-semibold">{t}</h2><p className="m-0 mt-1 text-[13.5px] text-muted">{sub}</p></div>{right}</div>;
 
   return (
@@ -340,7 +371,21 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               {idea && <span className="text-[13px]">Chosen: <b>{idea.title}</b></span>}</div>
           </div>}
 
-          {step === 3 && <div className="flex flex-col gap-3">
+          {step === S.angle && <div className="flex flex-col gap-3" data-tour="angles">
+            <H t="Choose the angle" sub="What Shashi will say about it. The angle steers the opening line and all three drafts." right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getAngles}>{busy === "angles" ? "Thinking" : "Sharpen with AI"}</button>} />
+            {topic && <div className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-white px-4 py-3.5"><span className="text-[12px] font-semibold text-[#d64545]">{topic.tag}</span><span className="text-[15px] font-[650] leading-snug">{topic.title}</span><span className="text-[12.5px] text-muted">{topic.line}</span></div>}
+            {angles.map((a, i) => <button key={a.kind + i} aria-pressed={angle === i} className={pick(angle === i)} onClick={() => setAngle(i)}>
+              <span className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
+              <span className="text-[14.5px] font-medium leading-snug">{a.text}</span></button>)}
+            <div className={pick(angle === "own") + " !gap-2"}>
+              <button className="flex items-center gap-2 text-[12px] font-semibold" onClick={() => setAngle("own")}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === "own" ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />Your own angle</button>
+              <label htmlFor="own-angle" className="sr-only">Your own angle</label>
+              <textarea id="own-angle" className="field text-[14px]" rows={2} value={ownAngle} onFocus={() => setAngle("own")} onChange={(e) => { setOwnAngle(e.target.value); setAngle("own"); }} placeholder="In one line: what Shashi wants to say about it" />
+            </div>
+          </div>}
+
+          {step === S.hook && <div className="flex flex-col gap-3">
+            <AngleBar />
             <H t={video ? "Choose the first line he says" : "Choose the opening line"} sub={video ? "The first 3 seconds decide whether people keep watching." : `Mobile shows about ${FOLD.mobile} characters before "see more". Each line is checked against it.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getHooks}><Sparkles size={14} /> {busy === "hooks" ? "Writing" : hooks.length ? "Write again" : "Write hooks"}</button>} />
             {hooks.map((h) => { const ok = video ? sayableIn3s(h.text) : hookFits(h.text, device); return (
               <button key={h.text} aria-pressed={hook === h.text} className={pick(hook === h.text) + " !flex-row !items-center !gap-3"} onClick={() => setHook(h.text)}>
@@ -351,7 +396,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             <label className="card flex flex-col gap-2 p-3.5"><span className="label">Or write the opening line</span><input className="field" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="One line that stands on its own" /></label>
           </div>}
 
-          {step === 4 && !video && <div className="flex flex-col gap-3">
+          {step === S.draft && !video && <div className="flex flex-col gap-3">
+            <AngleBar />
             <H t="Shape the draft" sub="Three drafts to choose from. Edit freely; every rule is checked as you type." right={<span className="text-[12.5px] text-muted">In Shashi&apos;s voice · <Link href={`/w/${ws.slug}/studio`} className="font-semibold text-ink underline underline-offset-2">Voice settings</Link></span>} />
             <div className="flex flex-wrap gap-2">
               {drafts.map((d, i) => <button key={i} aria-pressed={dIdx === i} className={pick(dIdx === i) + " !flex-1 !gap-1 !p-3"} onClick={() => { setDIdx(i); setText(d.text); }}><span className="text-[13px] font-semibold">Draft {"ABC"[i]} · {d.angle || "Angle"}</span><span className="num flex gap-3 text-[11.5px]"><span>Human {humanScore(d.text).score}</span><span style={{ color: d.impact >= 70 ? "#d64545" : "#5f5f5f" }}>Impact {d.impact || "–"}</span></span></button>)}
@@ -368,7 +414,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             {!!human.flags.length && <p className="m-0 text-[12.5px] text-[#9e1c1c]">House rules: {human.flags.join(" · ")}</p>}
           </div>}
 
-          {step === 4 && video && <div className="flex flex-col gap-3">
+          {step === S.draft && video && <div className="flex flex-col gap-3">
+            <AngleBar />
             <H t="Write the script" sub="What Shashi says, and what shows on screen while he says it." right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-[12px] text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
             <label className="flex flex-col gap-2 rounded-2xl bg-[#141414] p-4 text-white"><span className="text-[11.5px] font-semibold uppercase tracking-wider text-[#ff8a80]">Hook · first 3 seconds</span><input className="h-11 rounded-xl border border-white/20 bg-white/5 px-3 text-[15px] font-semibold text-white outline-none" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
             {script.beats.map((b, i) => (
@@ -386,7 +433,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             <label className="card flex flex-col gap-1.5 p-3.5"><span className="label">Caption posted with the video</span><textarea className="field min-h-[80px]" value={script.caption} onChange={(e) => setScript({ ...script, caption: e.target.value })} /></label>
           </div>}
 
-          {step === 5 && <div className="flex flex-col gap-3.5" data-tour="visual">
+          {step === S.visual && <div className="flex flex-col gap-3.5" data-tour="visual">
             {video ? <>
               <H t="Cover and captions" sub="The first frame people see in the feed, and how the words appear on screen." />
               <div className="grid grid-cols-3 gap-2.5">{[["dark", "#141414", "#fff"], ["red", "#d64545", "#fff"], ["white", "#fff", "#141414"]].map(([k, bg, fg]) => (
@@ -424,7 +471,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             </>}
           </div>}
 
-          {step === 6 && <div className="flex flex-col gap-3.5" data-tour="handoff">
+          {step === S.plan && <div className="flex flex-col gap-3.5" data-tour="handoff">
+            {angleText && <AngleBar />}
             <H t="Plan and hand off" sub="Prax never posts. It copies the post, opens LinkedIn and reminds Shashi at the planned time." right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
             {type === "Article" && settings.newsletter.name && <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-3 text-[13.5px]"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} />Part of the <b>{settings.newsletter.name}</b> newsletter</label>}
             {!!flags.length && <div className="rounded-xl border-2 border-[#d64545] bg-white p-4" data-tour="claims">
@@ -458,8 +506,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           <div className="flex items-center justify-between gap-2.5 pt-0.5">
             <button className="btn h-10 px-4" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
-            <span className="num text-[12px] text-faint">Step {step + 1} of 7</span>
-            <button className="btn btn-primary h-10 px-5" disabled={step === 6 || !canNext} onClick={() => { const n = step + 1; setStep(n); if (n === 2 && !ideas.length && editable) getIdeas(); if (n === 3 && !hooks.length && editable && idea) getHooks(); if (n === 4 && !video && !drafts.length && !text && editable && hook) getDrafts(); }}>{step === 6 ? "Done" : "Continue"}</button>
+            <span className="num text-[12px] text-faint">Step {step + 1} of {names.length}</span>
+            <button className="btn btn-primary h-10 px-5" disabled={step === S.plan || !canNext} onClick={() => { const n = step + 1; setStep(n); if (n === S.idea && !ideas.length && editable) getIdeas(); if (n === S.hook && !hooks.length && editable && idea) getHooks(); if (n === S.draft && !video && !drafts.length && !text && editable && hook) getDrafts(); }}>{step === S.plan ? "Done" : "Continue"}</button>
           </div>
         </section>
 
