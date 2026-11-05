@@ -13,6 +13,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 
 - `npm run dev` / `npm run build`. Lint and types: `npx tsc --noEmit && npx eslint src`.
 - Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score), `node scripts/test-citations.ts` (AI citations parsing, detection, maths, repeats, tone and facts, alerts, lift, share links) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
+- Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths).
 - Campaign logic tests: `node scripts/test-campaigns.ts` (plan per objective, date slots, re-plan, time budget, warnings, halfway check, report).
 - Deploy: `npx vercel deploy --prod --yes`. Production deploys need Alok's explicit go-ahead each time. After every deploy, commit and push to GitHub.
 - After any change in `extension/`: bump `version` in `extension/manifest.json` and `LATEST_EXT` in `src/lib/bridge.ts`, then `npm run ext:zip` before deploying.
@@ -28,7 +29,7 @@ The extension never touches tables directly. It calls `/api/ext/[action]` with a
 1. **No LinkedIn automation of any kind.** A colleague's account (Vikram) was restricted. The extension only reads the page the user is on, and only drafts suggestions. It never clicks, posts, comments, likes, connects, sends, scrolls or crawls. "Use" fills a box the user has already opened, otherwise it copies to the clipboard. Logging to Prax happens when the user presses LinkedIn's own Post or Send.
 2. **AI keys stay in the browser.** The user brings their own key (Claude, OpenAI, Grok, Gemini). The Prax Extension page hands it to the extension through `extension/bridge.js`; it is never sent to or stored on the Prax server.
 3. **Never enter passwords, API keys or tokens yourself**, and never ask for them in chat. Alok approves logins himself.
-4. **Design:** white and light red only, light mode only (tokens in `globals.css`, sidebar `.side-red`). Mature and calm, never AI-generic: press states, toasts with Undo, skeletons, no emoji, no gradients for decoration.
+4. **Design:** dark #141414, red #d64545, dark red #9e1c1c, white, and neutral greys for secondary text and borders. Light mode only (tokens in `globals.css`). The sidebar `.side-red` is dark; the active item is red with white text. Every section is built on the shell in `src/components/shell/` (see `docs/HANDOFF.md`): an entry moment once per section per session, a plain header with actions top right, underline tabs with counts, a Home tab of KPI tiles, Needs you, Start something and recent activity, and a guided tour from the Guide button. Mature and calm, never AI-generic: press states, focus rings, toasts with Undo bottom right, skeletons, no emoji, no gradients. No dashes or contractions in copy Shashi sees.
 5. **Comment voice** for Shashi lives in `workspaces.voice` (editable in Settings). Source of truth for the rules: `SHASHI_SEEDING_COMMENT_SYSTEM` in the Antier-and-Shashi-Marketing repo. 50 to 70 words, "I think" or "In my view", value layer not summary, no overlap with other comments, never against a regulator or government, no em dashes, no contractions.
 
 ## Working with Alok

@@ -5,8 +5,8 @@ import { Upload, Plus, X, Copy, Bookmark, Trash2, Download, ChevronDown, Wand2, 
 import { unzipSync, strFromU8 } from "fflate";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
-import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { useWorkspace, fmtDay, ymd, today, weekStart, addDays } from "@/lib/workspace";
+import { Section, KpiTiles, DarkCard, StartCards, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import {
@@ -14,15 +14,25 @@ import {
   type Studio, type Style, type Playbook, type Tuning, type Safety, type Fingerprint,
 } from "@/lib/studio";
 
-const TABS = ["Voice Lab", "Styles", "Playbooks", "Tuning", "Rewrite Lab", "Library", "Safety"] as const;
+const TABS = ["Home", "Voice Lab", "Styles", "Playbooks", "Tuning", "Rewrite Lab", "Library", "Safety"] as const;
 type Tab = (typeof TABS)[number];
 type Field = keyof Studio;
 type Save = <K extends Field>(field: K, value: Studio[K], msg?: string) => Promise<boolean>;
+const STUDIO_TOUR: TourStep[] = [
+  { target: "header", title: "How every draft is written", body: "Comment Studio holds the voice, the styles, the rules per kind of post and the limits. The extension reads them each time LinkedIn loads.", tab: "Home" },
+  { target: "kpis", title: "This week at a glance", body: "Drafts written this week, the average Human and Impact scores over 30 days, and how many drafts are saved.", tab: "Home" },
+  { target: "voice", title: "Voice status", body: "Whether a voice fingerprint is in use. Without one, drafts follow the comment rules only.", tab: "Home" },
+  { target: "styles", title: "Top styles", body: "The styles used most in the last 30 days. Turn styles on or off in the Styles tab.", tab: "Home" },
+  { target: "start", title: "Start something", body: "Build or refresh the voice, test a draft in Rewrite Lab, or open the saved drafts.", tab: "Home" },
+  { target: "header", title: "Everything else lives in the tabs", body: "Playbooks set rules per kind of post, Tuning sets length and scoring, Safety sets the limits. Press Guide to see this again.", tab: "Home" },
+];
+
+type U = { at: string; kind: string; style: string; human: number | null; impact: number | null };
 
 export default function StudioPage() {
   const { ws } = useWorkspace();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("Voice Lab");
+  const [tab, setTab] = useState<Tab>("Home");
   const [studio, setStudio] = useState<Studio | null>(null);
 
   useEffect(() => {
@@ -38,13 +48,52 @@ export default function StudioPage() {
     return true;
   }, [ws.id, toast]);
 
+  const d30 = addDays(today(), -30), wk = weekStart(today());
+  const use = useLive<U>("ext_usage", ws.id, { filter: (q) => q.gte("at", d30) });
+  const saved = useLive<{ id: string }>("saved_drafts", ws.id, {});
+  const stats = useMemo(() => {
+    const drafts = use.rows.filter((u) => ["comment", "reply", "note"].includes(u.kind));
+    const scored = use.rows.filter((u) => u.kind === "scores");
+    const avg = (k: "human" | "impact") => { const v = scored.map((x) => x[k]).filter((x): x is number => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    const styles = Object.entries(scored.reduce((m: Record<string, number>, x) => { if (x.style) m[x.style] = (m[x.style] ?? 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return { week: drafts.filter((u) => u.at.slice(0, 10) >= wk).length, human: avg("human"), impact: avg("impact"), styles };
+  }, [use.rows, wk]);
+  const fp = studio?.voice_profile;
+  const on = studio?.styles.filter((s) => s.on).length ?? 0;
+
   return (
-    <div className="mx-auto max-w-[1180px]">
-      <PageHeader title="Comment Studio" sub="How every Prax draft is written for this profile: the voice, the styles, the rules per kind of post, and the limits. The extension reads these when LinkedIn loads." />
-      <div className="mb-4 flex w-fit max-w-full flex-wrap rounded-lg border border-line-strong bg-surface p-0.5">
-        {TABS.map((t) => <button key={t} className={`btn h-7 border-0 ${tab === t ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setTab(t)}>{t}</button>)}
-      </div>
+    <Section id="studio" title="Comment Studio" status="How every Prax draft is written for this profile: the voice, the styles, the rules per kind of post, and the limits."
+      entryStatus={`${stats.week} drafts this week. ${fp?.summary ? "Voice fingerprint in use." : "No voice fingerprint yet."}`}
+      tabs={TABS.map((t) => ({ id: t, label: t, count: t === "Library" ? saved.rows.length : undefined }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={STUDIO_TOUR}>
       {!studio ? <div className="card h-64 animate-pulse bg-surface-2" />
+        : tab === "Home" ? (
+          <div className="flex flex-col gap-4">
+            <KpiTiles tour="kpis" items={[
+              { label: "Drafts this week", value: stats.week, sub: "written with the extension", tone: "dark" },
+              { label: "Average Human", value: stats.human ?? "None", sub: stats.human == null ? "no scored drafts yet" : "last 30 days" },
+              { label: "Average Impact", value: stats.impact ?? "None", sub: stats.impact == null ? "no scored drafts yet" : "last 30 days" },
+              { label: "Saved drafts", value: saved.rows.length, sub: "in the Library", onClick: () => setTab("Library") },
+            ]} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <DarkCard tour="voice" kicker="Voice">
+                <p className="text-[15px] leading-relaxed">{fp?.summary ? fp.summary : "No voice fingerprint yet. Drafts follow the comment rules in Settings until one is built in Voice Lab."}</p>
+                <p className="text-[12px] text-[#cfcfcf]">{on} of {studio.styles.length} styles on</p>
+              </DarkCard>
+              <section data-tour="styles" className="rounded-2xl border border-line bg-surface p-[18px]">
+                <div className="mb-3 font-semibold">Top styles, 30 days</div>
+                {stats.styles.length === 0 ? <p className="text-[13px] text-muted">No scored drafts yet. Styles show here once the extension has written a few.</p> : stats.styles.map(([k, n]) => (
+                  <div key={k} className="mb-2"><div className="flex justify-between text-[13px]"><span className="truncate">{k}</span><span className="num text-muted">{n}</span></div>
+                    <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((n / stats.styles[0][1]) * 100)}%` }} /></div></div>
+                ))}
+              </section>
+            </div>
+            <StartCards tour="start" items={[
+              { title: fp?.summary ? "Refresh the voice" : "Build the voice", sub: "Add posts and comments he wrote; Prax learns how he sounds.", icon: Wand2, primary: !fp?.summary, onClick: () => setTab("Voice Lab") },
+              { title: "Test a rewrite", sub: "Paste a draft and see it rewritten and scored.", icon: Star, onClick: () => setTab("Rewrite Lab") },
+              { title: "Open saved drafts", sub: "Copy or export what is kept in the Library.", icon: Bookmark, onClick: () => setTab("Library") },
+            ]} />
+          </div>
+        )
         : tab === "Voice Lab" ? <VoiceLab studio={studio} save={save} />
         : tab === "Styles" ? <Styles studio={studio} save={save} />
         : tab === "Playbooks" ? <Playbooks studio={studio} save={save} />
@@ -52,7 +101,7 @@ export default function StudioPage() {
         : tab === "Rewrite Lab" ? <RewriteLab studio={studio} />
         : tab === "Library" ? <Library />
         : <SafetyTab studio={studio} save={save} />}
-    </div>
+    </Section>
   );
 }
 

@@ -4,11 +4,19 @@ import { Plus, Search, LayoutGrid, List, Flame } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, STAGES, SEGMENTS, today, fmtDay } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { Section, KpiTiles, NeedsYou, type TourStep } from "@/components/shell";
 import { ProspectDrawer, type Prospect } from "@/components/prospect-drawer";
 import { useToast, haptic } from "@/components/toaster";
 
 const OPEN = STAGES.filter((s) => s !== "Parked");
+const PIPE_TOUR: TourStep[] = [
+  { target: "kpis", title: "Where the pipeline stands", body: "People in the pipeline, conversations, calls booked and follow-ups that are overdue.", tab: "home" },
+  { target: "stages", title: "Every stage", body: "How many people sit in each stage. Click a stage to see those people.", tab: "home" },
+  { target: "needs", title: "Needs you", body: "Overdue follow-ups first, then people warming up who are ready for a note.", tab: "home" },
+  { target: "rates", title: "Conversion between stages", body: "Where people stall: from warming to request, request to connection, connection to conversation, and conversation to call.", tab: "people" },
+  { target: "filters", title: "Find people", body: "Search, filter by segment or warm only, and switch between the board and the table.", tab: "people" },
+  { target: "board", title: "Open a person", body: "Click anyone to open their record, warm path and notes.", tab: "people" },
+];
 
 export default function Pipeline() {
   const { ws, can } = useWorkspace();
@@ -23,6 +31,9 @@ export default function Pipeline() {
   const [over, setOver] = useState<string | null>(null);
   const editable = can("editor");
   const t = today();
+  const [tab, setTab] = useState("home");
+  const [warmN, setWarmN] = useState<number | null>(null);
+  useEffect(() => { supabase().rpc("network_warm_count", { ws: ws.id }).then(({ data, error }: { data: unknown; error: unknown }) => setWarmN(error ? null : (data as number))); }, [ws.id, rows.length]);
   // Open a person's drawer when arriving from the command menu (?p=<id>).
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("p");
@@ -46,19 +57,54 @@ export default function Pipeline() {
     if (undo) toast(`${from.name} moved to ${stage}`, () => move(id, from.stage, false));
   }
 
+  const overdue = rows.filter((p) => p.next_date && p.next_date < t && !["Won", "Parked"].includes(p.stage)).sort((a, b) => (a.next_date! < b.next_date! ? -1 : 1));
+  const dueToday = rows.filter((p) => p.next_date === t && !["Won", "Parked"].includes(p.stage));
+  const warming = rows.filter((p) => p.stage === "Warming");
   return (
-    <div className="mx-auto max-w-[1400px]">
-      <PageHeader title="Pipeline" sub={`${rows.length} people · ${reached("In conversation")} in conversation · ${reached("Call booked")} calls`}>
-        {editable && <button className="btn btn-primary" onClick={() => setSel("new")}><Plus size={14} /> Add prospect</button>}
-      </PageHeader>
+    <Section id="pipeline" title="Pipeline" wide status={`${rows.length} people · ${reached("In conversation")} in conversation · ${reached("Call booked")} calls`}
+      entryStatus={`${overdue.length} follow-ups overdue, ${dueToday.length} due today. ${reached("In conversation")} people in conversation.`}
+      tabs={[{ id: "home", label: "Home" }, { id: "people", label: "People", count: rows.length || undefined }]} tab={tab} onTab={setTab} steps={PIPE_TOUR}
+      actions={editable ? <button className="btn btn-primary h-10 px-4" onClick={() => setSel("new")}><Plus size={14} /> Add prospect</button> : undefined}>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      {tab === "home" && (
+        <div className="flex flex-col gap-4">
+          <KpiTiles tour="kpis" items={[
+            { label: "In the pipeline", value: rows.filter((p) => p.stage !== "Parked").length, sub: "open and won", tone: "dark", onClick: () => setTab("people") },
+            { label: "In conversation", value: reached("In conversation"), sub: "or further" },
+            { label: "Calls booked", value: reached("Call booked"), sub: "or further" },
+            { label: "Overdue", value: overdue.length, sub: `${dueToday.length} due today`, tone: overdue.length ? "red" : undefined },
+          ]} />
+          <div className="flex flex-wrap gap-4">
+            <section data-tour="stages" className="min-w-0 flex-[3_1_520px] overflow-hidden rounded-2xl border border-line bg-surface">
+              <div className="flex items-baseline justify-between px-[18px] py-3.5"><span className="font-semibold">Stages</span><span className="text-[12px] text-muted">{warmN == null ? "Import the LinkedIn export in Network for warm paths" : `${warmN} open prospects have a warm path`}</span></div>
+              {[...OPEN, "Parked"].map((s) => { const n = rows.filter((p) => p.stage === s).length; const max = Math.max(1, ...[...OPEN, "Parked"].map((x) => rows.filter((p) => p.stage === x).length)); return (
+                <button key={s} type="button" onClick={() => { setTab("people"); setView("table"); setQ(""); }} className="grid w-full grid-cols-[150px_1fr_40px] items-center gap-3 border-t border-line px-[18px] py-2.5 text-left text-[13px] hover:bg-[#fafafa]">
+                  <span className="font-medium">{s}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: s === "Parked" ? "#8c8c8c" : s === "Won" || s === "Call booked" ? "#9e1c1c" : "#d64545" }} /></span>
+                  <span className="num text-right">{n}</span>
+                </button>
+              ); })}
+            </section>
+            <div className="min-w-0 flex-[2_1_320px]">
+              <NeedsYou tour="needs" empty="Nothing overdue and nobody waiting. People whose next step is due show here."
+                items={[
+                  ...overdue.slice(0, 6).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `Overdue since ${fmtDay(p.next_date!, { day: "numeric", month: "short" })} · ${p.next_action || p.stage}`, cta: "Open", onClick: () => setSel(p), tone: "red" as const })),
+                  ...dueToday.slice(0, 4).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `Due today · ${p.next_action || p.stage}`, cta: "Open", onClick: () => setSel(p), tone: "dark" as const })),
+                  ...warming.slice(0, 4).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: "Warming: comment twice, then send the note", cta: "Open", onClick: () => setSel(p), tone: "dim" as const })),
+                ]} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "people" && <>
+      <div data-tour="rates" className="mb-4 grid grid-cols-2 gap-3 rounded-2xl md:grid-cols-4">
         {[["Warmed → requested", conv("Warming", "Requested")], ["Requested → connected", conv("Requested", "Connected")], ["Connected → conversation", conv("Connected", "In conversation")], ["Conversation → call", conv("In conversation", "Call booked")]].map(([l, v]) => (
           <div key={l as string} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-[20px] font-semibold">{v}%</div></div>
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div data-tour="filters" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl">
         <div className="relative w-full max-w-[260px]"><Search size={14} className="absolute left-2.5 top-2.5 text-faint" /><input id="p-search" className="field pl-8" placeholder="Search people, companies" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <select id="p-seg" className="field w-auto" value={seg} onChange={(e) => setSeg(e.target.value)} aria-label="Segment">
           <option value="">All segments</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{k} · {v.label}</option>)}
@@ -73,7 +119,7 @@ export default function Pipeline() {
       {loading ? (
         <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-[320px] w-[260px] shrink-0 animate-pulse rounded-xl bg-surface-2" />)}</div>
       ) : view === "board" ? (
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div data-tour="board" className="flex gap-3 overflow-x-auto rounded-xl pb-4">
           {[...OPEN, "Parked"].map((s) => {
             const items = by(s);
             return (
@@ -92,7 +138,7 @@ export default function Pipeline() {
           })}
         </div>
       ) : (
-        <div className="card overflow-x-auto">
+        <div data-tour="board" className="card overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead><tr className="border-b border-line text-left">{["Name", "Company", "Segment", "Region", "Stage", "Next action", "Due"].map((h) => <th key={h} className="label px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
             <tbody>{list.map((p) => (
@@ -109,8 +155,9 @@ export default function Pipeline() {
           </table>
         </div>
       )}
+      </>}
       {sel && <ProspectDrawer p={sel === "new" ? null : sel} onClose={() => setSel(null)} />}
-    </div>
+    </Section>
   );
 }
 

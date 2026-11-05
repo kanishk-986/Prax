@@ -4,11 +4,20 @@ import { ChevronLeft, ChevronRight, Plus, Check, Link2, Trash2, PartyPopper } fr
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, fmtDay, isWeekday, KINDS } from "@/lib/workspace";
-import { PageHeader } from "@/components/page-header";
+import { Section, NeedsYou, KpiTiles, type TourStep, type Need } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 
 type Item = { id: string; day: string; kind: string; idx: number; title: string; done: boolean; link: string; note: string; done_at: string | null };
 const SECTIONS = [...KINDS, { key: "custom", label: "Other tasks", unit: "task", hint: "One-off tasks for this day" }];
+type Due = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null };
+const TODAY_TOUR: TourStep[] = [
+  { target: "progress", title: "The day at a glance", body: "Done against planned for the day, with each kind of work shown separately.", tab: "home" },
+  { target: "left", title: "What is left", body: "Items still open by kind. Click one to jump to the checklist.", tab: "home" },
+  { target: "needs", title: "Needs you", body: "Follow-ups whose date has arrived and one-off tasks, such as campaign comments or the weekly AI citation run.", tab: "home" },
+  { target: "days", title: "Other days", body: "Step back or forward a day. Each day keeps its own checklist.", tab: "home" },
+  { target: "checklist", title: "The checklist", body: "Tick items as you do them. J and K move, X ticks. Every tick updates the dashboard live.", tab: "list" },
+  { target: "custom", title: "One-off tasks", body: "Add anything that is not part of the daily quota.", tab: "list" },
+];
 
 export default function Today() {
   const { ws, can } = useWorkspace();
@@ -18,6 +27,8 @@ export default function Today() {
   const editable = can("editor");
   const [focus, setFocus] = useState(0);
   const [justDone, setJustDone] = useState<string | null>(null);
+  const [tab, setTab] = useState("home");
+  const due = useLive<Due>("prospects", ws.id, { filter: (q) => q.lte("next_date", today()).not("stage", "in", "(Won,Parked)").order("next_date") });
 
   // Generate the day's checklist from the profile's quotas the first time it is opened.
   useEffect(() => {
@@ -71,6 +82,7 @@ export default function Today() {
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
+      if (tab !== "list") return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.metaKey || e.ctrlKey) return;
       if (e.key === "j") setFocus((f) => Math.min(f + 1, ordered.length - 1));
@@ -79,7 +91,7 @@ export default function Today() {
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
-  }, [ordered, focus, toggle]);
+  }, [ordered, focus, toggle, tab]);
   useEffect(() => { list.current?.querySelector(`[data-i="${focus}"]`)?.scrollIntoView({ block: "nearest" }); }, [focus]);
 
   async function addCustom() {
@@ -87,17 +99,22 @@ export default function Today() {
     if (data) { setRows((rs) => [...rs, data as Item]); setTimeout(() => document.getElementById(`t-${(data as Item).id}`)?.focus(), 50); }
   }
 
+  const open = rows.filter((r) => !r.done);
+  const needs: Need[] = [
+    ...due.rows.slice(0, 5).map((p) => ({ title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `${p.stage} · ${p.next_action || "Next step due"} · ${fmtDay(p.next_date!, { day: "numeric", month: "short" })}`, cta: "Open", href: `/w/${ws.slug}/pipeline?p=${p.id}`, tone: "red" as const })),
+    ...open.filter((r) => r.kind === "custom" && r.title).slice(0, 5).map((r) => ({ title: r.title, sub: r.link ? "Has a link" : "One-off task", cta: r.link ? "Open" : "Go", ...(r.link ? { href: r.link } : { onClick: () => setTab("list") }), tone: "dark" as const })),
+  ];
   return (
-    <div className="mx-auto max-w-[920px]">
-      <PageHeader title="Today" sub={fmtDay(day, { weekday: "long", day: "numeric", month: "long" }) + (day === today() ? "" : " · not today")}>
-        <div className="flex items-center gap-1">
-          <button className="btn btn-ghost" aria-label="Previous day" onClick={() => setDay(addDays(day, -1))}><ChevronLeft size={16} /></button>
-          <button className="btn" onClick={() => setDay(today())} disabled={day === today()}>Today</button>
-          <button className="btn btn-ghost" aria-label="Next day" onClick={() => setDay(addDays(day, 1))}><ChevronRight size={16} /></button>
-        </div>
-      </PageHeader>
+    <Section id="today" title="Today" status={fmtDay(day, { weekday: "long", day: "numeric", month: "long" }) + (day === today() ? "" : " · not today")}
+      entryStatus={total ? `${total - done} of ${total} items left. ${due.rows.length} follow-ups due.` : `${due.rows.length} follow-ups due. The checklist builds from the daily quota when you open it.`}
+      tabs={[{ id: "home", label: "Home" }, { id: "list", label: "Checklist", count: total - done || undefined }]} tab={tab} onTab={setTab} steps={TODAY_TOUR}
+      actions={<div data-tour="days" className="flex items-center gap-1 rounded-xl">
+          <button className="btn btn-ghost h-10" aria-label="Previous day" onClick={() => setDay(addDays(day, -1))}><ChevronLeft size={16} /></button>
+          <button className="btn h-10" onClick={() => setDay(today())} disabled={day === today()}>Today</button>
+          <button className="btn btn-ghost h-10" aria-label="Next day" onClick={() => setDay(addDays(day, 1))}><ChevronRight size={16} /></button>
+        </div>}>
 
-      <section className={`card mb-5 overflow-hidden ${pct >= 100 ? "ring-1 ring-good/40" : ""}`}>
+      <section data-tour="progress" className={`card overflow-hidden ${pct >= 100 ? "ring-1 ring-good/40" : ""}`}>
         <div className="flex flex-wrap items-center gap-6 p-5">
           <Ring pct={pct} />
           <div className="min-w-[180px]">
@@ -115,16 +132,23 @@ export default function Today() {
         {pct >= 100 && <div className="anim-rise flex items-center gap-2 border-t border-line bg-good-soft px-5 py-2.5 text-[13px] text-good"><PartyPopper size={15} /> Quota met. Anything extra today is a bonus.</div>}
       </section>
 
-      {loading ? <Skeleton /> : total === 0 && !editable ? (
+      {tab === "home" && (
+        <div className="flex flex-col gap-4">
+          <KpiTiles tour="left" items={SECTIONS.filter((k) => rows.some((r) => r.kind === k.key)).slice(0, 4).map((k) => { const g = rows.filter((r) => r.kind === k.key); const d = g.filter((x) => x.done).length; return { label: k.label, value: g.length - d, of: "left", sub: `${d} of ${g.length} done`, onClick: () => setTab("list"), tone: d === g.length ? "dark" as const : undefined }; })} />
+          <NeedsYou tour="needs" items={needs} empty="Nothing waiting. Follow-ups with a due date and one-off tasks show here." />
+        </div>
+      )}
+
+      {tab === "list" && (loading ? <Skeleton /> : total === 0 && !editable ? (
         <div className="card p-10 text-center text-[13px] text-muted">No checklist for this day yet. An editor opens it to generate the quota.</div>
       ) : (
-        <div ref={list} className="flex flex-col gap-4">
+        <div ref={list} data-tour="checklist" className="flex flex-col gap-4 rounded-2xl">
           {SECTIONS.map((s) => {
             const g = rows.filter((r) => r.kind === s.key).sort((a, b) => a.idx - b.idx);
             if (!g.length && s.key !== "custom") return null;
             const d = g.filter((x) => x.done).length;
             return (
-              <section key={s.key} className="card overflow-hidden">
+              <section key={s.key} data-tour={s.key === "custom" ? "custom" : undefined} className="card overflow-hidden">
                 <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
                   <h2 className="flex items-center gap-2 text-[13px] font-semibold">{s.label}{g.length > 0 && <span className="num text-[12px] font-normal text-muted">{d}/{g.length}</span>}</h2>
                   {s.key === "custom" && editable ? <button className="btn btn-ghost h-7" onClick={addCustom}><Plus size={14} /> Add task</button> : <span className="hidden text-[12px] text-muted sm:block">{s.hint}</span>}
@@ -137,8 +161,8 @@ export default function Today() {
           })}
           <p className="pb-2 text-center text-[12px] text-faint">Keyboard: <span className="kbd">J</span> <span className="kbd">K</span> to move, <span className="kbd">X</span> to tick, <span className="kbd">⌘</span><span className="kbd">K</span> to jump anywhere</p>
         </div>
-      )}
-    </div>
+      ))}
+    </Section>
   );
 }
 
