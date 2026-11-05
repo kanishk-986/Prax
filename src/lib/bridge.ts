@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 // Talks to the Prax extension through its bridge script on this page. Settings sent here go
 // straight into the extension's storage in this browser; the AI key never reaches the server.
 export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[] };
-export const LATEST_EXT = "0.5.0";
+export const LATEST_EXT = "0.7.0";
 
 export function useExtension() {
   const [status, setStatus] = useState<ExtStatus | null>(null);

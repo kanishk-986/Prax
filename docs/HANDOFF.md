@@ -133,6 +133,16 @@ Order: Content Studio, then Pipeline, then AI citations, then restyle the remain
 - Today adds one "Run the AI citation questions" task when the last run is 7 days old or there has never been one.
 - `db/010_citations_more.sql` (after 009). Tone and wrong facts are stored on `citation_runs` when the check runs; alerts are computed on the page. Not verified against Supabase yet.
 
+## AI citations studio (6 Nov 2026, branch `citations-studio`)
+
+- Tabs now: Home, Gaps (red count), Prompts (was Questions), Answers, Sources, Competitors, Actions, Report, Company. Old `?tab=Overview` and `?tab=Questions` links still work. New UI lives in `citations/studio.tsx`; the logic is in `src/lib/citations.ts` (person and company section at the end).
+- `db/011_citations_person_company.sql` (after 010, re-runnable): `citation_entities.subject` (person or company) and `status` (active or suggested); splits the combined self row into Shashi Pal (person, LinkedIn domains) and Antier (company); `citation_questions.audience` (expert, vendor, leadership, backfilled from wording) and `keywords`; `citation_runs.person_review`; `posts.channel` (shashi or company) and `posts.citation_question_id`.
+- Shashi counts only by his full name with context in the same paragraph (Antier, his role, or a topic or keyword); otherwise "needs review" with Yes or Someone else in the evidence drawer. "Shashi" or "Pal" alone never counts. Peer experts and peer firms are separate pools; suggested rows track nothing until approved. No peer experts were pre-filled: Prax does not guess people.
+- Gaps send a posts row as an Idea (topic "AI citations", the prompt, rivals and AI tools in `resource`), channel `shashi` for expert and leadership prompts and `company` for vendor prompts; Undo deletes the row.
+- Report tab: one report per week that has runs, 12 numbered sections, PDF from `src/lib/pdf.ts` (hand-written, Helvetica), CSV, and the existing share link.
+- Keys: "Connect AI keys" writes OpenAI, Google, Anthropic and Perplexity keys to the extension through the bridge and never reads them back. Perplexity runs through Chat Completions with model `sonar` (docs.perplexity.ai API reference: `search_results`, `citations`, `usage`). Extension 0.7.0.
+- Entry screen once per browser session; guided tour of 15 steps starts once per user and reopens from Guide.
+
 ## Known gaps
 
 - Sign-in email uses Supabase's built-in sender, which is rate-limited. Fix: custom SMTP (Resend) set up by Alok.
