@@ -197,3 +197,10 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Q92: Write a post gets an Angle step after the idea and before the opening line, for every starting point: 4 suggested angles (contrarian, GCC and India lens, operator view, numbers and prediction) plus your own; it steers hooks and drafts, is saved on the post and shown in approval.
 - Q93: Library Source filter (Discovery Studio, AI citations, Campaign, Written here) and a "From Discovery · #rank · score" tag linking back to the topic.
 - Q94: Plan gets a To plan tray of undated Discovery and AI citations topics, dragged onto a day.
+
+## Dashboard and Today follow-ups, agreed (6 Nov 2026, Q95 to Q98; branch `dashboard-today`, do after Discovery Studio)
+
+- Q95: Today stays one agenda page, but it must feel interactive, catchy and premium: richer motion and interaction on the ring, groups and rows (hover detail, smooth done and skip transitions, focus states), still restrained and in palette.
+- Q96: a skip counts as cleared on Today and not as done on the Dashboard (keep as built).
+- Q97: once Discovery Studio exists, add it to "This week at a glance" (Digest ready, topics sent) and add new Discovery topics to Needs you now.
+- Q98: AI citations becomes a fifth headline tile: "Shashi named in X% of AI answers", with the week-on-week change.
