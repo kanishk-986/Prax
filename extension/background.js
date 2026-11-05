@@ -102,6 +102,48 @@ async function remember(items) {
   await chrome.storage.local.set({ history: [...items, ...h].slice(0, 200) });
 }
 
+// ---------- AI citations ----------
+// Asks one buyer question on one engine with web search on, using that provider's key in this browser.
+// Returns the raw provider response; the Prax page parses it. The question goes as written, with no system prompt.
+const SEARCH_MODEL = { claude: "claude-opus-5-5", openai: "gpt-5", gemini: "gemini-3.8-flash" };
+const keyFor = (c, p) => (c.keys && c.keys[p]) || ((c.provider || "claude") === p ? c.apiKey : "") || "";
+
+async function post(url, headers, body) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error?.message || `${url.split("/")[2]} returned ${r.status}`);
+  return j;
+}
+
+async function search({ engine, prompt, country }) {
+  if (engine === "perplexity") throw new Error("Perplexity is not connected yet.");
+  const c = await cfg();
+  const key = keyFor(c, engine);
+  if (!key) throw new Error(`No ${engine === "openai" ? "OpenAI" : engine === "gemini" ? "Gemini" : "Claude"} key in this browser. Add one on the Prax Extension page.`);
+  const model = (c.searchModels && c.searchModels[engine]) || SEARCH_MODEL[engine];
+  const loc = country ? { user_location: { type: "approximate", country } } : {};
+  const raws = [];
+  if (engine === "claude") {
+    const messages = [{ role: "user", content: prompt }];
+    for (let i = 0; i < 4; i++) {
+      // Server-side fallback lets Anthropic retry on another model if this one declines; the served model is recorded.
+      const j = await post("https://api.anthropic.com/v1/messages",
+        { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "anthropic-beta": "server-side-fallback-2026-07-01" },
+        { model, max_tokens: 8000, messages, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5, ...loc }], fallbacks: "default" });
+      raws.push(j);
+      if (j.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: j.content });
+    }
+  } else if (engine === "openai") {
+    raws.push(await post("https://api.openai.com/v1/responses", { authorization: "Bearer " + key }, { model, input: prompt, tools: [{ type: "web_search", ...loc }] }));
+  } else {
+    raws.push(await post("https://generativelanguage.googleapis.com/v1beta/interactions", { "x-goog-api-key": key, "Api-Revision": "2026-05-20" }, { model, input: prompt, tools: [{ type: "google_search" }] }));
+  }
+  const tok = (k) => raws.reduce((s, j) => s + (j.usage?.[k] ?? 0), 0);
+  prax("usage", { kind: "citation", provider: engine, model: raws[raws.length - 1]?.model || model, input_tokens: tok("input_tokens"), output_tokens: tok("output_tokens") }).catch(() => {});
+  return { engine, model, raws };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const jobs = {
     me: () => me(msg.fresh),
@@ -111,6 +153,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     remember: () => remember(msg.items || []),
     history: async () => (await chrome.storage.local.get("history")).history || [],
     clearHistory: async () => { await chrome.storage.local.remove("history"); return []; },
+    search: () => search(msg),
   };
   const job = jobs[msg.type];
   if (!job) return false;

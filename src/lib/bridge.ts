@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 // Talks to the Prax extension through its bridge script on this page. Settings sent here go
 // straight into the extension's storage in this browser; the AI key never reaches the server.
-export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean };
-export const LATEST_EXT = "0.4.0";
+export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[] };
+export const LATEST_EXT = "0.5.0";
 
 export function useExtension() {
   const [status, setStatus] = useState<ExtStatus | null>(null);
@@ -29,7 +29,7 @@ export function useExtension() {
 }
 
 /** AI work and local draft history from the extension. The AI key stays in the extension. */
-export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
     const on = (e: MessageEvent) => {

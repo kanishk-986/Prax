@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, ymd, addDays, today, fmtDay } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
-import { useExtension, LATEST_EXT } from "@/lib/bridge";
+import { useExtension, LATEST_EXT, type ExtStatus } from "@/lib/bridge";
 
 type Tok = { token_hash: string; label: string; created_at: string; last_used: string | null; user_id: string };
 type Use = { id: number; at: string; kind: string; provider: string; model: string; input_tokens: number; output_tokens: number; user_id: string };
@@ -153,6 +153,8 @@ export default function ExtensionPage() {
           </fieldset>
         </section>
 
+        <SearchKeys status={status} send={send} />
+
         <section className="card p-5">
           <h2 className="flex items-center gap-2 text-[14px] font-semibold"><Moon size={15} /> On LinkedIn</h2>
           <p className="mt-1 text-[12px] text-muted">Every post gets a Prax bar with the comment modes, or press Alt+P. Your own posts get Reply on comments, and the connection note box gets Prax note. Prax only suggests; you press Post or Send.</p>
@@ -183,5 +185,35 @@ export default function ExtensionPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Extra keys so AI citations can ask the same question on several engines. Kept in the extension only. */
+function SearchKeys({ status, send }: { status: ExtStatus | null; send: (type: string, data?: Record<string, unknown>) => Promise<ExtStatus> }) {
+  const toast = useToast();
+  const [keys, setKeys] = useState<Record<string, string>>({});
+  const rows = [["openai", "OpenAI (ChatGPT)"], ["gemini", "Gemini"], ["claude", "Claude"]] as const;
+  async function save(p: string) {
+    try { await send("settings", { searchKey: { provider: p, key: keys[p] } }); setKeys({ ...keys, [p]: "" }); haptic(); toast("Key saved in this browser"); } catch (e) { toast((e as Error).message); }
+  }
+  return (
+    <section id="search-keys" className="card p-5 md:col-span-2">
+      <h2 className="flex items-center gap-2 text-[14px] font-semibold"><KeyRound size={15} /> Keys for AI citations</h2>
+      <p className="mt-1 text-[12px] text-muted">AI citations asks each buyer question on every engine that has a key here, with web search on. The key above counts for its own provider. Keys stay in this browser and go only to the provider. Perplexity is not connected yet.</p>
+      <div className="mt-3 grid gap-2">
+        {rows.map(([p, name]) => {
+          const ready = !!status?.searchKeys?.[p], extra = !!status?.extraKeys?.includes(p);
+          return (
+            <div key={p} className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
+              <span className="w-36 text-[13px] font-medium">{name}</span>
+              <span className={`text-[12px] ${ready ? "text-good" : "text-muted"}`}>{ready ? (extra ? "Search key saved" : "Uses the key above") : "No key"}</span>
+              <input type="password" autoComplete="off" aria-label={`${name} key`} className="field ml-auto h-8 w-full sm:w-64" placeholder={extra ? "Saved. Type to replace." : "Paste a key"} value={keys[p] ?? ""} onChange={(e) => setKeys({ ...keys, [p]: e.target.value })} disabled={!status?.installed} />
+              <button className="btn h-8" disabled={!keys[p]} onClick={() => save(p)}>Save</button>
+              {extra && <button className="btn btn-ghost h-8 hover:text-bad" onClick={() => send("settings", { clearSearchKey: p }).then(() => toast("Key removed from this browser"))}>Remove</button>}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
