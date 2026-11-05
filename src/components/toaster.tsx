@@ -1,17 +1,18 @@
 "use client";
 import { createContext, useCallback, useContext, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Info } from "lucide-react";
 
-type Toast = { id: number; text: string; undo?: () => void };
-const C = createContext<(text: string, undo?: () => void) => void>(() => {});
+type Toast = { id: number; text: string; undo?: () => void; info?: boolean };
+type Push = (text: string, undo?: () => void, opts?: { info?: boolean }) => void;
+const C = createContext<Push>(() => {});
 
-/** Bottom-centre confirmations with an optional Undo, like Linear and Gmail. */
+/** Bottom-right confirmations with an optional Undo, like Linear and Gmail. info shows a neutral mark instead of a tick. */
 export function Toaster({ children }: { children: React.ReactNode }) {
   const [list, setList] = useState<Toast[]>([]);
-  const push = useCallback((text: string, undo?: () => void) => {
+  const push = useCallback<Push>((text, undo, opts) => {
     const id = Date.now() + Math.random();
-    setList((l) => [...l.slice(-2), { id, text, undo }]);
-    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), undo ? 5000 : 2400);
+    setList((l) => [...l.slice(-2), { id, text, undo, info: opts?.info }]);
+    setTimeout(() => setList((l) => l.filter((t) => t.id !== id)), undo ? 5000 : opts?.info ? 3200 : 2400);
   }, []);
   return (
     <C.Provider value={push}>
@@ -19,7 +20,8 @@ export function Toaster({ children }: { children: React.ReactNode }) {
       <div className="pointer-events-none fixed right-4 bottom-[max(20px,env(safe-area-inset-bottom))] z-[60] flex flex-col items-end gap-2 md:right-6" aria-live="polite">
         {list.map((t) => (
           <div key={t.id} className="anim-rise pointer-events-auto flex items-center gap-3 rounded-full bg-ink py-2 pl-3 pr-2 text-[13px] text-canvas shadow-[var(--shadow-lg)]">
-            <span className="grid h-5 w-5 place-items-center rounded-full bg-good text-white"><Check size={12} strokeWidth={3} /></span>
+            {t.info ? <span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-white"><Info size={12} strokeWidth={2.6} /></span>
+              : <span className="grid h-5 w-5 place-items-center rounded-full bg-good text-white"><Check size={12} strokeWidth={3} /></span>}
             <span>{t.text}</span>
             {t.undo ? (
               <button className="rounded-full px-2.5 py-1 font-semibold text-accent-soft hover:bg-white/10" onClick={() => { t.undo!(); setList((l) => l.filter((x) => x.id !== t.id)); }}>Undo</button>
