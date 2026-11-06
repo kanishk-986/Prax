@@ -359,12 +359,12 @@ export function recommend(runs: Run[], questions: Question[], self: Entity, riva
   for (const q of active) {
     const v = verdicts(q.id);
     if (!v.length) continue;
-    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: "No engine names Shashi or Antier for this question. A clear, specific article from him gives the AI something to cite.", question_ids: [q.id] });
-    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link an Antier page when he writes about ${q.topic || "this topic"}`, detail: `He is named for "${q.question}" but no answer links his sites. A post or article that links the right Antier page can turn mentions into links.`, question_ids: [q.id] });
+    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: "No AI tool names you for this prompt. A clear, specific article gives the AI something to cite.", question_ids: [q.id] });
+    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link a company page in posts about ${q.topic || "this topic"}`, detail: `Named for "${q.question}", but no answer links your sites. A post that links the right page can turn mentions into links.`, question_ids: [q.id] });
   }
   for (const g of citationGaps(runs, self, rivals).slice(0, 5)) {
     const qids = [...new Set(runs.filter((r) => r.sources.some((x) => x.domain === g.domain)).map((r) => r.question_id))];
-    out.push({ kind: "elsewhere", title: `Get mentioned on ${g.domain}`, detail: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. A guest piece, a quote or data there would help.`, question_ids: qids });
+    out.push({ kind: "elsewhere", title: `Get mentioned on ${g.domain}`, detail: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name you. A guest piece, a quote or data there would help.`, question_ids: qids });
   }
   return out;
 }
@@ -381,7 +381,7 @@ export function alerts(runs: Run[], questions: Question[], self: Entity, rivals:
     const nowS = shareOfVoice(runs, questions, self, self).named, prevS = shareOfVoice(prevRuns, questions, self, self).named;
     for (const c of rivals) {
       const nowC = shareOfVoice(runs, questions, c, self).named, prevC = shareOfVoice(prevRuns, questions, c, self).named;
-      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more questions than Antier (${nowC} against ${nowS})` });
+      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more prompts than you (${nowC} against ${nowS})` });
     }
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1));
