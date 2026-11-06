@@ -23,8 +23,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | D7 | Bug: on the demo profile the Network glance line says "No LinkedIn export uploaded yet" although the demo has network data (`page.tsx` line 204 reads the import count, the seed writes people) | 6 Nov 04:24 live check, "I'll fix it in the next pass" | Built not live (count used a missing id column; fixed) |
 | D8 | LinkedIn MCP button: first removed (Q118), then put back at the user's request as "LinkedIn MCP" with the LinkedIn mark, no "Coming soon"; a click explains it is on the way | Q118; 6 Nov 03:37 "can we put only LinkedIn MCP button" | Live |
 | D9 | LinkedIn MCP that actually connects (read LinkedIn data through an MCP) | 6 Nov 01:12 Q121 "i want to make cis mcp etc in the future" | Not started |
-| D10 | Weekly report: one page covering posts, replies, stage moves, AI citations movement and next week's plan (step 4 "weekly report"; Claude's "Weekly review" suggestion) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Not started |
-| D11 | Multi-profile overview: one screen comparing all profiles (step 4) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Not started |
+| D10 | Weekly report: one page covering posts, replies, stage moves, AI citations movement and next week's plan (step 4 "weekly report"; Claude's "Weekly review" suggestion) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Built not live (weekly report, on screen and PDF) |
+| D11 | Multi-profile overview: one screen comparing all profiles (step 4) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Built not live (profiles overview) |
 | D12 | One comment count shared by Dashboard and Engagement (`commentDays`) | Audit item 1 (Q117) | Live |
 
 ## Today
@@ -232,7 +232,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | X4 | Test the bar on real LinkedIn pages by hand and send screenshots (Claude may not automate LinkedIn) | Handoff "Not verified yet" | Needs user action |
 | X5 | Star icon on Extension in the sidebar | 5 Nov 23:38 | Live |
 | X6 | Provider logos and calm key rows in the side panel | 5 Nov 23:47 | Live |
-| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Not started |
+| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Built not live (Inbox; extension button in progress; needs db/026) |
 | X8 | Unlisted Chrome Web Store listing so the extension auto-updates | Handoff "Known gaps" (option) | Needs user action (developer account, 5 USD) |
 
 ## Login and profiles

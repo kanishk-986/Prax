@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Logo } from "@/components/logo";
 import { ProfileList, type ProfileRow } from "@/components/profile-list";
+import { loadWeek, citationScope } from "@/lib/weekly-data";
+import { overviewOf, type OverviewRow } from "@/lib/weekly";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const { deleted } = await searchParams;
@@ -13,6 +15,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   const { data: ws } = await sb.from("workspaces").select("*, members(role, user_id)").order("created_at");
   const list: ProfileRow[] = (ws ?? []).map((w) => ({ id: w.id, slug: w.slug, name: w.name, headline: w.headline ?? "", company: w.company ?? "", archived_at: w.archived_at ?? null, is_demo: !!w.is_demo,
     role: (w.members as { role: string; user_id: string }[]).find((m) => m.user_id === user.id)?.role ?? "viewer" }));
+  // D11: this week's numbers for each live profile, from the same aggregation as its weekly report.
+  const now = new Date(), t = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const stats: Record<string, OverviewRow | null> = Object.fromEntries(await Promise.all((ws ?? []).filter((w) => !w.archived_at).map(async (w) => {
+    try { return [w.id, overviewOf(await loadWeek(sb, w, t, t, await citationScope(sb, w.id, user.id)))] as const; }
+    catch { return [w.id, null] as const; }
+  })));
 
   return (
     <main className="mx-auto max-w-[880px] px-4 py-12">
@@ -26,7 +34,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
       <h1 className="mt-10 text-page font-semibold tracking-tight">Profiles</h1>
       <p className="mt-1 text-muted">Each profile is one LinkedIn presence with its own plan, pipeline and team.</p>
       {deleted && <p className="mt-4 rounded-xl border border-line-strong bg-white px-4 py-2.5 text-body" role="status">The profile and all its data were deleted.</p>}
-      <ProfileList list={list} />
+      <ProfileList list={list} stats={stats} />
     </main>
   );
 }

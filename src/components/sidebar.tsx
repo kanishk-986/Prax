@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, type LucideIcon } from "lucide-react";
+import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, Inbox, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
@@ -21,6 +21,7 @@ export type NavItem = { href: string; label: string; icon: LucideIcon; group: Na
 export const NAV: NavItem[] = [
   { href: "", label: "Dashboard", icon: LayoutDashboard, group: "do" },
   { href: "/today", label: "Today", icon: CheckSquare, group: "do" },
+  { href: "/inbox", label: "Inbox", icon: Inbox, group: "do" },
   { href: "/pipeline", label: "Pipeline", icon: Kanban, group: "do" },
   { href: "/studio-content", label: "Content Studio", icon: FileText, group: "create" },
   { href: "/studio", label: "Comment Studio", icon: PenLine, group: "create" },

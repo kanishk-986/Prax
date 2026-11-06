@@ -42,6 +42,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
         const n = (x: unknown) => { const v = parseCount(String(x ?? "")); return v == null ? null : Math.min(v, 2_000_000_000); };
         return json({ post: await rpc("ext_post_results", { p: { url: String(body.url ?? "").slice(0, 1000), impressions: n(body.impressions), reactions: n(body.reactions), comments: n(body.comments), reposts: n(body.reposts) } }) });
       }
+      // A LinkedIn message the user sent to the Inbox from a conversation they have open (user click only; db/026_step4.sql).
+      case "inbox": return json(await rpc("ext_inbox_add", { p: { name: String(body.name ?? "").slice(0, 200), company: String(body.company ?? "").slice(0, 200), url: String(body.url ?? "").slice(0, 500), thread_url: String(body.thread_url ?? "").slice(0, 500), text: String(body.text ?? "").slice(0, 4000), received_at: String(body.received_at ?? "").slice(0, 40) } }));
       case "snapshot":return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
       case "capture": {
         const me = await rpc("ext_me", {});
