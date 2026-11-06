@@ -2,7 +2,7 @@
 // Run: node scripts/test-network.ts [path/to/write/fake-export.zip]
 import { zipSync, strToU8 } from "fflate";
 import { writeFileSync } from "node:fs";
-import { readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normName, toDay, DEFAULT_SEGMENTS, defaultTopics, type Person, type SegRule, type TopicRule } from "../src/lib/network.ts";
+import { readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normName, toDay, DEFAULT_SEGMENTS, defaultTopics, mutualOf, mutualLine, targetNews, topicPeople, topicExplainPrompt, parseTopicExplain, type Person, type SegRule, type TopicRule } from "../src/lib/network.ts";
 
 // Fixtures: the first profile's own segment rules and pillar topics (db/016 writes them into its network_settings).
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
@@ -104,6 +104,43 @@ const w3 = warmPaths(rp, people, idx, []);
 eq("colleagues ranked by seniority", [w3.level, w3.colleagues.map((c) => c.name)], [3, ["Asha Rao", "Omar Haddad"]]);
 people.find((p) => p.key === "linkedin.com/in/kofriel")!.not_prospects = ["p1"];
 eq("'not them' hides the suggestion", warmPaths(kp, people, indexPeople(people), []).suggest.length, 0);
+
+// ---------- mutual connections and location read by the extension (N11, N12) ----------
+eq("no mutual line without a profile read", w3.mutual, undefined);
+const w4 = warmPaths({ ...rp, mutual_count: 14, mutual_names: ["Priya Nair", "Tom Becker"], profile_read_at: "2026-11-06T10:00:00Z" }, people, idx, []);
+eq("mutual connections on the prospect, level unchanged", [w4.mutual?.count, w4.level], [14, 3]);
+eq("the newest read wins", mutualOf({ mutual_count: 2, mutual_names: ["A", "B"], profile_read_at: "2026-11-01" }, { mutual_count: 5, mutual_names: [], profile_read_at: "2026-11-05" })?.count, 5);
+eq("mutual line with others", mutualLine({ count: 14, names: ["Priya Nair", "Tom Becker"], at: null }), "14 mutual connections, including Priya Nair and Tom Becker");
+eq("mutual line, all named", mutualLine({ count: 1, names: ["Kim Park"], at: null }), "1 mutual connection: Kim Park");
+eq("mutual line, count only", mutualLine({ count: 1204, names: [], at: null }), "1,204 mutual connections");
+const geo: SegRule[] = [{ seg: "D", companies: ["emirates nbd"], roles: [], places: ["dubai", "abu dhabi"] }, { seg: "C", companies: [], roles: ["partnerships"] }];
+eq("location rule puts a Dubai person in D", segmentFor("Northbank", "Treasurer", geo, new Map(), "Dubai, United Arab Emirates"), "D");
+eq("no location, no location match", segmentFor("Northbank", "Treasurer", geo, new Map()), "");
+eq("older rules without places still work", segmentFor("Acme", "Head of Partnerships", [{ seg: "C", companies: [], roles: ["partnerships"] }], new Map(), "Dubai"), "C");
+
+// ---------- target accounts in the news (DS16), same matching as db/024 ----------
+const nf = (id: string, title: string, orgs: string[] = [], extra = {}) => ({ id, url: `https://n.example/${id}`, title, orgs, status: "new", found_at: `2026-11-0${id.length}T00:00:00Z`, ...extra });
+const tp = [{ id: "a", name: "Omar", company: "Gulf Union Bank PJSC", stage: "Target" }, { id: "b", name: "Lena", company: "Northbank", stage: "Warming" }, { id: "c", name: "Pat", company: "Parkbank", stage: "Parked" }, { id: "d", name: "Al", company: "ABC", stage: "Target" }];
+const hits = (f: ReturnType<typeof nf>[]) => targetNews(f, tp).map((x) => `${x.finding.id}:${x.prospect.id}`);
+eq("organisation named, legal suffix ignored", hits([nf("1", "Pilots in the Gulf", ["Gulf Union Bank"])]), ["1:a"]);
+eq("company in the title, whole words only", hits([nf("2", "Why Northbank moved treasury"), nf("3", "Northbankers club")]), ["2:b"]);
+eq("Parked, short names in titles, dismissed and profiles are skipped", hits([nf("4", "Parkbank news", ["Parkbank"]), nf("5", "ABC of stablecoins"), nf("6", "Northbank", [], { status: "dismissed" }), nf("7", "Lena: CFO at Northbank", ["Northbank"], { found: { linkedin: { kind: "profile" } } })]), []);
+eq("short company names still match as an organisation", hits([nf("8", "A deal", ["ABC"])]), ["8:d"]);
+
+// ---------- Explain with AI on a topic (N10) ----------
+const tpeople = topicPeople({ name: "Stablecoins", words: ["stablecoin", "treasury"] }, [
+  { ...people[0], key: "k1", name: "Zed Treasurer", position: "Head of Treasury and Stablecoin", company: "X", is_connection: true },
+  { ...people[0], key: "k2", name: "Amy Ceo", position: "CEO", company: "Stablecoin Labs", is_connection: true },
+  { ...people[0], key: "k3", name: "No Match", position: "Designer", company: "Y", is_connection: true },
+  { ...people[0], key: "k4", name: "Not Connected", position: "Treasury", company: "Z", is_connection: false },
+]);
+eq("topic people: matches only, most matches first, connections only", tpeople.map((p) => p.name), ["Zed Treasurer", "Amy Ceo"]);
+eq("topic people: a topic with no words uses its name", topicPeople({ name: "Tokenisation", words: [] }, [{ ...people[0], key: "t", name: "Tia", position: "Tokenisation lead", company: "", is_connection: true }]).length, 1);
+const ask = topicExplainPrompt({ topic: "Stablecoins", words: ["stablecoin"], who: "Shashi Pal, COO at Antier", pillars: ["Stablecoins"], posts: [{ kind: "post", day: "2026-10-01", text: "On stablecoins" }], people: tpeople });
+eq("prompt numbers the people and asks for JSON", [/1\. Zed Treasurer/.test(ask), /Return only JSON/.test(ask)], [true, true]);
+const ex = parseTopicExplain({ meaning: "It matters.", next: "Call Zed.", talk: [{ n: 1, why: "Runs treasury." }, { n: 1, why: "again" }, { n: 9, why: "invented" }, { n: 2, why: "Builds it." }] }, tpeople);
+eq("explain keeps listed people once and drops invented ones", ex?.talk.map((t) => [t.name, t.why]), [["Zed Treasurer", "Runs treasury."], ["Amy Ceo", "Builds it."]]);
+eq("explain without meaning is rejected", parseTopicExplain({ talk: [] }, tpeople), null);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

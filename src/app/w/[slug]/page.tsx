@@ -72,6 +72,8 @@ export default function Dashboard() {
   const pipes = useLive<Pipeline>("pipelines", ws.id);
   const imports = useLive<{ export_date: string | null; created_at: string }>("network_imports", ws.id, { order: "created_at", asc: false, filter: (q) => q.limit(1) });
   const topics = useLive<{ id: string; title: string; rank: number | null; rising: boolean; sent_at: string | null }>("discovery_topics", ws.id, { filter: (q) => q.eq("week", wk) });
+  // Target accounts in the news (DS16, db/024): Discovery writes one note per finding on the matching prospect.
+  const news = useLive<{ id: string; ref_id: string; body: string; created_at: string }>("threads", ws.id, { order: "created_at", asc: false, filter: (q) => q.eq("ref_table", "prospects").eq("author_email", "Discovery Studio").gte("created_at", addDays(t, -14)).limit(20) });
 
   // Open prospects with a linked connection or a connection at their company (db/006_network.sql); null when there is no export.
   const [warm, setWarm] = useState<number | null>(null);
@@ -162,13 +164,14 @@ export default function Dashboard() {
     if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : `Waiting for ${first} to approve`, cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
     if (!week.today.total) list.push({ kind: "today", title: "Open today's plan", sub: "It builds from the daily quota", cta: "Start", href: `${base}/today`, tone: "dark" });
     else if (week.today.done < week.today.total) list.push({ kind: "today", title: `${week.today.total - week.today.done} of ${week.today.total} tasks left today`, sub: "Comments, posts, follow-ups and connections", cta: "Continue", href: `${base}/today`, tone: "dark" });
+    if (news.rows.length) { const n = new Set(news.rows.map((r) => r.ref_id)).size; list.push({ kind: "discovery", title: `${n} target ${n === 1 ? "account" : "accounts"} in the news`, sub: news.rows[0].body.replace(/^In the news:\s*/, "").split(", http")[0], cta: "Open", href: `${base}/pipeline?p=${news.rows[0].ref_id}`, tone: "dim" }); }
     if (disc.open.length) list.push({ kind: "discovery", title: `${disc.open.length} Digest ${disc.open.length === 1 ? "topic" : "topics"} not sent yet`, sub: `Top: ${disc.open[0].title}`, cta: "Review", href: `${base}/discovery?tab=digest`, tone: "dim" });
     if (cit.active && (cit.lastDays == null || cit.lastDays >= 7)) list.push({ kind: "citations", title: "Run the AI citation prompts", sub: cit.lastDays == null ? `${cit.active} prompts have never been run` : `Last run ${cit.lastDays} days ago`, cta: "Run", href: `${base}/citations`, tone: "dim" });
     if (pipe.warming) list.push({ kind: "warming", title: `${pipe.warming} ${pipe.warming === 1 ? "person" : "people"} warming up`, sub: "Two comments each, then a connection note", cta: "Open", href: `${base}/pipeline`, tone: "dim" });
     // A new profile (nobody in Pipeline) has the import as a set-up step already, so it is not listed twice.
     if (warm == null && prospects.rows.length) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
     return rankNeeds(list, t);
-  }, [pipe, content, week.today, disc, cit, warm, base, t, can, first, prospects.rows.length]);
+  }, [pipe, content, week.today, disc, news.rows, cit, warm, base, t, can, first, prospects.rows.length]);
   // A new profile has nobody in Pipeline yet: show what to do first instead of leaving a row of zeros to read.
   const setup = setupSteps({ base, first, hasStrategy: pillarsOf(ws).length > 0 && !!ws.voice?.trim(), extConnected: !!ext?.connected, people: people ?? 0, prospects: prospects.rows.length });
 

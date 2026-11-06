@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseProfile, auditProfile } from "@/lib/profile";
 import { mergeStudio, tuningRules, voiceText, LOCKED_RULES, LENGTHS } from "@/lib/studio";
 import { parseCount } from "@/lib/content";
+import { normUrl } from "@/lib/network";
 
 // The Chrome extension's only door into Prax. Every call carries the user's extension token,
 // which the database checks before it reads or writes anything.
@@ -36,7 +37,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       case "usage": return json({ ok: await rpc("ext_log_usage", { p: body }) });
       case "replies": return json({ marked: await rpc("ext_replies", { post_url: String(body.url ?? "") }) });
       // A post the user sent from the Prax bar while reading it: it lands in Discovery Studio as a finding.
-      case "discovery": return json({ id: await rpc("ext_discovery_add", { p: { url: String(body.url ?? "").slice(0, 1000), title: String(body.title ?? "").slice(0, 300), text: String(body.text ?? "").slice(0, 6000), author: String(body.author ?? "").slice(0, 200), author_url: String(body.author_url ?? "").slice(0, 500), company: String(body.company ?? "").slice(0, 200) } }) });
+      // kind "profile": a profile the user has open (DS15), with its headline and the activity shown on it.
+      case "discovery": return json({ id: await rpc("ext_discovery_add", { p: { kind: body.kind === "profile" ? "profile" : "post", url: String(body.url ?? "").slice(0, 1000), title: String(body.title ?? "").slice(0, 300), text: String(body.text ?? "").slice(0, 6000), author: String(body.author ?? "").slice(0, 200), author_url: String(body.author_url ?? "").slice(0, 500), company: String(body.company ?? "").slice(0, 200) } }) });
+      // Mutual connections and location read from a profile the user has open, when they press the Prax bar (N11, N12).
+      case "profile": {
+        const url = String(body.url ?? "").slice(0, 500);
+        if (!/^https:\/\/www\.linkedin\.com\/in\/[^/?#]+\/?$/.test(url)) return json({ error: "Open a LinkedIn profile page first." }, 400);
+        const count = Number.isInteger(body.mutual_count) && body.mutual_count >= 0 ? Math.min(body.mutual_count, 100000) : null;
+        const names = Array.isArray(body.mutual_names) ? body.mutual_names.map((x: unknown) => String(x).slice(0, 120)).filter(Boolean).slice(0, 10) : [];
+        return json(await rpc("ext_profile_save", { p: { url, key: normUrl(url), name: String(body.name ?? "").slice(0, 200), location: String(body.location ?? "").slice(0, 200), mutual_count: count, mutual_names: names } }));
+      }
       // A post's own analytics page, read while the user has it open (CS29, db/022). Matched by the activity id in the link.
       case "post_results": {
         const n = (x: unknown) => { const v = parseCount(String(x ?? "")); return v == null ? null : Math.min(v, 2_000_000_000); };

@@ -78,9 +78,9 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | N7 | Owner-only "Remove network data" | Q15 | Live |
 | N8 | Warm path line in the lead panel | Q9 | Live |
 | N9 | Keep Network as its own section (not folded into other pages) and make its use obvious | Q78 (first one); 5 Nov 20:30 "no take it like there only" | Live (fold-in declined by user) |
-| N10 | "Explain with AI" on topics | Q7 recommendation "can come with Content Studio in step 4" | Not started |
-| N11 | Mutual connections read by the extension from a profile the user opens (true 2nd-degree paths) | Q4 "waits for its own small release"; Handoff Network | Not started |
-| N12 | Location read from profile pages the user opens, for regional segments | Q11 "left for later" | Not started |
+| N10 | "Explain with AI" on topics | Q7 recommendation "can come with Content Studio in step 4" | Built not live (Explain with AI on topics) |
+| N11 | Mutual connections read by the extension from a profile the user opens (true 2nd-degree paths) | Q4 "waits for its own small release"; Handoff Network | Built not live (mutuals read on click; needs db/024) |
+| N12 | Location read from profile pages the user opens, for regional segments | Q11 "left for later" | Built not live (location read on click) |
 | N13 | Upload Shashi's real export | Handoff "Waiting for Shashi's real export" | Needs user action |
 
 ## Profile Studio
@@ -109,8 +109,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | DS12 | Digest = merged topics, priority score with editable weights, Crowded flag, top 10 plus Rising, Possible merge, top 3 cards plus ranked list | Q84 to Q90; 5 Nov 20:53 | Live |
 | DS13 | Tick topics and Send to Content Studio; angle decided there | Q91 | Live |
 | DS14 | Send to Discovery from LinkedIn (Prax bar on a post) | Q74 design ("Sources: LinkedIn") | Live |
-| DS15 | Send to Discovery from a LinkedIn profile you have opened | Q74 design "or on a profile you've opened" | Partly done: only from a post's Prax bar |
-| DS16 | News about a target company adds a note on that prospect in Pipeline | Q74 routing table | Partly done: target companies are detected and flagged in findings; nothing is written to the prospect |
+| DS15 | Send to Discovery from a LinkedIn profile you have opened | Q74 design "or on a profile you've opened" | Built not live (Send to Discovery from a profile) |
+| DS16 | News about a target company adds a note on that prospect in Pipeline | Q74 routing table | Built not live (note on prospect, Discovery and Dashboard Needs you) |
 | DS17 | First real Discovery run with AI keys (never run yet; the live check showed "nothing run yet") | 5 Nov 23:16 "needs a Discovery run first" | Needs user action |
 
 ## Content Studio
@@ -145,7 +145,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CS26 | Regulated-claims check before approval, with a tick to go on | Q64 | Live |
 | CS27 | LinkedIn newsletter track with its own cadence in Plan | Q66 | Live |
 | CS28 | What works: which types, pillars, days, times and hooks land, nudging plans; "not enough results yet" until there is data | Q67 | Built not live (fed by per-post results) |
-| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Built not live (results per post, manual entry; extension capture in progress) |
+| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Built not live (manual entry plus extension Read analytics; needs db/022) |
 | CS30 | Repurpose: turn one article or long post into several pieces (posts, carousel, comments), each landing as an Idea | Q42; Handoff "Repurpose (one piece into several)" | Built not live (Repurpose) |
 | CS31 | First comment and reply prep, only on posts that need them | Q44 "not all but relevant ones" | Built not live (first comment and reply prep) |
 | CS32 | Company channel: company-gap content flagged "Company content, not for the profile" | Q71 | Live |
@@ -232,7 +232,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | X4 | Test the bar on real LinkedIn pages by hand and send screenshots (Claude may not automate LinkedIn) | Handoff "Not verified yet" | Needs user action |
 | X5 | Star icon on Extension in the sidebar | 5 Nov 23:38 | Live |
 | X6 | Provider logos and calm key rows in the side panel | 5 Nov 23:47 | Live |
-| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Built not live (Inbox; extension button in progress; needs db/026) |
+| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Built not live (Inbox plus extension Send to Prax Inbox; needs db/026) |
 | X8 | Unlisted Chrome Web Store listing so the extension auto-updates | Handoff "Known gaps" (option) | Needs user action (developer account, 5 USD) |
 
 ## Login and profiles

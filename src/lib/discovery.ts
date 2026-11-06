@@ -663,7 +663,7 @@ export function replyDraft(o: { service: string; title: string; ask: string }, w
 // ---------- findings to Digest topics ----------
 export type Finding = {
   id: string; url: string; title: string; publisher: string; source_type: string; published: string | null; confirmed: boolean; excerpt: string;
-  found_by: string[]; found: { ai?: { engine?: string; pack?: string; query?: string }; crawl?: { list?: string; link?: string; name?: string }; linkedin?: { author?: string } };
+  found_by: string[]; found: { ai?: { engine?: string; pack?: string; query?: string }; crawl?: { list?: string; link?: string; name?: string }; linkedin?: { author?: string; author_url?: string; kind?: string } };
   scores: number[]; scored_by: string; pillar: string; geo: string; service: string; kind: string; why: string; angle: string; orgs: string[];
   target: boolean; competitor: string; opp: { kind?: string; due?: number | null; ask?: string }; gap: boolean; status: string; dismiss_reason: string;
   comment_target: boolean; post_id: string | null; found_at: string; run_id: string | null;
