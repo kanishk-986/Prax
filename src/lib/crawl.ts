@@ -3,7 +3,7 @@
 // Shared by /api/discovery/crawl (one link at a time, from the browser) and the Monday cron.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { safeFetch } from "@/lib/safe-fetch";
-import { gateOf, isListPage, articleLinks, newestArticles, pageDate, pageTitle, pagePublisher, urlDate, ruleScore, sourceTypeOf, opportunityOf } from "@/lib/discovery";
+import { gateOf, isListPage, articleLinks, newestArticles, pageDate, pageTitle, pagePublisher, urlDate, ruleScore, sourceTypeOf, opportunityOf, buyersOf } from "@/lib/discovery";
 import { readable } from "@/lib/content";
 
 export type ReadPage = { status: "read" | "gated" | "blocked" | "failed"; url: string; title: string; publisher: string; published: string | null; confirmed: boolean; excerpt: string; error: string; html?: string };
@@ -44,8 +44,10 @@ export async function saveCrawl(sb: SupabaseClient, link: LinkRow, listName: str
   const byUrl = new Map(((have ?? []) as { id: string; url: string; found_by: string[]; found: Record<string, unknown> }[]).map((h) => [h.url, h]));
   const crawl = { list: listName, link: link.url, name: link.name };
   // The rules score uses this profile's pillars (db/016); before 016 the column is missing and the built-in words apply.
-  const { data: ws } = await sb.from("workspaces").select("pillars").eq("id", link.workspace_id).maybeSingle();
+  const { data: ws } = await sb.from("workspaces").select("*").eq("id", link.workspace_id).maybeSingle();
   const pillars = Array.isArray(ws?.pillars) ? (ws.pillars as string[]) : undefined;
+  // Buyers: the Strategy's weighted Audience segments (db/021), so buyer fit follows who the profile targets.
+  const buyers = buyersOf((ws?.segments ?? {}) as Record<string, string>, (ws?.segment_weights ?? {}) as Record<string, number>);
   let added = 0;
   for (const a of res.articles) {
     const old = byUrl.get(a.url);
@@ -53,7 +55,7 @@ export async function saveCrawl(sb: SupabaseClient, link: LinkRow, listName: str
       if (!old.found_by.includes("crawl")) await sb.from("discovery_findings").update({ found_by: [...old.found_by, "crawl"], found: { ...old.found, crawl } }).eq("id", old.id);
       continue;
     }
-    const st = sourceTypeOf(a.url), rs = ruleScore({ ...a, source_type: st }, todayYmd, pillars), opp = opportunityOf(a.title, a.excerpt, todayYmd);
+    const st = sourceTypeOf(a.url), rs = ruleScore({ ...a, source_type: st }, todayYmd, pillars, buyers), opp = opportunityOf(a.title, a.excerpt, todayYmd);
     const { error } = await sb.from("discovery_findings").insert({
       workspace_id: link.workspace_id, run_id: runId, url: a.url, title: a.title.slice(0, 300) || a.url, publisher: a.publisher || link.name, source_type: st,
       published: a.published, confirmed: a.confirmed, excerpt: a.excerpt, found_by: ["crawl"], found: { crawl }, scores: rs.scores, scored_by: "rules",

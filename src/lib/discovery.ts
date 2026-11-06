@@ -79,6 +79,15 @@ const OPERATOR = ["reconciliation", "settlement", "custody", "controls", "produc
 export const EVENT_WORDS = ["launch", "pilot", "partnership", "acquisition", "licence granted", "consultation", "goes live"];
 
 const hits = (text: string, words: string[]) => words.reduce((n, w) => n + (text.includes(w) ? 1 : 0), 0);
+const BUYER_STOP = new Set(["and", "the", "for", "with", "other", "core", "second", "priority", "region", "growth", "voices", "buyers", "institutions"]);
+/** Words that mark a buyer from the profile's weighted Audience segments ("Fintech & payments" gives fintech, payments). */
+export function buyerWords(names: string[] = []) {
+  return [...new Set(names.flatMap((n) => n.toLowerCase().split(/[^a-z0-9]+/)).filter((w) => w.length > 3 && !BUYER_STOP.has(w)))];
+}
+/** The weighted Audience segment names, heaviest first (Strategy, workspaces.segments and segment_weights, db/021). */
+export function buyersOf(segments: Record<string, string> = {}, weights: Record<string, number> = {}) {
+  return Object.entries(weights).filter(([k, w]) => w > 0 && segments[k]?.trim()).sort((a, b) => b[1] - a[1]).map(([k]) => segments[k].trim());
+}
 const best = (text: string, map: Record<string, string[]>) => {
   let top = "", n = 0;
   for (const [k, ws] of Object.entries(map)) { const h = hits(text, ws); if (h > n) { top = k; n = h; } }
@@ -132,10 +141,11 @@ export function pillarWords(pillars?: string[]) {
 }
 /** True when the profile uses the built-in pillars, so the built-in services and regions apply too. */
 export const builtInVocabulary = (pillars?: string[]) => !pillars || pillars.some((p) => p in PILLAR_WORDS);
-export function ruleScore(a: Article, todayYmd: string, pillars?: string[]): RuleScore {
+/** buyers: the weighted Audience segment names (buyersOf); their words also count as a buyer. */
+export function ruleScore(a: Article, todayYmd: string, pillars?: string[], buyers?: string[]): RuleScore {
   const text = ` ${a.title} ${a.excerpt ?? ""} `.toLowerCase().replace(/\s+/g, " ");
   const st = a.source_type || sourceTypeOf(a.url);
-  const buyer = hits(text, BUYER) > 0, decision = hits(text, DECISION) > 0;
+  const buyer = hits(text, BUYER) > 0 || hits(text, buyerWords(buyers)) > 0, decision = hits(text, DECISION) > 0;
   const vocab = builtInVocabulary(pillars);
   const pil = best(text, pillarWords(pillars)), svc = vocab ? best(text, SERVICE_WORDS) : { top: "", n: 0 };
   const geoScore = !vocab ? 3 : hits(text, MENA) ? 5 : hits(text, INDIA) ? 5 : hits(text, EM) ? 3 : hits(text, WEST) ? 2 : 1;
@@ -516,10 +526,10 @@ export function parseSearchItems(answer: string, sources: CitedSource[]): { retu
 // ---------- the AI check of scores ----------
 export type AiScore = { scores: number[]; pillar: string; geo: string; service: string; kind: string; why: string; angle: string; orgs: string[] };
 /** who: whoLine of the profile ("Name, Role at Company"); geos: the geography order from Criteria, first is highest. */
-export function scorePrompt(items: { id: string; title: string; publisher: string; date: string; excerpt: string }[], pillars: string[], who: string, geos: string[]) {
+export function scorePrompt(items: { id: string; title: string; publisher: string; date: string; excerpt: string }[], pillars: string[], who: string, geos: string[], buyers: string[] = []) {
   const vocab = builtInVocabulary(pillars);
   return `Score each item for ${who}.
-Score 0 to 5 on: buyer (one of their buyers now faces a decision), pillar (fits one of: ${pillars.join("; ") || "their topics"}), geo (${geos.length ? `${geos.join(", then ")}, in that order, the first highest` : "any region scores 3"}), service (${vocab ? `matches a service: ${SERVICES.join(", ")}` : "matches what their company offers"}), freshness (72 hours 5, 7 days 4), evidence (primary or two independent sources 5, a press release alone 2), angle (they can speak about it from their own experience).
+Score 0 to 5 on: buyer (one of their buyers${buyers.length ? `, ${buyers.join(", ")} in that order of weight,` : ""} now faces a decision), pillar (fits one of: ${pillars.join("; ") || "their topics"}), geo (${geos.length ? `${geos.join(", then ")}, in that order, the first highest` : "any region scores 3"}), service (${vocab ? `matches a service: ${SERVICES.join(", ")}` : "matches what their company offers"}), freshness (72 hours 5, 7 days 4), evidence (primary or two independent sources 5, a press release alone 2), angle (they can speak about it from their own experience).
 Challenge each one: an old story resurfacing, a vendor claim or a single weak source scores low.
 For each give the pillar, geo (${geos.join(", ") || "the region named"}), service, kind (Fact, Analysis, Signal or Speculation), why it matters to their buyers in one sentence, a suggested angle in one line, and the organisations named. No dashes, no contractions.
 ITEMS:
@@ -584,7 +594,8 @@ export function clusterStories<T extends Mergeable>(items: T[], kept: Set<string
 }
 
 // ---------- topic priority (Q85) ----------
-export type TopicFacts = { ai: number; crawl: number; li: number; pubs: number; grow: number; quality: number; fit: number; gap: boolean; warm: number; due: number | null; posted: boolean; crowded: boolean };
+/** lift and liftBy: points a strategy rule adds ("Raise Discovery and warm priority" on a lead at a named company). */
+export type TopicFacts = { ai: number; crawl: number; li: number; pubs: number; grow: number; quality: number; fit: number; gap: boolean; warm: number; due: number | null; posted: boolean; crowded: boolean; lift?: number; liftBy?: string };
 export const sourcesOf = (t: Pick<TopicFacts, "ai" | "crawl" | "li">) => t.ai + t.crawl + t.li;
 /** Each factor 0 to 1, in the order of PRIORITY_FACTORS. */
 export function priorityParts(t: TopicFacts): number[] {
@@ -607,7 +618,7 @@ export function priorityMinus(t: Pick<TopicFacts, "posted" | "crowded">, pen = D
 }
 export function priority(t: TopicFacts, w = DEFAULT_PRIORITY, pen = DEFAULT_PENALTIES) {
   const base = priorityParts(t).reduce((a, v, i) => a + v * (w[i] ?? 0), 0);
-  return Math.max(0, Math.min(100, Math.round(base + priorityMinus(t, pen).reduce((a, x) => a + x[1], 0))));
+  return Math.max(0, Math.min(100, Math.round(base + (t.lift ?? 0) + priorityMinus(t, pen).reduce((a, x) => a + x[1], 0))));
 }
 /** Crowded: many LinkedIn voices or more than 15 publishers on it already. The topic stays, marked for a new angle. */
 export const crowdedOf = (t: Pick<TopicFacts, "li" | "pubs">) => t.li >= 3 || t.pubs >= 15;
@@ -662,7 +673,9 @@ export type Topic = TopicFacts & {
   key: string; title: string; ids: string[]; pillar: string; service: string; angle: string; why: string; move: "Post" | "Comment" | "Watch";
   competitor: string; sources: TopicSource[]; possibleWith?: string;
 };
-export type DigestCtx = { weights: number[]; bands: Bands; today: string; warm: (orgs: string[]) => number; posts: { title: string; status: string; publish_date: string | null }[] };
+export type DigestCtx = { weights: number[]; bands: Bands; today: string; warm: (orgs: string[]) => number; posts: { title: string; status: string; publish_date: string | null }[];
+  /** The strategy's raise rule for the organisations named, if any: its name and the points it adds. */
+  raise?: (orgs: string[]) => { rule: string; points: number } | null };
 const viaOf = (f: Finding): TopicSource["via"] => (f.found_by.includes("ai") ? "AI" : f.found_by.includes("crawl") ? "Crawl" : "LinkedIn");
 export function buildTopic(members: Finding[], c: DigestCtx): Topic {
   const ms = [...members].sort((a, b) => totalScore(b.scores, c.weights) - totalScore(a.scores, c.weights));
@@ -678,6 +691,8 @@ export function buildTopic(members: Finding[], c: DigestCtx): Topic {
     due: dues.length ? Math.min(...dues) : null, posted: postedRecently(lead.title, c.posts, c.today), crowded: false,
   };
   facts.crowded = crowdedOf(facts);
+  const up = c.raise?.([...new Set(ms.flatMap((m) => m.orgs))]);
+  if (up) { facts.lift = up.points; facts.liftBy = up.rule; }
   return {
     ...facts, key: lead.url, title: lead.title, ids: ms.map((m) => m.id), pillar: lead.pillar, service: lead.service || ms.find((m) => m.service)?.service || "",
     angle: lead.angle, why: lead.why, move: band === "Post-worthy" ? "Post" : band === "Comment-worthy" ? "Comment" : "Watch",

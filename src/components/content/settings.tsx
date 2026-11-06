@@ -8,7 +8,8 @@ import { type Pov, type Newsletter, mergePov, DEFAULT_NEWSLETTER, nextIssue } fr
 import { Modal } from "./shared";
 import { firstNameOf } from "@/lib/persona";
 
-export type ContentSettings = { pov: Pov; newsletter: Newsletter };
+/** plan: the Strategy Content system node (db/021): posts a week, days and formats. New campaigns start from it. */
+export type ContentSettings = { pov: Pov; newsletter: Newsletter; plan?: { ppw?: number; days?: number[]; formats?: string[] } };
 
 /** The profile's point-of-view bank and newsletter, kept in content_settings. */
 export function useContentSettings() {
@@ -16,13 +17,14 @@ export function useContentSettings() {
   const [s, setS] = useState<ContentSettings>({ pov: mergePov(null), newsletter: DEFAULT_NEWSLETTER });
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    supabase().from("content_settings").select("pov,newsletter").eq("workspace_id", ws.id).maybeSingle()
-      .then(({ data }: { data: { pov: Partial<Pov>; newsletter: Partial<Newsletter> } | null }) => {
-        setS({ pov: mergePov(data?.pov), newsletter: { ...DEFAULT_NEWSLETTER, ...(data?.newsletter ?? {}) } }); setReady(true);
+    // select * so the page keeps working before db/021 adds plan.
+    supabase().from("content_settings").select("*").eq("workspace_id", ws.id).maybeSingle()
+      .then(({ data }: { data: { pov: Partial<Pov>; newsletter: Partial<Newsletter>; plan?: ContentSettings["plan"] } | null }) => {
+        setS({ pov: mergePov(data?.pov), newsletter: { ...DEFAULT_NEWSLETTER, ...(data?.newsletter ?? {}) }, plan: data?.plan ?? {} }); setReady(true);
       });
   }, [ws.id]);
   const save = useCallback(async (next: ContentSettings) => {
-    const { error } = await supabase().from("content_settings").upsert({ workspace_id: ws.id, pov: next.pov, newsletter: next.newsletter, updated_at: new Date().toISOString() });
+    const { error } = await supabase().from("content_settings").upsert({ workspace_id: ws.id, pov: next.pov, newsletter: next.newsletter, updated_at: new Date().toISOString() }); // plan is left as it is
     if (!error) setS(next);
     return error?.message ?? null;
   }, [ws.id]);

@@ -207,9 +207,9 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 
 | ID | Item, in plain English | Source | Status |
 |---|---|---|---|
-| S1 | Strategy as an open canvas like n8n or WorksBuddy: dotted wires, nodes showing only their name, view, edit and delete, custom nodes and flows | Q108; 5 Nov 23:38; 6 Nov 04:42 (screenshot) | In progress (another agent; today the page is still the old record list) |
-| S2 | Strategy drives the product: each node maps to real settings (Today quotas, post mix and pillars, target segments, Comment Studio rules) and shows what it affects | Q109 step 1 | In progress |
-| S3 | If/else rules engine applied across Today, Pipeline and Content Studio | Q109 step 2; Q108 | In progress |
+| S1 | Strategy as an open canvas like n8n or WorksBuddy: dotted wires, nodes showing only their name, view, edit and delete, custom nodes and flows | Q108; 5 Nov 23:38; 6 Nov 04:42 (screenshot) | Built not live (workflow canvas; needs db/021) |
+| S2 | Strategy drives the product: each node maps to real settings (Today quotas, post mix and pillars, target segments, Comment Studio rules) and shows what it affects | Q109 step 1 | Built not live (nodes write the real settings) |
+| S3 | If/else rules engine applied across Today, Pipeline and Content Studio | Q109 step 2; Q108 | Built not live (if/else rules in Today, Pipeline, Content Studio, Discovery) |
 | S4 | "Who does what" sections hidden from viewers and commenters | Audit item 10 | Live |
 | S5 | Merge Strategy and Notes into one Playbook | Step 4 list; Handoff "Next" item 3 | Not started (may be overtaken by S1) |
 

@@ -18,6 +18,8 @@ import { useCitationProfile } from "@/lib/citation-profile";
 import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession } from "./shared";
 import { LinkedInPreview } from "./preview";
 import type { ContentSettings } from "./settings";
+import { useActiveStrategy } from "@/components/strategy/data";
+import { preferredAngle } from "@/lib/strategy";
 
 type SourceKind = "idea" | "link" | "pdf" | "draft" | "comment" | "gap" | "repurpose";
 type TypeKey = "Text post" | "Image post" | "Carousel" | "Video" | "Poll" | "Article";
@@ -62,6 +64,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const { scope: citScope } = useCitationProfile();
   // Who the posts are for, from the profile; neutral wording when a field is missing.
   const first = firstNameOf(ws), company = companyOf(ws), region = regionText(ws);
+  // The active strategy's angle action (Q109) comes first in the angle step, after a Discovery suggestion.
+  const strat = useActiveStrategy();
+  const prefer = useMemo(() => preferredAngle(strat.nodes, today()), [strat.nodes]);
+  const preferred = useMemo(() => (prefer ? [{ kind: `From strategy: ${prefer.rule}`, text: prefer.text }] : []), [prefer]);
   const pillars = useMemo(() => pillarsOf(ws), [ws]);
   const byline = [fullNameOf(ws, ""), companyOf(ws, "")].filter(Boolean).join(" · ") || "Prax";
   const toast = useToast();
@@ -133,14 +139,14 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     const fromDisc = seed.source_kind === "discovery", fromCit = seed.topic === "AI citations" || seed.source_kind === "gap";
     const base = suggestAngles(seed.title, region);
     const disc = seed.discovery?.angle || (fromDisc ? seed.angle ?? "" : "");
-    const list = disc ? [{ kind: "Suggested by Discovery Studio", text: angleLine(disc) }, ...base] : base;
+    const list = disc ? [{ kind: "Suggested by Discovery Studio", text: angleLine(disc) }, ...preferred, ...base] : [...preferred, ...base];
     setAngles(list);
     const saved = seed.angle && !fromDisc ? list.findIndex((a) => a.text === seed.angle) : 0;
     if (seed.angle && !fromDisc && saved < 0) { setAngle("own"); setOwnAngle(seed.angle); } else { setAngle(Math.max(0, saved)); setOwnAngle(""); }
     setTopic(fromDisc ? { tag: `From Discovery Studio${seed.discovery?.rank ? ` · #${seed.discovery.rank} this week` : ""}${seed.discovery?.score != null ? ` · score ${seed.discovery.score}` : ""}`, title: seed.title, line: `${seed.discovery?.sources?.length ?? 0} sources loaded${seed.discovery?.campaign ? ` · campaign: ${seed.discovery.campaign}` : ""}`, sources: seed.discovery?.sources ?? [] }
       : fromCit ? { tag: seed.channel === "company" ? "From AI citations · company content" : "From AI citations", title: seed.title, line: "The gap prompt and its rivals are loaded", sources: [] } : null);
     setStep(seed.draft ? S.draft : S.angle); clearSeed();
-  }, [seed, clearSeed, region]);
+  }, [seed, clearSeed, region, preferred]);
 
   // Repurpose from a post's view opens here on that piece (CS30).
   useEffect(() => {
@@ -164,8 +170,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   // Suggested angles follow the idea; a Discovery suggestion stays first.
   useEffect(() => {
     if (!idea?.title) return;
-    setAngles((cur) => { const disc = cur.filter((a) => a.kind === "Suggested by Discovery Studio"); return [...disc, ...suggestAngles(idea.title, region)]; });
-  }, [idea?.title, region]);
+    setAngles((cur) => { const disc = cur.filter((a) => a.kind === "Suggested by Discovery Studio"); return [...disc, ...preferred, ...suggestAngles(idea.title, region)]; });
+  }, [idea?.title, region, preferred]);
 
   // Topic gaps: ideas sent from AI citations, and pillars with nothing posted or planned in 30 days.
   const gaps = useMemo(() => {
@@ -519,7 +525,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             <H t="Choose the angle" sub={`What ${first} will say about it. The angle steers the opening line and all three drafts.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getAngles}>{busy === "angles" ? "Thinking" : "Sharpen with AI"}</button>} />
             {topic && <div className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-white px-4 py-3.5"><span className="text-meta font-semibold text-[#d64545]">{topic.tag}</span><span className="text-title font-semibold leading-snug">{topic.title}</span><span className="text-meta text-muted">{topic.line}</span></div>}
             {angles.map((a, i) => <button key={a.kind + i} aria-pressed={angle === i} className={pick(angle === i)} onClick={() => setAngle(i)}>
-              <span className="flex items-center gap-2 text-meta font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
+              <span className="flex items-center gap-2 text-meta font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : a.kind.startsWith("From strategy") ? "#141414" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
               <span className="text-body font-medium leading-snug">{a.text}</span></button>)}
             <div className={pick(angle === "own") + " !gap-2"}>
               <button className="flex items-center gap-2 text-meta font-semibold" onClick={() => setAngle("own")}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === "own" ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />Your own angle</button>

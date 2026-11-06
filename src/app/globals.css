@@ -295,3 +295,11 @@ body.touring .pl-rise { animation: none; }
 .auth-card::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); border-bottom-right-radius: 12px; }
 .auth-field { transition: border-color .12s ease; }
 .auth-field:not([aria-invalid]):hover { border-color: var(--stroke); }
+
+/* Strategy canvas: a saved node's Affects line glows once (the write-through moment); + buttons grow on hover. */
+@keyframes stratFlash { 0%, 70% { background: #fbeaea; color: #9e1c1c; } 100% { background: transparent; color: var(--faint); } }
+.strat-flash { animation: stratFlash 1.6s cubic-bezier(.16,1,.3,1) both; }
+.strat-plus { transition: scale .15s cubic-bezier(.16,1,.3,1), border-color .15s, color .15s; }
+.strat-plus:hover, .strat-plus:focus-visible { scale: 1.15; }
+.strat-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .strat-flash { animation: none; } .strat-plus { transition: none; } .strat-plus:hover, .strat-plus:focus-visible { scale: 1; } }

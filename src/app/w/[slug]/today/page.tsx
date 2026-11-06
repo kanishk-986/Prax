@@ -13,6 +13,8 @@ import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primary
 import { NAV } from "@/components/sidebar";
 import { openDraft } from "../studio/draft";
 import { openLeads, FALLBACK_PIPELINE, type Pipeline } from "@/lib/pipeline";
+import { useActiveStrategy, leadFacts } from "@/components/strategy/data";
+import { adviceFor, commentTasks, cleanConfig, STRATEGY_IDX, strategyNote, ruleFromNote, isStrategyNote, type ActionConfig } from "@/lib/strategy";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 /** What a task type means, shown when hovering or focusing its type label. */
@@ -51,16 +53,25 @@ export default function Today() {
   const duePosts = useLive<DuePost>("posts", ws.id, { filter: (q) => q.lte("publish_date", t).not("status", "in", "(Posted,Published,\"On hold\")").order("publish_date") });
   // Real people and posts for the empty rows: Pipeline's open leads (Do next order), Discovery's LinkedIn findings
   // from the last week, and the profile's own posts from the last week for reply rounds.
-  const allLeads = useLive<PrefillLead & { pipeline_id?: string | null }>("prospects", ws.id);
-  const leads = useMemo(() => ({ rows: openLeads(allLeads.rows, pipeList) }), [allLeads.rows, pipeList]);
+  const allLeads = useLive<PrefillLead & { pipeline_id?: string | null; segment: string; region: string }>("prospects", ws.id);
+  const leads = useMemo(() => ({ rows: openLeads(allLeads.rows, pipeList), loading: allLeads.loading }), [allLeads.rows, allLeads.loading, pipeList]);
   const finds = useLive<PrefillFinding>("discovery_findings", ws.id, { filter: (q) => q.gte("found_at", addDays(t, -7)) });
   const ownPosts = useLive<PrefillPost>("posts", ws.id, { filter: (q) => q.gte("publish_date", addDays(t, -7)).in("status", ["Posted", "Published"]) });
-  const suggest = useMemo(() => (day === t ? prefillToday(rows, { leads: leads.rows, findings: finds.rows, posts: ownPosts.rows, slug: ws.slug, today: t }) : {}), [rows, leads.rows, finds.rows, ownPosts.rows, ws.slug, t, day]);
+  // The active strategy (Q109): its rules pick the connection note template, raise leads and add comment tasks;
+  // Audience weights order the leads. Anything a rule shaped says "From strategy: <rule>".
+  const strat = useActiveStrategy();
+  const facts = useMemo(() => leads.rows.map((l) => leadFacts(l, t)), [leads.rows, t]);
+  const advice = useMemo(() => new Map(facts.map((f) => [f.id, adviceFor(strat.nodes, { day: t, lead: f })])), [facts, strat.nodes, t]);
+  const weights = ws.segment_weights;
+  const suggest = useMemo(() => (day === t ? prefillToday(rows, {
+    leads: leads.rows, findings: finds.rows, posts: ownPosts.rows, slug: ws.slug, today: t,
+    rank: (l) => (advice.get(l.id)?.priority ? 1000 : 0) + (weights?.[(l as { segment?: string }).segment ?? ""] ?? 0), advice: (l) => advice.get(l.id) ?? null,
+  }) : {}), [rows, leads.rows, finds.rows, ownPosts.rows, ws.slug, t, day, advice, weights]);
 
   // Generate the day's plan from the profile's quotas the first time it is opened.
   useEffect(() => {
     if (!editable || loading) return;
-    if (rows.some((r) => r.kind !== "custom")) return;
+    if (rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note))) return;
     const want: Record<string, unknown>[] = [];
     for (const k of KINDS) {
       const n = k.key === "inmail" && !isWeekday(day) ? 0 : (ws.quotas as Record<string, number>)[k.key] ?? 0;
@@ -68,6 +79,25 @@ export default function Today() {
     }
     if (want.length) supabase().from("daily_items").upsert(want, { onConflict: "workspace_id,day,kind,idx", ignoreDuplicates: true }).then(() => reload());
   }, [day, loading, rows, editable, ws, reload]);
+
+  // The strategy's comment tasks for today, after the quota rows: each comment action adds its count once a day,
+  // for the leads its lane runs for, in Do next order. Rows already added for an action count against it.
+  useEffect(() => {
+    if (!editable || loading || day !== t || !strat.ready || !strat.nodes.length || leads.loading) return;
+    const quota = Object.values(ws.quotas as Record<string, number>).some((n) => n > 0);
+    if (quota && !rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note))) return;
+    const have = new Map<string, number>();
+    for (const r of rows) if (isStrategyNote(r.note)) { const node = r.note.replace(/^skip:/, "").split(":")[1]; have.set(node, (have.get(node) ?? 0) + 1); }
+    const cap = new Map(strat.nodes.filter((n) => n.type === "action").map((n) => [n.id, (cleanConfig("action", n.config) as ActionConfig).count ?? 0]));
+    const byDate = [...facts].sort((a, b) => (leads.rows.find((l) => l.id === a.id)?.next_date ?? "9999").localeCompare(leads.rows.find((l) => l.id === b.id)?.next_date ?? "9999"));
+    const tasks = commentTasks(strat.nodes, byDate, t, new Set(rows.map((r) => r.prospect_id).filter(Boolean) as string[]));
+    const room = new Map([...cap.entries()].map(([k, n]) => [k, Math.max(0, n - (have.get(k) ?? 0))]));
+    const pick = tasks.filter((x) => { const n = room.get(x.node) ?? 0; if (n <= 0) return false; room.set(x.node, n - 1); return true; });
+    if (!pick.length) return;
+    let idx = Math.max(STRATEGY_IDX - 1, ...rows.filter((r) => r.kind === "comment" && r.idx >= STRATEGY_IDX).map((r) => r.idx));
+    const want = pick.map((x) => ({ workspace_id: ws.id, day: t, kind: "comment", idx: ++idx, title: `Comment on ${x.lead.name}${x.lead.name.endsWith("s") ? "'" : "'s"} latest post`, link: x.lead.linkedin ? `${x.lead.linkedin.replace(/\/+$/, "")}/recent-activity/all/` : "", prospect_id: x.lead.id, note: strategyNote(x.node, x.rule) }));
+    supabase().from("daily_items").upsert(want, { onConflict: "workspace_id,day,kind,idx", ignoreDuplicates: true }).then(() => reload());
+  }, [editable, loading, day, t, strat.ready, strat.nodes, leads.loading, leads.rows, facts, rows, ws.id, ws.quotas, reload]);
 
   // AI citation runs need this browser open, so once a week Today asks for one (one task, never repeated).
   useEffect(() => {
@@ -351,6 +381,7 @@ function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip,
   // A link to a Prax page reads as the page name, never as a raw address.
   const page = (link ?? "").startsWith(`/w/${slug}`) ? pageName(link, slug, NAV) : "";
   const hint = hintFor(it);
+  const rule = ruleFromNote(it.note) || (!it.title && !it.done ? sug?.why ?? "" : "");
   const hasActions = (act && !cleared) || (editable && !it.done) || (it.kind === "custom" && editable) || it.done;
   return (
     <li data-i={i} data-flip={it.id} data-tour={tour} onFocusCapture={onFocusRow} aria-current={focused ? "true" : undefined}
@@ -361,11 +392,12 @@ function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip,
         <Check size={13} strokeWidth={3} className={`task-tick ${it.done ? "on" : ""}`} />
       </button>
       <span tabIndex={hint ? 0 : undefined} data-tip={hint || undefined} className={`tip hidden w-[88px] shrink-0 truncate rounded text-meta font-semibold transition-colors sm:block ${cleared ? "text-faint" : "text-muted group-hover:text-ink"}`}>{typeLabel(it)}</span>
-      <span className="relative flex min-w-0 flex-1 basis-[calc(100%-32px)] items-center sm:basis-auto">
+      <span className="relative flex min-w-0 flex-1 basis-[calc(100%-32px)] flex-col items-stretch sm:basis-auto">
         {/* A one-line textarea that grows with its text (field-sizing), so long campaign titles wrap instead of being cut off. */}
         <textarea id={`t-${it.id}`} rows={1} disabled={!editable} value={title} placeholder={placeholder} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))} onBlur={() => title !== it.title && !(sug && !it.title && title === sug.title) && onPatch(it.id, sug && !it.title ? { title, prospect_id: sug.prospect_id } : { title })}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} aria-label="Who or what"
           className={`task-title min-w-0 flex-1 resize-none rounded-md bg-transparent px-1 py-0.5 text-body leading-snug outline-none [field-sizing:content] placeholder:text-faint ${it.done ? "is-done" : skipped ? "text-faint" : ""}`} />
+        {rule && <Link href={`/w/${slug}/strategy`} className="w-fit truncate rounded px-1 text-meta text-muted hover:text-ink">From strategy: {rule}</Link>}
       </span>
       {skipped && <span className="hidden sm:contents"><span className="count-badge muted shrink-0 whitespace-nowrap">Skipped</span></span>}
       <div className="hidden w-[22%] max-w-[240px] items-center gap-1.5 text-faint md:flex">

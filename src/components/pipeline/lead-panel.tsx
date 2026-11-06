@@ -12,6 +12,7 @@ import { daysPerStage, daysIn, dueLong, dueTone, fmtShort, isClosed, planFor, st
 import { useToast, haptic } from "@/components/toaster";
 import { HEAT_DOT, ownerName, type LeadInfo } from "./screen";
 import type { LeadDetail, PipelineApi, PipelineData } from "./types";
+import { strategySteps, type Advice } from "@/lib/strategy";
 
 type Ev = { at: string; text: string; strong: boolean };
 const localDay = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -22,8 +23,8 @@ const ago = (iso: string, t: string) => {
 const SECS = ["timeline", "warm", "plan", "heat", "notes", "msg", "details"] as const;
 type Sec = (typeof SECS)[number];
 
-export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialogOpen, logged, page = false }: {
-  lead: Prospect; pipe: Pipeline; info?: LeadInfo; data: PipelineData; api: PipelineApi; onMove: (to: string) => void; onClose: () => void; dialogOpen: boolean; logged: number;
+export function LeadPanel({ lead, pipe, info, advice, data, api, onMove, onClose, dialogOpen, logged, page = false }: {
+  lead: Prospect; pipe: Pipeline; info?: LeadInfo; advice?: Advice; data: PipelineData; api: PipelineApi; onMove: (to: string) => void; onClose: () => void; dialogOpen: boolean; logged: number;
   /** The full lead page: inline instead of a side panel, the name in the page header, every section open. */
   page?: boolean;
 }) {
@@ -55,7 +56,11 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
   const days = detail ? daysPerStage(detail.moves, lead, now) : {};
   const here = daysIn(lead, now);
   const first = lead.name.split(/\s+/)[0] || lead.name;
+  // The stage's own steps, then the strategy's (they keep their Today keys because they come after).
   const plan = planFor(pipe, lead.stage);
+  const extra = closed || !advice ? [] : strategySteps(advice);
+  const steps: { text: string; rule?: string }[] = [...plan.map((text) => ({ text })), ...extra];
+  const sugg = !closed && advice?.next && advice.next.text !== lead.next_action ? advice.next : null;
   const stepState = (i: number) => {
     const key = stepKey(lead.id, lead.stage, i);
     const it = detail?.items.find((x) => x.note === key || x.note === `skip:${key}`);
@@ -86,12 +91,12 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
   if (lead.created_at) evs.push({ at: lead.created_at, text: "Added to Prax", strong: false });
   evs.sort((a, b) => b.at.localeCompare(a.at));
 
-  const doneN = plan.filter((_, i) => stepState(i) === "done").length;
+  const doneN = steps.filter((_, i) => stepState(i) === "done").length;
   const heat = info?.heat;
   const summary: Record<Sec, string> = {
     timeline: detail ? `${evs.length} ${evs.length === 1 ? "event" : "events"}` : "Loading",
     warm: info?.warm?.level === 1 ? "Direct" : info?.warm?.level === 2 ? "Talked before" : info?.warm?.level === 3 ? "Someone you know" : "None yet",
-    plan: plan.length ? `${doneN} of ${plan.length} done` : "None at this stage",
+    plan: steps.length ? `${doneN} of ${steps.length} done` : "None at this stage",
     heat: heat ? `${heat.band}, ${heat.score} of 100` : "Cold",
     notes: lead.notes ? "Has notes" : "None",
     msg: draft ? "Drafted" : "Not drafted",
@@ -101,10 +106,10 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
 
   async function step(i: number, done: boolean | null) {
     const key = stepKey(lead.id, lead.stage, i);
-    const r = await api.step(lead, key, plan[i], done);
+    const r = await api.step(lead, key, steps[i].text, done);
     if (!r.ok) { toast(r.error); return; }
     haptic();
-    toast(done == null ? "Added to Today. You do it on LinkedIn yourself." : done ? "Step done and logged on the timeline" : "Step reopened", done ? () => { api.step(lead, key, plan[i], false).then(reload); } : undefined);
+    toast(done == null ? "Added to Today. You do it on LinkedIn yourself." : done ? "Step done and logged on the timeline" : "Step reopened", done ? () => { api.step(lead, key, steps[i].text, false).then(reload); } : undefined);
     reload();
   }
   async function makeDraft() {
@@ -145,6 +150,10 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
           <span className={`text-page font-semibold leading-[1.35] tracking-[-0.01em] ${lead.next_action ? "" : "text-muted"}`}>{lead.next_action || "No next action set"}</span>
           {lostLine && <span className="text-body font-semibold">{lostLine}</span>}
           <span className={`text-meta ${tone === "overdue" ? "font-semibold text-[#d64545]" : tone === "today" ? "font-semibold" : "text-muted"}`}>{dueLong(lead.next_date, t)}</span>
+          {sugg && <span className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-[#e6e6e6] pt-2.5 text-body">
+            <span className="min-w-0 flex-1"><b className="font-semibold">Suggested:</b> {sugg.text}<Link href={`/w/${ws.slug}/strategy`} className="block text-meta text-muted hover:text-ink">From strategy: {sugg.rule}</Link></span>
+            {editable && <button type="button" className="btn h-8! px-3! text-meta font-semibold" onClick={async () => { const prev = lead.next_action; const r = await api.update(lead.id, { next_action: sugg.text }); if (!r.ok) { toast(r.error); return; } haptic(); toast("Next action set", () => { api.update(lead.id, { next_action: prev }); }); }}>Use it</button>}
+          </span>}
           {editable && <span className="mt-1 flex flex-wrap gap-2">
             <button type="button" className="btn h-[38px]! px-4! text-body font-semibold" onClick={() => onMove(lead.stage)}>Done</button>
             <button type="button" className="btn btn-primary h-[38px]! px-4! text-body font-semibold" disabled={!next} onClick={() => next && onMove(next)}>{next ? `Move to ${next}` : "Last stage"}</button>
@@ -186,13 +195,13 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
                     </ol>
                   ))}
                   {k === "warm" && <span className="text-body leading-normal">{info?.warmText ?? "None found in the LinkedIn export yet."}</span>}
-                  {k === "plan" && (plan.length ? plan.map((s, i) => {
+                  {k === "plan" && (steps.length ? steps.map(({ text: s, rule }, i) => {
                     const st = stepState(i), done = st === "done";
                     return (
                       <span key={s} className="flex items-center gap-2.5">
                         <button type="button" aria-label={done ? "Mark not done" : "Mark done"} disabled={!editable} onClick={() => step(i, !done)}
                           className={`grid h-5 w-5 shrink-0 place-items-center rounded-md ${done ? "bg-[#d64545]" : "border-[1.5px] border-[#c4c4c4] bg-white"}`}>{done && <Check size={12} strokeWidth={3} className="text-white" />}</button>
-                        <span className={`min-w-0 flex-1 text-body leading-snug ${done ? "text-muted line-through" : ""}`}>{s}</span>
+                        <span className={`min-w-0 flex-1 text-body leading-snug ${done ? "text-muted line-through" : ""}`}>{s}{rule && <span className="block text-meta text-muted no-underline">From strategy: {rule}</span>}</span>
                         {editable && <button type="button" className="btn h-[30px]! shrink-0 whitespace-nowrap px-2.5! text-meta font-semibold" disabled={!!st} onClick={() => step(i, null)}>{done ? "Done" : st === "today" ? "On Today" : "Add to Today"}</button>}
                       </span>
                     );

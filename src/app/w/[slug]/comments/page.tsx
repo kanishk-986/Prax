@@ -6,7 +6,9 @@ import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, SEGMENTS, today, weekStart, addDays } from "@/lib/workspace";
-import { commentDays, weeklyCommentTarget, weekOverWeek } from "@/lib/dashboard";
+import { commentDays, weekOverWeek } from "@/lib/dashboard";
+import { useActiveStrategy } from "@/components/strategy/data";
+import { commentTarget } from "@/lib/strategy";
 
 type C = { id: string; day: string; author: string; segment: string; mode: string; url: string; reply: boolean; prospect_id: string | null; source: string };
 
@@ -101,6 +103,7 @@ function Insights() {
   const { rows, loading } = useLive<C>("comment_log", ws.id, { order: "created_at", asc: false });
   const t = today(), wk = weekStart(t), d30 = addDays(t, -30), d7 = addDays(t, -7);
   // The weekly count comes from the same place as the Dashboard's: comment ticks on Today and logged comments.
+  const { goal } = useActiveStrategy();
   const ticks = useLive<{ day: string }>("daily_items", ws.id, { filter: (q) => q.gte("day", addDays(wk, -7)).eq("kind", "comment").eq("done", true) });
   const s = useMemo(() => {
     const month = rows.filter((r) => r.day >= d30);
@@ -109,12 +112,12 @@ function Insights() {
     }, {})).sort((a, b) => b[1].n - a[1].n);
     const authors = Object.entries(month.reduce((m: Record<string, number>, x) => { if (x.author) m[x.author] = (m[x.author] ?? 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6);
     return {
-      week: weekOverWeek(commentDays(ticks.rows.map((x) => x.day), rows.map((r) => r.day)), t).now, quota: weeklyCommentTarget(ws.quotas.comment), month: month.length, replies: month.filter((r) => r.reply).length,
+      week: weekOverWeek(commentDays(ticks.rows.map((x) => x.day), rows.map((r) => r.day)), t).now, quota: commentTarget(goal, ws.quotas.comment), month: month.length, replies: month.filter((r) => r.reply).length,
       prospects: new Set(month.map((r) => r.prospect_id).filter(Boolean)).size, ext: pct(month.filter((r) => r.source === "extension").length, month.length),
       modes: group("mode"), segs: group("segment"), authors,
       waiting: rows.filter((r) => !r.reply && r.url && r.day >= d7).slice(0, 6),
     };
-  }, [rows, ticks.rows, t, d30, d7, ws.quotas.comment]);
+  }, [rows, ticks.rows, t, d30, d7, ws.quotas.comment, goal]);
   if (loading || ticks.loading) return <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="card h-[74px] animate-pulse bg-surface-2" />)}</div>;
   // Not started: nothing logged in 30 days. One true line and the one action that fills the page.
   if (!s.month) return (
