@@ -2,22 +2,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase/client";
 
-/** Rows of one table for this workspace, kept live through Supabase Realtime. */
-export function useLive<T = Record<string, unknown>>(table: string, wsId: string, opts: { order?: string; asc?: boolean; filter?: (q: any) => any } = {}) {
+/** Rows of one table for this workspace, kept live through Supabase Realtime. A change of `key` reloads (use it when
+ *  `filter` depends on a value); `skip` waits without loading; `error` is true when the table could not be read. */
+export function useLive<T = Record<string, unknown>>(table: string, wsId: string, opts: { order?: string; asc?: boolean; filter?: (q: any) => any; key?: string; skip?: boolean } = {}) {
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seq = useRef(0);
+  const key = opts.key ?? "", skip = !!opts.skip;
 
   const load = useCallback(async () => {
+    if (skip) return;
+    const n = ++seq.current;
     let q = supabase().from(table).select("*").eq("workspace_id", wsId);
     if (optsRef.current.filter) q = optsRef.current.filter(q);
     if (optsRef.current.order) q = q.order(optsRef.current.order, { ascending: optsRef.current.asc ?? true });
-    const { data } = await q;
+    const { data, error } = await q;
+    if (n !== seq.current) return; // a newer load (another key) has started
     setRows((data as T[]) ?? []);
+    setError(!!error);
     setLoading(false);
-  }, [table, wsId]);
+  }, [table, wsId, key, skip]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A new key shows the loading state until its own rows arrive.
+  useEffect(() => { if (key) setLoading(true); }, [key]);
 
   useEffect(() => {
     load();
@@ -31,5 +42,5 @@ export function useLive<T = Record<string, unknown>>(table: string, wsId: string
     return () => { supabase().removeChannel(ch); };
   }, [table, wsId, load]);
 
-  return { rows, setRows, loading, reload: load };
+  return { rows, setRows, loading, error, reload: load };
 }

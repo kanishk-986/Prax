@@ -614,3 +614,51 @@ export function gapTopic(g: PromptGap) {
   const q = g.question.question.replace(/\?\s*$/, "");
   return g.channel === "company" ? `Company content: ${q}` : `Answer it as Shashi: ${q}`;
 }
+
+// ---------- tracked profiles (db/017) ----------
+// A workspace can track several people, each with their company and LinkedIn profile. A profile holds its own
+// entities, prompts, runs, facts, recommendations, prompt groups and share links. Each user picks the one they look
+// at; a pick that is gone or archived falls back to the first live profile.
+export type Profile = { id: string; name: string; archived_at: string | null; sort: number; created_at: string };
+/** Matches no row: what queries use when profiles exist but none is live, so nothing from another profile shows. */
+export const NO_PROFILE = "00000000-0000-0000-0000-000000000000";
+
+const byOrder = (a: Profile, b: Profile) => a.sort - b.sort || (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+export const liveProfiles = (ps: Profile[]) => ps.filter((p) => !p.archived_at).sort(byOrder);
+export const archivedProfiles = (ps: Profile[]) => ps.filter((p) => !!p.archived_at).sort((a, b) => (a.archived_at! < b.archived_at! ? 1 : -1));
+
+export function currentProfile(ps: Profile[], pick: string | null | undefined): Profile | null {
+  const live = liveProfiles(ps);
+  return live.find((p) => p.id === pick) ?? live[0] ?? null;
+}
+
+/** The profile queries are limited to: null before db/017 (nothing is scoped yet), NO_PROFILE when none is live. */
+export const profileScope = (legacy: boolean, current: Profile | null) => (legacy ? null : current?.id ?? NO_PROFILE);
+export const scoped = <Q extends { eq: (col: string, v: string) => Q }>(q: Q, scope: string | null) => (scope ? q.eq("profile_id", scope) : q);
+export const withProfile = <T extends object>(row: T, scope: string | null): T & { profile_id?: string } => (scope && scope !== NO_PROFILE ? { ...row, profile_id: scope } : row);
+/** The same tag on a Content Studio idea made from AI citations (posts.citation_profile_id). */
+export const postProfile = (scope: string | null): { citation_profile_id?: string } => (scope && scope !== NO_PROFILE ? { citation_profile_id: scope } : {});
+
+/** A profile is named after who it tracks; the same rule as citation_profile_name() in db/017. */
+export function profileName(person: string, company: string, fallback: string) {
+  return [person, company].map((x) => x.trim()).filter(Boolean).join(", ") || fallback.trim() || "Tracked profile";
+}
+export const NEW_PROFILE_NAME = "New tracked profile";
+export const nextSort = (ps: Profile[]) => ps.reduce((m, p) => Math.max(m, p.sort), -1) + 1;
+/** Delete needs the name typed out; spaces at the ends and letter case do not matter (same check as the SQL). */
+export const deleteConfirmed = (typed: string, name: string) => !!name.trim() && typed.trim().toLowerCase() === name.trim().toLowerCase();
+
+/** Gap topics in Content Studio carry the profile they came from; untagged ones (made before db/017) show everywhere. */
+export const inProfile = (row: { citation_profile_id?: string | null }, scope: string | null) => !scope || !row.citation_profile_id || row.citation_profile_id === scope;
+
+/** What db/017 does to existing rows: each row lands in its workspace's default profile, except a run, which follows
+ *  its prompt. Rows that already have a profile are left alone. Mirrors the SQL so the mapping is tested offline. */
+export function migrateRows<R extends { workspace_id: string; profile_id?: string | null; question_id?: string | null; id?: string }>(rows: { table: string; row: R }[], defaults: Record<string, string>) {
+  const qProfile = new Map<string, string>();
+  for (const { table, row } of rows) if (table === "citation_questions" && row.id) qProfile.set(row.id, row.profile_id || defaults[row.workspace_id]);
+  return rows.map(({ table, row }) => {
+    if (row.profile_id) return { table, row };
+    const pid = (table === "citation_runs" && row.question_id && qProfile.get(row.question_id)) || defaults[row.workspace_id];
+    return { table, row: { ...row, profile_id: pid } };
+  });
+}

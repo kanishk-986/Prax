@@ -5,6 +5,8 @@ import { useWorkspace, today, addDays, weekStart, fmtDay } from "@/lib/workspace
 import { greeting, firstName } from "@/lib/dashboard";
 import { StartCards } from "@/components/shell";
 import { whatWorks, nextIssue } from "@/lib/content";
+import { inProfile } from "@/lib/citations";
+import { useCitationProfile } from "@/lib/citation-profile";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf } from "./shared";
 import type { ContentSettings } from "./settings";
 
@@ -15,6 +17,8 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
   posts: Post[]; campaigns: Campaign[]; settings: ContentSettings; go: (tab: string) => void; openPost: (p: Post) => void; writeFrom: (p: Post) => void; planCampaign: () => void;
 }) {
   const { ws, email, name, can } = useWorkspace();
+  // AI citations gap topics show for the tracked profile in view there (db/017).
+  const { scope: citScope } = useCitationProfile();
   const t = today(), tomorrow = addDays(t, 1), wk = weekStart(t), wkEnd = addDays(wk, 6);
   const hour = new Date().getHours();
   // Same greeting as the Dashboard: the signed-in member's own name, then a readable email name, then none.
@@ -35,11 +39,11 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
       if (st === "In review") out.push({ id: p.id + "r", label: p.title, sub: can("owner") ? "Waiting for your approval" : "With Shashi for approval", post: p, act: "open" });
       else if ((p.publish_date === t || p.publish_date === tomorrow) && st !== "Posted" && st !== "On hold") out.push({ id: p.id + "d", label: p.title, sub: `Due ${p.publish_date === t ? "today" : "tomorrow"}${p.planned_time ? `, ${p.planned_time}` : ""} · ${st}`, post: p, act: st === "Ready" ? "open" : "write" });
       else if (st === "Idea" && p.source_kind === "discovery") out.push({ id: p.id + "v", label: p.title, sub: `New topic from Discovery Studio${p.discovery?.rank ? ` · #${p.discovery.rank} this week` : ""}${p.discovery?.score != null ? ` · score ${p.discovery.score}` : ""}`, post: p, act: "write" });
-      else if (st === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap")) out.push({ id: p.id + "g", label: p.title, sub: "New topic from AI citations", post: p, act: "write" });
+      else if (st === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap") && inProfile(p, citScope)) out.push({ id: p.id + "g", label: p.title, sub: "New topic from AI citations", post: p, act: "write" });
       else if (st === "Idea" && p.publish_date && p.publish_date <= addDays(t, 7)) out.push({ id: p.id + "i", label: p.title, sub: `Not written yet · planned ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}`, post: p, act: "write" });
     }
     return out.slice(0, 8);
-  }, [posts, t, tomorrow, can]);
+  }, [posts, t, tomorrow, can, citScope]);
 
   const ww = useMemo(() => whatWorks(posts.map((p) => ({ format: p.format, pillar: p.pillar, publish_date: p.publish_date, planned_time: p.planned_time, draft: p.draft, status: p.status, impressions: p.impressions, reactions: p.reactions, comments: p.comments }))), [posts]);
   const starts: [string, string, React.ElementType, () => void][] = [

@@ -5,16 +5,18 @@ import { useSearchParams } from "next/navigation";
 import { ActionMenu } from "@/components/content/shared";
 import { AlertsCard, NextMoves, ProfileCard, QuickSetup, Suggested, SetsBar, Actions, DraftTest, AskPanel, FactsDrawer, ShareDialog, CommentTargets, buildSnapshot, judgeRun, type RecRow, type SetRow } from "./extras";
 import { KeysModal, Home, Gaps, Company, Report, KeywordsPanel, Tour, TOUR, type Ctx } from "./studio";
+import { ProfileChip, ProfileMenu, DeleteProfile, useProfileActions } from "./profiles";
 import { EntryMoment, useTour, type TourStep } from "@/components/shell";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
+import { useCitationProfile, useCitationScope, CitationProfileProvider } from "@/lib/citation-profile";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, useExtension } from "@/lib/bridge";
 import {
   ENGINES, ESTIMATE, COUNTRY, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, citationGaps, linkedinCited, latestBatches, aggregate, promptFor, findMatches, recommend, sentimentOf,
-  detectPerson, personContext, promptGaps, audienceOf, AUDIENCE_LABEL,
-  type Engine, type Entity, type Run, type Question, type Source, type Facts, type FactIssue, type Audience,
+  detectPerson, personContext, promptGaps, audienceOf, AUDIENCE_LABEL, scoped, withProfile, postProfile, profileName, nextSort, archivedProfiles,
+  type Profile, type Engine, type Entity, type Run, type Question, type Source, type Facts, type FactIssue, type Audience,
 } from "@/lib/citations";
 import s from "./citations.module.css";
 
@@ -39,17 +41,25 @@ export default function Citations() {
   const { ws, can, userId } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
+  // The tracked profile in view (db/017). Every query below is limited to it; before 017 nothing is scoped.
+  const prof = useCitationProfile();
+  const { scope } = prof;
+  const scopeOpts = { key: scope ?? "", skip: !prof.ready, filter: (q: any) => scoped(q, scope) };
+  const profAct = useProfileActions(prof);
+  const [creating, setCreating] = useState(false);
+  const [del, setDel] = useState<Profile | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const params = useSearchParams();
   const asked = params.get("tab") ?? "";
   const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(asked) ? (asked as Tab) : OLD_TAB[asked] ?? "Home");
-  const sets = useLive<SetRow>("citation_sets", ws.id, { order: "sort" });
-  const recs = useLive<RecRow>("citation_recs", ws.id, { order: "created_at", asc: false });
+  const sets = useLive<SetRow>("citation_sets", ws.id, { order: "sort", ...scopeOpts });
+  const recs = useLive<RecRow>("citation_recs", ws.id, { order: "created_at", asc: false, ...scopeOpts });
   const [facts, setFacts] = useState<Partial<Facts>>({});
   const [panel, setPanel] = useState<"" | "ask" | "draft" | "facts" | "share" | "keys">("");
   const [tour, setTour] = useState<{ step: number; done: Set<number> } | null>(null);
   const [draftInit, setDraftInit] = useState("");
   const [menu, setMenu] = useState<HTMLElement | null>(null);
-  const loadFacts = useCallback(() => { supabase().from("citation_facts").select("facts").eq("workspace_id", ws.id).maybeSingle().then(({ data }: { data: { facts: Partial<Facts> } | null }) => setFacts(data?.facts ?? {})); }, [ws.id]);
+  const loadFacts = useCallback(() => { if (!prof.ready) return; scoped(supabase().from("citation_facts").select("facts").eq("workspace_id", ws.id), scope).maybeSingle().then(({ data }: { data: { facts: Partial<Facts> } | null }) => setFacts(data?.facts ?? {})); }, [ws.id, scope, prof.ready]);
   useEffect(() => { loadFacts(); }, [loadFacts]);
   // Content Studio's "Is this citable?" opens the draft test with that post's text.
   useEffect(() => {
@@ -57,9 +67,11 @@ export default function Citations() {
     if (!id) return;
     supabase().from("posts").select("title,draft").eq("id", id).maybeSingle().then(({ data }: { data: { title: string; draft: string } | null }) => { if (data) { setDraftInit(data.draft || data.title); setPanel("draft"); } });
   }, [params]);
-  const qs = useLive<Question & { sort: number }>("citation_questions", ws.id, { order: "sort" });
-  const ents = useLive<Entity & { sort: number }>("citation_entities", ws.id, { order: "sort" });
-  const manual = useLive<Manual>("citation_results", ws.id, { order: "week_start", asc: false });
+  const qs = useLive<Question & { sort: number }>("citation_questions", ws.id, { order: "sort", ...scopeOpts });
+  const ents = useLive<Entity & { sort: number }>("citation_entities", ws.id, { order: "sort", ...scopeOpts });
+  // Manual ticks predate profiles; they belong to whichever profile holds their prompt.
+  const manualAll = useLive<Manual>("citation_results", ws.id, { order: "week_start", asc: false });
+  const manual = useMemo(() => { const ids = new Set(qs.rows.map((q) => q.id)); return manualAll.rows.filter((m) => ids.has(m.question_id)); }, [manualAll.rows, qs.rows]);
   const [runRows, setRunRows] = useState<RunRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState<RunRow | null>(null);
@@ -67,11 +79,13 @@ export default function Citations() {
 
   // The last 90 days of runs with their sources; older runs stay in the database.
   const loadRuns = useCallback(async () => {
+    if (!prof.ready) return;
     const since = new Date(Date.now() - 90 * 864e5).toISOString();
-    const { data } = await supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id).gte("run_at", since).order("run_at", { ascending: false }).limit(3000);
+    const { data } = await scoped(supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id), scope).gte("run_at", since).order("run_at", { ascending: false }).limit(3000);
     setRunRows((data as RunRow[]) ?? []); setLoaded(true);
-  }, [ws.id]);
-  useEffect(() => { loadRuns(); }, [loadRuns]);
+  }, [ws.id, scope, prof.ready]);
+  // A switch starts from a clean page: no runs or drawer from the profile before.
+  useEffect(() => { setLoaded(false); setRunRows([]); setOpen(null); loadRuns(); }, [loadRuns]);
 
   const runs: Run[] = useMemo(() => runRows.map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) })), [runRows]);
   // Shashi (person) and Antier (company) are separate self rows since db/011. Older views that score "us" as one
@@ -108,50 +122,69 @@ export default function Citations() {
   }
 
   const firstRun = !ents.loading && !self;
+  // New opens the setup for another person without touching the profile in view; it is created on Start tracking.
+  const setupView = creating || firstRun;
+  const switchable = !prof.legacy && prof.ready;
   const setupTour = useTour("citations-setup", SETUP_TOUR);
+  const moreBtn = <button className={cx(s.btn, s.menuBtn)} aria-label="More" aria-haspopup="menu" title="Tracked profiles, facts sheet and share link" onClick={(e) => setMenu(e.currentTarget)}><MoreHorizontal size={16} /></button>;
+  const extraItems = self && !creating ? [{ label: "Facts sheet", run: () => setPanel("facts") }, { label: "Weekly report", run: () => setTab("Report") }, { label: "Share a view-only link", run: () => setPanel("share") }] : [];
+  async function confirmDelete() {
+    if (!del) return;
+    setDeleting(true);
+    const ok = await profAct.remove(del);
+    setDeleting(false);
+    if (ok) { setDel(null); setCreating(false); }
+  }
   return (
+    <CitationProfileProvider value={prof}>
     <div className={cx("mx-auto max-w-[1180px]", s.root)}>
       <EntryMoment section="citations" title="AI citations" status="Whether AI tools name Shashi and Antier when buyers ask, and what to publish next." onDone={firstRun ? setupTour.autoStart : undefined} />
       <header data-tour="header" className="flex flex-wrap items-center justify-between gap-3 pl-10 md:pl-0">
         <div className="min-w-0 flex-[1_1_360px]">
           <h1 className="text-[26px] font-semibold tracking-tight">AI citations</h1>
           <p className={s.sub}>Whether AI tools name and link Shashi and Antier when buyers ask. Every result is the tool&apos;s API with web search on: close to, not the same as, what someone sees in the app.</p>
+          {switchable && (creating || prof.current) && <ProfileChip name={creating ? "a new profile" : prof.current!.name} draft={creating} onOpen={setMenu} />}
         </div>
-        {firstRun && <div className="flex flex-wrap items-center gap-2"><button className={s.btn} onClick={setupTour.start}>Guide</button></div>}
-        {self && (
+        {setupView && <div className="flex flex-wrap items-center gap-2">{creating && prof.current && <button className={s.btn} onClick={() => setCreating(false)} title={`Back to ${prof.current.name}`}>Cancel</button>}<button className={s.btn} onClick={setupTour.start}>Guide</button>{switchable && moreBtn}</div>}
+        {self && !creating && (
           <div id="tour-run" className="flex flex-wrap items-center gap-2">
             <button className={s.btn} onClick={() => { setTab(TOUR[0].tab as Tab); setTour({ step: 0, done: new Set() }); }}>Guide</button>
             <button className={s.btn} onClick={() => setPanel("keys")}>Connect AI keys</button>
             <button className={s.btn} onClick={() => setPanel("ask")} disabled={!runs.length}>Ask</button>
             <button className={s.btn} onClick={() => { setDraftInit(""); setPanel("draft"); }}>Draft test</button>
-            <button className={cx(s.btn, s.menuBtn)} aria-label="More" title="Facts sheet and share link" onClick={(e) => setMenu(e.currentTarget)}><MoreHorizontal size={16} /></button>
+            {moreBtn}
             {editable && <button className={cx(s.btn, s.red)} disabled={!active.length} onClick={() => setRunOpen(true)}>Run prompts</button>}
           </div>
         )}
       </header>
-      {menu && <ActionMenu anchor={menu} onClose={() => setMenu(null)} items={[{ label: "Facts sheet", run: () => setPanel("facts") }, { label: "Weekly report", run: () => setTab("Report") }, { label: "Share a view-only link", run: () => setPanel("share") }]} />}
-      <nav className={s.tabs} role="tablist" aria-label="AI citations">
+      {menu && (switchable
+        ? <ProfileMenu anchor={menu} profiles={prof.profiles} currentId={creating ? null : prof.current?.id ?? null} editable={editable} owner={can("owner")} items={extraItems} onClose={() => setMenu(null)}
+            onChoose={(p) => { setCreating(false); profAct.choose(p); }} onNew={() => { setCreating(true); setTab("Home"); }} onArchive={profAct.archive} onRestore={(p) => { setCreating(false); profAct.restore(p); }} onDelete={setDel} />
+        : <ActionMenu anchor={menu} onClose={() => setMenu(null)} items={extraItems} />)}
+      {del && <DeleteProfile profile={del} busy={deleting} onClose={() => setDel(null)} onConfirm={confirmDelete} />}
+      {!creating && <nav className={s.tabs} role="tablist" aria-label="AI citations">
         {TABS.map((t) => {
           const sug = qs.rows.filter((q) => q.status === "suggested").length, openRecs = recs.rows.filter((r) => r.status === "open" || r.status === "accepted").length;
           const n = t === "Gaps" ? gapCount : t === "Prompts" ? active.length + sug : t === "Answers" ? runs.length : t === "Competitors" ? rivals.length : t === "Actions" ? openRecs : 0;
           return <button key={t} role="tab" aria-selected={tab === t} className={cx(s.tab, tab === t && s.tabOn)} onClick={() => setTab(t)}>{t}{n > 0 && <span className={s.count} style={t === "Gaps" ? { background: "#d64545", color: "#fff" } : undefined}>{n}</span>}</button>;
         })}
-      </nav>
-      {loaded && self && !runs.length && (
+      </nav>}
+      {creating && <div className="mb-5" />}
+      {loaded && self && !creating && !runs.length && (
         <div className={cx(s.panel, "mb-4 flex flex-wrap items-center justify-between gap-3 p-4")} role="status">
           <span className="max-w-[720px] text-[13.5px]"><b>Nothing has run yet.</b> <span className="text-[#cfcfcf]">Every number on this page comes from your own runs; there is no sample data. Connect at least one AI key, then run your prompts.</span></span>
           <span className="flex gap-2"><button className={s.ghostDark} onClick={() => setPanel("keys")}>Connect AI keys</button>{editable && <button className={cx(s.btn, s.sm, s.red)} disabled={!active.length} onClick={() => setRunOpen(true)}>Run prompts</button>}</span>
         </div>
       )}
 
-      {!ents.loading && !self ? <Setup editable={editable} />
+      {setupView ? <Setup editable={editable} fresh={creating} onDone={() => setCreating(false)} />
         : !loaded || qs.loading || !self || !c ? <div className={cx(s.box, "h-64 animate-pulse")} />
         : tab === "Home" ? (!active.length && !qs.rows.some((q) => q.status === "suggested") ? <QuickSetup count={qs.rows.length} />
           : <Home c={c} onTab={(t) => setTab(t as Tab)} onOpenRun={(id) => { const r = runRows.find((x) => x.id === id); if (r) setOpen(r); }} onKeys={() => setPanel("keys")} onRun={() => setRunOpen(true)}
               cards={<div className="grid gap-4 lg:grid-cols-3"><AlertsCard runs={runs} qs={qs.rows} self={self} rivals={rivals} /><NextMoves recs={recs.rows} computed={recommend(runs, qs.rows, self, rivals)} onAll={() => setTab("Actions")} /><ProfileCard facts={facts} onFacts={() => setPanel("facts")} /></div>} />)
         : tab === "Gaps" ? <Gaps c={c} editable={editable} siteGaps={<SiteGaps runs={runs} self={self} rivals={rivals} editable={editable} />} />
         : tab === "Prompts" ? <Questions qs={qs.rows} sets={sets.rows} runs={runs} self={self} editable={editable} c={c} />
-        : tab === "Answers" ? <div id="tour-answers"><Answers runs={runs} rows={runRows} qs={qs.rows} qById={qById} self={self} rivals={rivals} manual={manual.rows} onOpen={setOpen} /></div>
+        : tab === "Answers" ? <div id="tour-answers"><Answers runs={runs} rows={runRows} qs={qs.rows} qById={qById} self={self} rivals={rivals} manual={manual} onOpen={setOpen} /></div>
         : tab === "Sources" ? <div id="tour-sourcestab"><Sources runs={runs} self={self} rivals={rivals} editable={editable} /></div>
         : tab === "Competitors" ? <div id="tour-competitors"><Competitors ents={ents.rows} runs={runs} qs={qs.rows} self={self} editable={editable} /></div>
         : tab === "Actions" ? <div id="tour-actions"><Actions recs={recs.rows} runs={runs} qs={qs.rows} self={self} rivals={rivals} /></div>
@@ -164,38 +197,58 @@ export default function Citations() {
       {panel === "ask" && self && <AskPanel runs={runs} qs={qs.rows} self={self} rivals={rivals} onClose={() => setPanel("")} />}
       {panel === "draft" && self && <DraftTest qs={qs.rows} self={self} initial={draftInit} onClose={() => setPanel("")} />}
       {panel === "facts" && <FactsDrawer facts={facts} onClose={() => { setPanel(""); loadFacts(); }} />}
-      {panel === "share" && self && <ShareDialog snap={buildSnapshot(runs, qs.rows, self, rivals, recs.rows, ws.name)} onClose={() => setPanel("")} />}
+      {panel === "share" && self && <ShareDialog snap={buildSnapshot(runs, qs.rows, self, rivals, recs.rows, prof.current?.name ?? ws.name)} onClose={() => setPanel("")} />}
       {tour && <Tour step={tour.step} done={tour.done.size} onStep={tourStep} onClose={() => { setTour(null); toast("Tour closed. Guide opens it again."); }} />}
       {setupTour.node}
     </div>
+    </CitationProfileProvider>
   );
 }
 
 // ---------------- setup ----------------
-function Setup({ editable }: { editable: boolean }) {
+// fresh: a new tracked profile from the header menu, so nothing is filled in.
+function Setup({ editable, fresh, onDone }: { editable: boolean; fresh: boolean; onDone: () => void }) {
   const { ws } = useWorkspace();
   const toast = useToast();
+  const prof = useCitationScope();
   const li = ws.linkedin_url ? ws.linkedin_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "") : "";
-  const [f, setF] = useState({ name: "Antier", aliases: "Antier, Antier Solutions, antiersolutions.com", domains: "antiersolutions.com", person: "Shashi Pal", li });
+  const [f, setF] = useState(fresh ? { name: "", aliases: "", domains: "", person: "", li: "" } : { name: "Antier", aliases: "Antier, Antier Solutions, antiersolutions.com", domains: "antiersolutions.com", person: "Shashi Pal", li });
+  const [busy, setBusy] = useState(false);
+  const allArchived = !fresh && !prof.legacy && !prof.current && archivedProfiles(prof.profiles).length > 0;
   async function save() {
+    setBusy(true);
+    const name = profileName(f.person, f.name, ws.name);
+    // Before db/017 there are no profiles. After it, the setup fills the profile in view, or makes a new one.
+    let pid = prof.legacy || fresh ? null : prof.current?.id ?? null;
+    if (!prof.legacy && !pid) {
+      const { data, error } = await supabase().from("citation_profiles").insert({ workspace_id: ws.id, name, sort: nextSort(prof.profiles) }).select("id").single();
+      if (error) { setBusy(false); toast(error.message); return; }
+      pid = data.id as string;
+    } else if (pid && prof.current?.name !== name) await supabase().from("citation_profiles").update({ name }).eq("id", pid);
     const { error } = await supabase().from("citation_entities").insert([
-      { workspace_id: ws.id, kind: "self", subject: "person", name: f.person.trim(), aliases: [f.person.trim()], domains: list(f.li), sort: 0 },
-      { workspace_id: ws.id, kind: "self", subject: "company", name: f.name, aliases: list(f.aliases), domains: list(f.domains), sort: 1 },
+      withProfile({ workspace_id: ws.id, kind: "self", subject: "person", name: f.person.trim(), aliases: [f.person.trim()], domains: list(f.li), sort: 0 }, pid),
+      withProfile({ workspace_id: ws.id, kind: "self", subject: "company", name: f.name.trim(), aliases: list(f.aliases), domains: list(f.domains), sort: 1 }, pid),
     ]);
-    if (error) toast(error.message); else { haptic(); toast("Tracking set up"); }
+    setBusy(false);
+    if (error) { toast(error.message); return; }
+    if (pid && pid !== prof.current?.id) await prof.choose(pid);
+    prof.reload(); haptic(); onDone();
+    toast(fresh ? `Now tracking ${name}. Add its prompts next.` : "Tracking set up");
   }
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
     <div data-tour="setup" className={cx(s.box, "min-w-0 p-5")}>
       <h2 className="text-[18px] font-semibold">Who should the AI name?</h2>
+      {fresh && <p className={cx(s.small, "mt-1")}>A new tracked profile starts empty, with its own prompts, runs, facts and competitors. The profile you were looking at is unchanged.</p>}
+      {allArchived && <p className={cx(s.small, "mt-1")}>Every tracked profile is archived. Restore one from the menu at the top right, or set up a new one here.</p>}
       <p className={s.small}>Names are matched as whole words, so &quot;Antier&quot; never matches &quot;Antiers&quot;. Domains count as linked when an answer cites them; a LinkedIn profile path also covers his posts and articles. All of this can be changed later under Competitors.</p>
       <div className="mt-4 grid gap-3">
-        <label className="grid gap-1.5"><span className={s.label}>The person, full name</span><input className={s.field} value={f.person} onChange={(e) => setF({ ...f, person: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className={s.label}>His LinkedIn profile</span><input className={s.field} value={f.li} onChange={(e) => setF({ ...f, li: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className={s.label}>The company</span><input className={s.field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className={s.label}>Company names to look for, separated by commas</span><input className={s.field} value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className={s.label}>Owned domains and profiles</span><input className={s.field} value={f.domains} onChange={(e) => setF({ ...f, domains: e.target.value })} /></label>
-        {editable ? <div><button className={cx(s.btn, s.red)} onClick={save} disabled={f.person.trim().split(/\s+/).length < 2 || !f.name.trim() || !list(f.aliases).length}>Start tracking</button></div> : <p className={s.small}>An editor sets this up.</p>}
+        <label className="grid gap-1.5"><span className={s.label}>The person, full name</span><input className={s.field} placeholder="First and last name" value={f.person} onChange={(e) => setF({ ...f, person: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className={s.label}>His LinkedIn profile</span><input className={s.field} placeholder="linkedin.com/in/their-profile" value={f.li} onChange={(e) => setF({ ...f, li: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className={s.label}>The company</span><input className={s.field} placeholder="Company name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className={s.label}>Company names to look for, separated by commas</span><input className={s.field} placeholder="Company, Company Ltd, company.com" value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className={s.label}>Owned domains and profiles</span><input className={s.field} placeholder="company.com" value={f.domains} onChange={(e) => setF({ ...f, domains: e.target.value })} /></label>
+        {editable ? <div><button className={cx(s.btn, s.red)} onClick={save} disabled={busy || f.person.trim().split(/\s+/).length < 2 || !f.name.trim() || !list(f.aliases).length}>{busy ? "Setting up" : "Start tracking"}</button></div> : <p className={s.small}>An editor sets this up.</p>}
       </div>
     </div>
     <aside data-tour="next" className={cx(s.box, "min-w-0 p-5")}>
@@ -256,6 +309,7 @@ function Answers({ runs, rows, qs, qById, self, rivals, manual, onOpen }: { runs
 // ---------------- run panel ----------------
 function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]; self: Entity; facts: Partial<Facts>; onKeys: () => void; onClose: () => void; onDone: () => void }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const { status } = useExtension();
   const toast = useToast();
   const ready = (e: Engine) => !!status?.searchKeys?.[e];
@@ -271,7 +325,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
 
   async function one(q: Question, engine: Engine, rep: number) {
     const prompt = promptFor(q, engine), country = engine === "gemini" ? "" : COUNTRY[q.region] ?? "";
-    const base = { workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language, repeat_index: rep };
+    const base = withProfile({ workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language, repeat_index: rep }, scope);
     try {
       const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country }, 240000);
       const p = parseEngine(engine, res.raws);
@@ -438,6 +492,7 @@ function KeywordsCell({ q, editable, onSave }: { q: Question; editable: boolean;
 
 function Questions({ qs, sets, runs, self, editable, c }: { qs: (Question & { sort: number })[]; sets: SetRow[]; runs: Run[]; self: Entity; editable: boolean; c: Ctx }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [setView, setSetView] = useState("all");
   const [kw, setKw] = useState("");
@@ -449,7 +504,7 @@ function Questions({ qs, sets, runs, self, editable, c }: { qs: (Question & { so
   const [show, setShow] = useState<"active" | "archived">("active");
   async function add(e: React.FormEvent) {
     e.preventDefault(); if (!f.question.trim()) return;
-    const { error } = await supabase().from("citation_questions").insert({ workspace_id: ws.id, question: f.question.trim(), topic: f.topic, region: f.region === "Global" ? "" : f.region, language: f.language, audience: f.audience, keywords: list(f.keywords), status: "active", sort: qs.length + 1, set_id: setView !== "all" && setView !== "none" ? setView : null });
+    const { error } = await supabase().from("citation_questions").insert(withProfile({ workspace_id: ws.id, question: f.question.trim(), topic: f.topic, region: f.region === "Global" ? "" : f.region, language: f.language, audience: f.audience, keywords: list(f.keywords), status: "active", sort: qs.length + 1, set_id: setView !== "all" && setView !== "none" ? setView : null }, scope));
     if (error) toast(error.message); else { haptic(); toast("Prompt added"); setF({ ...f, question: "", keywords: "" }); }
   }
   async function setStatus(id: string, status: string) {
@@ -541,6 +596,7 @@ function Runs({ rows, qById, self, manual, onOpen }: { rows: RunRow[]; qById: Ma
 // ---------------- sources ----------------
 function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; rivals: Entity[]; editable: boolean }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [made, setMade] = useState<Set<string>>(new Set());
   const domains = useMemo(() => {
@@ -562,7 +618,7 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     const { data } = best ? await supabase().from("citation_questions").select("question,topic").eq("id", best).maybeSingle() : { data: null };
     const title = data ? `LinkedIn article: ${data.question}` : "LinkedIn article on the topic AI cites him for";
-    const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title, format: "Article", status: "Idea", topic: data?.topic || "AI citations", resource: "AI answers already cite his LinkedIn on this topic. A full article gives them more to cite." });
+    const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title, format: "Article", status: "Idea", topic: data?.topic || "AI citations", resource: "AI answers already cite his LinkedIn on this topic. A full article gives them more to cite.", ...postProfile(scope) });
     if (error) toast(error.message); else { haptic(); setMade(new Set([...made, "li-article"])); toast("Article idea added in Content Studio, Library"); }
   }
   return (
@@ -594,11 +650,12 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
 // Sites that cite competitors and never Antier; shown on Sources and under the prompt gaps.
 function SiteGaps({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; rivals: Entity[]; editable: boolean }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [made, setMade] = useState<Set<string>>(new Set());
   const gaps = useMemo(() => citationGaps(runs, self, rivals), [runs, self, rivals]);
   async function toIdea(g: { domain: string; competitors: string[] }) {
-    const { data, error } = await supabase().from("posts").insert({ workspace_id: ws.id, title: `Earn a mention on ${g.domain}`, status: "Idea", topic: "AI citations", channel: "company", resource: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. Pitch a guest piece, a quote or data there, or post on the topic it covers. Company content, not for Shashi's profile.` }).select("id").single();
+    const { data, error } = await supabase().from("posts").insert({ workspace_id: ws.id, title: `Earn a mention on ${g.domain}`, status: "Idea", topic: "AI citations", channel: "company", resource: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. Pitch a guest piece, a quote or data there, or post on the topic it covers. Company content, not for Shashi's profile.`, ...postProfile(scope) }).select("id").single();
     if (error) { toast(error.message); return; }
     haptic(); setMade(new Set([...made, g.domain]));
     toast("Added as an idea in Content Studio, Library", async () => { await supabase().from("posts").delete().eq("id", data.id); setMade((m) => { const n = new Set(m); n.delete(g.domain); return n; }); });
@@ -629,6 +686,7 @@ const POOLS: { key: string; title: string; note: string; match: (e: EntRow) => b
 ];
 function Competitors({ ents, runs, qs, self, editable }: { ents: EntRow[]; runs: Run[]; qs: Question[]; self: Entity; editable: boolean }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [draft, setDraft] = useState<Record<string, { name: string; aliases: string; domains: string }>>({});
   const [nf, setNf] = useState<Record<string, { name: string; aliases: string; domains: string }>>({});
@@ -644,7 +702,7 @@ function Competitors({ ents, runs, qs, self, editable }: { ents: EntRow[]; runs:
   }
   async function add(pool: typeof POOLS[number]) {
     const f = nf[pool.key] ?? blank;
-    const { error } = await supabase().from("citation_entities").insert({ workspace_id: ws.id, kind: "competitor", subject: pool.subject, status: "active", name: f.name.trim(), aliases: list(f.aliases || f.name), domains: list(f.domains), sort: rivals.length + 1 });
+    const { error } = await supabase().from("citation_entities").insert(withProfile({ workspace_id: ws.id, kind: "competitor", subject: pool.subject, status: "active", name: f.name.trim(), aliases: list(f.aliases || f.name), domains: list(f.domains), sort: rivals.length + 1 }, scope));
     if (error) toast(error.message); else { haptic(); toast(pool.subject === "person" ? "Peer expert added" : "Peer firm added"); setNf({ ...nf, [pool.key]: blank }); }
   }
   async function approve(e: Entity) {

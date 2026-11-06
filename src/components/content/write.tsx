@@ -10,6 +10,8 @@ import { humanScore } from "@/lib/studio";
 import { PILLARS } from "@/lib/campaigns";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS } from "@/lib/content";
 import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
+import { inProfile } from "@/lib/citations";
+import { useCitationProfile } from "@/lib/citation-profile";
 import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession } from "./shared";
 import { LinkedInPreview } from "./preview";
 import type { ContentSettings } from "./settings";
@@ -47,6 +49,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   posts: Post[]; campaigns: Campaign[]; settings: ContentSettings; seed: Post | null; clearSeed: () => void; openPost: (p: Post) => void;
 }) {
   const { ws, can, userId } = useWorkspace();
+  const { scope: citScope } = useCitationProfile();
   const toast = useToast();
   const { status: ext } = useExtension();
   const editable = can("editor"), owner = can("owner");
@@ -138,13 +141,13 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   // Topic gaps: ideas sent from AI citations, and pillars with nothing posted or planned in 30 days.
   const gaps = useMemo(() => {
     const t = today(), since = addDays(t, -30);
-    const fromCitations = posts.filter((p) => statusOf(p.status) === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap")).map((p) => ({ id: "p" + p.id, label: p.title, sub: p.channel === "company" ? "From AI citations · company content" : "From AI citations", pillar: p.pillar }));
+    const fromCitations = posts.filter((p) => statusOf(p.status) === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap") && inProfile(p, citScope)).map((p) => ({ id: "p" + p.id, label: p.title, sub: p.channel === "company" ? "From AI citations · company content" : "From AI citations", pillar: p.pillar }));
     const quiet = PILLARS.filter((pl) => !posts.some((p) => p.pillar === pl && (p.publish_date ?? "") >= since)).map((pl) => {
       const last = posts.filter((p) => p.pillar === pl && p.publish_date).map((p) => p.publish_date!).sort().pop();
       return { id: "q" + pl, label: pl, sub: last ? `Last post ${fmtDay(last, { day: "numeric", month: "short" })}` : "Nothing posted yet", pillar: pl };
     });
     return [...fromCitations, ...quiet];
-  }, [posts]);
+  }, [posts, citScope]);
 
   const material = () => {
     if (src === "link" && page) return `SOURCE PAGE (${page.host}): ${page.title}\nThe point to post about: ${page.points[page.pick] ?? ""}\n\n${page.text.slice(0, 6000)}`;
