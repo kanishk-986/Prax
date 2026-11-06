@@ -302,60 +302,60 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const names = STEP_NAMES(video);
   const camp = campaigns.find((c) => c.id === campaignId);
   const pick = (on: boolean) => `pick card-hover flex flex-col items-start gap-1.5 rounded-2xl border bg-white p-3.5 text-left ${on ? "border-2 border-[#d64545]" : "border-line"}`;
-  const AngleBar = () => <div className="flex flex-wrap items-baseline gap-2 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Angle</b><span className="min-w-0 flex-1">{angleText || "Not chosen yet"}</span><button className="text-[12px] font-semibold underline underline-offset-[3px]" onClick={() => setStep(S.angle)}>Change</button></div>;
-  const H = ({ t, sub, right }: { t: string; sub: string; right?: React.ReactNode }) => <div className="flex flex-wrap items-end justify-between gap-2"><div><h2 className="m-0 text-[19px] font-semibold">{t}</h2><p className="m-0 mt-1 text-[13.5px] text-muted">{sub}</p></div>{right}</div>;
+  const AngleBar = () => <div className="flex flex-wrap items-baseline gap-2 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body leading-snug text-ink"><b className="font-semibold">Angle</b><span className="min-w-0 flex-1">{angleText || "Not chosen yet"}</span><button className="text-meta font-semibold underline underline-offset-[3px]" onClick={() => setStep(S.angle)}>Change</button></div>;
+  const H = ({ t, sub, right }: { t: string; sub: string; right?: React.ReactNode }) => <div className="flex flex-wrap items-end justify-between gap-2"><div><h2 className="m-0 text-page font-semibold">{t}</h2><p className="m-0 mt-1 text-body text-muted">{sub}</p></div>{right}</div>;
 
   return (
     <div className="flex flex-col gap-4">
-      {camp && <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] text-white"><span className="font-semibold text-[#ff8a80]">Campaign</span><span className="font-semibold">{camp.name}</span><span className="text-[#cfcfcf]">{idea?.title}</span></div>}
+      {camp && <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body text-ink"><span className="font-semibold">Campaign</span><span className="font-semibold">{camp.name}</span><span className="text-[#cfcfcf]">{idea?.title}</span></div>}
       <nav aria-label="Steps" data-tour="steps" className="flex flex-wrap gap-1 rounded-2xl border border-line bg-white p-1.5">
         {names.map((n, i) => (
-          <button key={n} onClick={() => setStep(i)} className="inline-flex h-[38px] items-center gap-2 rounded-xl pl-1.5 pr-3.5 text-[13px] font-semibold" style={{ background: step === i ? "#d64545" : "transparent", color: step === i ? "#fff" : i < step ? "#141414" : "var(--faint)" }}>
-            <span className="num inline-grid h-6 w-6 place-items-center rounded-full text-[11px]" style={{ background: step === i ? "#fff" : i < step ? "#141414" : "#fff", color: step === i ? "#d64545" : i < step ? "#fff" : "var(--faint)", border: step === i || i < step ? 0 : "1px solid #d0d0d0" }}>{i < step ? <Check size={13} strokeWidth={2.6} aria-label="done" /> : i + 1}</span>{n}
+          <button key={n} onClick={() => setStep(i)} className="inline-flex h-[38px] items-center gap-2 rounded-xl pl-1.5 pr-3.5 text-body font-semibold" style={{ background: step === i ? "#d64545" : "transparent", color: step === i ? "#fff" : i < step ? "#141414" : "var(--faint)" }}>
+            <span className="num inline-grid h-6 w-6 place-items-center rounded-full text-meta" style={{ background: step === i ? "#fff" : i < step ? "#141414" : "#fff", color: step === i ? "#d64545" : i < step ? "#fff" : "var(--faint)", border: step === i || i < step ? 0 : "1px solid #d0d0d0" }}>{i < step ? <Check size={13} strokeWidth={2.6} aria-label="done" /> : i + 1}</span>{n}
           </button>
         ))}
       </nav>
 
       <div className="flex flex-wrap items-start gap-5">
         <section className="flex min-w-0 flex-[3_1_540px] flex-col gap-4">
-          {err && <div className="flex items-start gap-2 rounded-xl border border-[#d64545] bg-white px-3.5 py-2.5 text-[13px]"><span className="flex-1">{err}</span><button aria-label="Dismiss" onClick={() => setErr("")}><X size={14} /></button></div>}
+          {err && <div className="flex items-start gap-2 rounded-xl border border-[#d64545] bg-white px-3.5 py-2.5 text-body"><span className="flex-1">{err}</span><button aria-label="Dismiss" onClick={() => setErr("")}><X size={14} /></button></div>}
 
           {step === 0 && <div className="flex flex-col gap-3.5" data-tour="sources">
             <H t="What are you starting from?" sub="Pick one. Prax asks only what that source needs." />
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {SOURCES.map(([k, t, sub, Icon]) => <button key={k} aria-pressed={src === k} className={pick(src === k)} style={{ minHeight: 118 }} onClick={() => { setSrc(k); setErr(""); }}>
                 <span className="grid h-9 w-9 place-items-center rounded-xl text-white" style={{ background: src === k ? "#d64545" : "#141414" }}><Icon size={17} /></span>
-                <span className="text-[14px] font-semibold">{t}</span><span className="text-[12.5px] leading-snug text-muted">{sub}</span></button>)}
+                <span className="text-body font-semibold">{t}</span><span className="text-meta leading-snug text-muted">{sub}</span></button>)}
             </div>
             <div className="card flex flex-col gap-3 p-4">
-              {(src === "idea" || src === "draft") && <label className="flex flex-col gap-2"><span className="label">{src === "idea" ? `What does ${first} want to say?` : "Paste the rough draft"}</span><textarea className="field min-h-[110px] text-[14px]" value={srcText} onChange={(e) => setSrcText(e.target.value)} placeholder={src === "idea" ? "A sentence or two is enough." : "Their own words, however rough."} /></label>}
+              {(src === "idea" || src === "draft") && <label className="flex flex-col gap-2"><span className="label">{src === "idea" ? `What does ${first} want to say?` : "Paste the rough draft"}</span><textarea className="field min-h-[110px] text-body" value={srcText} onChange={(e) => setSrcText(e.target.value)} placeholder={src === "idea" ? "A sentence or two is enough." : "Their own words, however rough."} /></label>}
               {src === "link" && <>
                 <label htmlFor="src-url" className="label">Paste a link</label>
                 <div className="flex gap-2"><input id="src-url" type="url" className="field h-11" placeholder="https://" value={url} onChange={(e) => { setUrl(e.target.value); setPage(null); }} /><button className="btn btn-primary h-11 px-5" disabled={!url || busy === "link"} onClick={readLink}>{busy === "link" ? "Reading" : page ? "Read again" : "Fetch"}</button></div>
-                <p className="m-0 text-[12px] text-muted">Public pages only. LinkedIn pages are never fetched; open those on LinkedIn and use the extension.</p>
+                <p className="m-0 text-meta text-muted">Public pages only. LinkedIn pages are never fetched; open those on LinkedIn and use the extension.</p>
                 {page && <div className="anim-rise flex gap-3.5 rounded-xl border border-line p-3.5">
-                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-[#141414] text-[18px] font-bold text-white">{page.host.replace(/^www\./, "")[0]?.toUpperCase()}</span>
-                  <span className="flex min-w-0 flex-col gap-1"><span className="text-[11.5px] text-faint">{page.host} · fetched just now</span><span className="text-[15px] font-semibold leading-snug">{page.title}</span>
-                    {busy === "points" ? <span className="text-[12.5px] text-muted">Finding the points</span> : <span className="mt-1 flex flex-wrap gap-1.5">{page.points.map((pt, i) => <button key={i} className="rounded-full px-3 py-1 text-left text-[12.5px] font-semibold" style={{ background: page.pick === i ? "#d64545" : "#fff", color: page.pick === i ? "#fff" : "#141414", border: page.pick === i ? 0 : "1px solid #d0d0d0" }} onClick={() => setPage({ ...page, pick: i })}>{pt}</button>)}</span>}</span>
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-[#141414] text-page font-semibold text-white">{page.host.replace(/^www\./, "")[0]?.toUpperCase()}</span>
+                  <span className="flex min-w-0 flex-col gap-1"><span className="text-meta text-faint">{page.host} · fetched just now</span><span className="text-title font-semibold leading-snug">{page.title}</span>
+                    {busy === "points" ? <span className="text-meta text-muted">Finding the points</span> : <span className="mt-1 flex flex-wrap gap-1.5">{page.points.map((pt, i) => <button key={i} className="rounded-full px-3 py-1 text-left text-meta font-semibold" style={{ background: page.pick === i ? "#d64545" : "#fff", color: page.pick === i ? "#fff" : "#141414", border: page.pick === i ? 0 : "1px solid #d0d0d0" }} onClick={() => setPage({ ...page, pick: i })}>{pt}</button>)}</span>}</span>
                 </div>}
               </>}
               {src === "pdf" && <>
                 <span className="label">Upload a PDF</span>
                 <button type="button" className="grid place-items-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-[#d0d0d0] p-6 text-center hover:border-[#d64545]" onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) readPdf(f); }}>
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#d64545] text-white"><FileText size={18} /></span><span className="font-semibold">{busy === "pdf" ? "Reading the PDF" : "Choose a PDF from your computer"}</span><span className="text-[12.5px] text-muted">Or drop it here. Reports, decks, regulator papers.</span>
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#d64545] text-white"><FileText size={18} /></span><span className="font-semibold">{busy === "pdf" ? "Reading the PDF" : "Choose a PDF from your computer"}</span><span className="text-meta text-muted">Or drop it here. Reports, decks, regulator papers.</span>
                 </button>
                 <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) readPdf(f); e.target.value = ""; }} />
-                {pdf && <div className="anim-rise flex flex-col gap-2 rounded-xl bg-[#141414] p-3.5 text-white"><span className="font-semibold">{pdf.name}</span>
-                  <span className="flex flex-wrap gap-1.5">{pdf.points.map((pt, i) => <button key={i} className="rounded-full px-3 py-1 text-left text-[12.5px] font-semibold" style={{ background: pdf.pick === i ? "#d64545" : "rgba(255,255,255,.1)" }} onClick={() => setPdf({ ...pdf, pick: i })}>{pt}</button>)}{!pdf.points.length && <span className="text-[12.5px] text-[#cfcfcf]">{busy === "points" ? "Finding the points" : "Read. Pick the angle in the next steps."}</span>}</span></div>}
+                {pdf && <div className="anim-rise flex flex-col gap-2 rounded-xl bg-surface-2 p-3.5 text-ink"><span className="font-semibold">{pdf.name}</span>
+                  <span className="flex flex-wrap gap-1.5">{pdf.points.map((pt, i) => <button key={i} aria-pressed={pdf.pick === i} className="rounded-md border px-3 py-1 text-left text-meta font-medium" style={pdf.pick === i ? { background: "#141414", color: "#fff", borderColor: "#141414" } : { background: "#fff", color: "#141414", borderColor: "#d4d4d4" }} onClick={() => setPdf({ ...pdf, pick: i })}>{pt}</button>)}{!pdf.points.length && <span className="text-meta text-muted">{busy === "points" ? "Finding the points" : "Read. Pick the angle in the next steps."}</span>}</span></div>}
               </>}
               {src === "comment" && <>
                 <span className="label">Pick one of their comments</span>
-                {saved.comments.map((c) => <button key={c.id} aria-pressed={commentPick === c.id} className={pick(commentPick === c.id)} onClick={() => setCommentPick(c.id)}><span className="text-[11.5px] text-faint">{c.meta}</span><span className="line-clamp-3 text-[13.5px] leading-snug">{c.text}</span></button>)}
-                {!saved.comments.length && <p className="m-0 text-[13px] text-muted">No saved or posted comments yet. Save drafts in Comment Studio, or post comments with the extension.</p>}
+                {saved.comments.map((c) => <button key={c.id} aria-pressed={commentPick === c.id} className={pick(commentPick === c.id)} onClick={() => setCommentPick(c.id)}><span className="text-meta text-faint">{c.meta}</span><span className="line-clamp-3 text-body leading-snug">{c.text}</span></button>)}
+                {!saved.comments.length && <p className="m-0 text-body text-muted">No saved or posted comments yet. Save drafts in Comment Studio, or post comments with the extension.</p>}
               </>}
               {src === "gap" && <>
                 <span className="label">Pick a topic gap</span>
-                {gaps.map((g) => <button key={g.id} aria-pressed={gapPick === g.id} className={pick(gapPick === g.id) + " !flex-row !items-center"} onClick={() => { setGapPick(g.id); if (g.pillar) setPillar(g.pillar); }}><span className="min-w-0 flex-1"><span className="block text-[13.5px] font-semibold">{g.label}</span><span className="text-[12px] text-muted">{g.sub}</span></span></button>)}
+                {gaps.map((g) => <button key={g.id} aria-pressed={gapPick === g.id} className={pick(gapPick === g.id) + " !flex-row !items-center"} onClick={() => { setGapPick(g.id); if (g.pillar) setPillar(g.pillar); }}><span className="min-w-0 flex-1"><span className="block text-body font-semibold">{g.label}</span><span className="text-meta text-muted">{g.sub}</span></span></button>)}
               </>}
             </div>
           </div>}
@@ -363,32 +363,32 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
           {step === 1 && <div className="flex flex-col gap-3.5">
             <H t="What kind of post?" sub="Each type gets its own structure, length and later steps." />
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3" data-tour="types">
-              {TYPES.map(([k, sub, len]) => <button key={k} aria-pressed={type === k} className={pick(type === k)} onClick={() => setType(k)}><span className="text-[14px] font-semibold">{k}</span><span className="text-[12.5px] text-muted">{sub}</span><span className="num text-[11px] text-faint">{len}</span></button>)}
+              {TYPES.map(([k, sub, len]) => <button key={k} aria-pressed={type === k} className={pick(type === k)} onClick={() => setType(k)}><span className="text-body font-semibold">{k}</span><span className="text-meta text-muted">{sub}</span><span className="num text-meta text-faint">{len}</span></button>)}
             </div>
             <label className="flex flex-col gap-1.5"><span className="label">Where it goes</span><select className="field w-auto" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}><option value={PROFILE_CHANNEL}>{possessive(first)} own profile</option><option value="company">{cap(company)} company page</option></select></label>
-            {channel === "company" && <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] text-white">Company content, not for {possessive(first)} profile. It is flagged this way in Library and Plan.</p>}
+            {channel === "company" && <p className="m-0 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body text-ink">Company content, not for {possessive(first)} profile. It is flagged this way in Library and Plan.</p>}
           </div>}
 
           {step === 2 && <div className="flex flex-col gap-3">
             <H t="Pick the idea" sub="Scored before a word is written: pillar fit, buyer relevance, freshness." right={editable && <button className="btn h-9" disabled={!!busy} onClick={getIdeas}><Sparkles size={14} /> {busy === "ideas" ? "Thinking" : ideas.length ? "Suggest again" : "Suggest ideas"}</button>} />
             {ideas.map((x) => <button key={x.title} aria-pressed={idea?.title === x.title} className={pick(idea?.title === x.title) + " !flex-row !items-center !gap-3.5"} onClick={() => { setIdea(x); setPillar(x.pillar); }}>
-              <span className="num grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full text-[16px] text-white" style={{ background: idea?.title === x.title ? "#d64545" : "#141414" }}>{x.score}</span>
-              <span className="flex min-w-0 flex-col gap-1"><span className="text-[15px] font-semibold leading-snug">{x.title}</span><span className="text-[13px] text-muted">{x.why}</span><span className="text-[12px] font-semibold text-[#d64545]">{x.pillar}</span></span></button>)}
+              <span className="num grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full text-title text-white" style={{ background: idea?.title === x.title ? "#d64545" : "#141414" }}>{x.score}</span>
+              <span className="flex min-w-0 flex-col gap-1"><span className="text-title font-semibold leading-snug">{x.title}</span><span className="text-body text-muted">{x.why}</span><span className="text-meta font-semibold text-[#d64545]">{x.pillar}</span></span></button>)}
             <div className="card flex flex-col gap-2 p-3.5"><span className="label">Or use your own</span><div className="flex gap-2"><input className="field" placeholder="The idea in one line" value={ownIdea} onChange={(e) => setOwnIdea(e.target.value)} /><button className="btn btn-dark" disabled={!ownIdea.trim()} onClick={() => { setIdea({ title: ownIdea.trim(), why: "", pillar, score: 0 }); setOwnIdea(""); }}>Use it</button></div>
-              <label className="flex items-center gap-2 text-[12.5px] text-muted">Pillar<select className="field h-8 w-auto" value={pillar} onChange={(e) => setPillar(e.target.value)}><option value="">Not set</option>{pillars.map((p) => <option key={p}>{p}</option>)}</select></label>
-              {idea && <span className="text-[13px]">Chosen: <b>{idea.title}</b></span>}</div>
+              <label className="flex items-center gap-2 text-meta text-muted">Pillar<select className="field h-8 w-auto" value={pillar} onChange={(e) => setPillar(e.target.value)}><option value="">Not set</option>{pillars.map((p) => <option key={p}>{p}</option>)}</select></label>
+              {idea && <span className="text-body">Chosen: <b>{idea.title}</b></span>}</div>
           </div>}
 
           {step === S.angle && <div className="flex flex-col gap-3" data-tour="angles">
             <H t="Choose the angle" sub={`What ${first} will say about it. The angle steers the opening line and all three drafts.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getAngles}>{busy === "angles" ? "Thinking" : "Sharpen with AI"}</button>} />
-            {topic && <div className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-white px-4 py-3.5"><span className="text-[12px] font-semibold text-[#d64545]">{topic.tag}</span><span className="text-[15px] font-[650] leading-snug">{topic.title}</span><span className="text-[12.5px] text-muted">{topic.line}</span></div>}
+            {topic && <div className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-white px-4 py-3.5"><span className="text-meta font-semibold text-[#d64545]">{topic.tag}</span><span className="text-title font-semibold leading-snug">{topic.title}</span><span className="text-meta text-muted">{topic.line}</span></div>}
             {angles.map((a, i) => <button key={a.kind + i} aria-pressed={angle === i} className={pick(angle === i)} onClick={() => setAngle(i)}>
-              <span className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
-              <span className="text-[14.5px] font-medium leading-snug">{a.text}</span></button>)}
+              <span className="flex items-center gap-2 text-meta font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
+              <span className="text-body font-medium leading-snug">{a.text}</span></button>)}
             <div className={pick(angle === "own") + " !gap-2"}>
-              <button className="flex items-center gap-2 text-[12px] font-semibold" onClick={() => setAngle("own")}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === "own" ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />Your own angle</button>
+              <button className="flex items-center gap-2 text-meta font-semibold" onClick={() => setAngle("own")}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === "own" ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />Your own angle</button>
               <label htmlFor="own-angle" className="sr-only">Your own angle</label>
-              <textarea id="own-angle" className="field text-[14px]" rows={2} value={ownAngle} onFocus={() => setAngle("own")} onChange={(e) => { setOwnAngle(e.target.value); setAngle("own"); }} placeholder={`In one line: what ${first} wants to say about it`} />
+              <textarea id="own-angle" className="field text-body" rows={2} value={ownAngle} onFocus={() => setAngle("own")} onChange={(e) => { setOwnAngle(e.target.value); setAngle("own"); }} placeholder={`In one line: what ${first} wants to say about it`} />
             </div>
           </div>}
 
@@ -398,40 +398,40 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             {hooks.map((h) => { const ok = video ? sayableIn3s(h.text) : hookFits(h.text, device); return (
               <button key={h.text} aria-pressed={hook === h.text} className={pick(hook === h.text) + " !flex-row !items-center !gap-3"} onClick={() => setHook(h.text)}>
                 <span className="h-[18px] w-[18px] shrink-0 rounded-full bg-white" style={{ border: hook === h.text ? "6px solid #d64545" : "1.5px solid #d0d0d0" }} />
-                <span className="min-w-0 flex-1 text-[14.5px] font-medium leading-snug">{h.text}</span>
-                <span className="flex shrink-0 flex-col items-end gap-0.5"><span className="text-[12px] font-semibold">{h.kind}</span><span className="num text-[11px]" style={{ color: ok ? "#5f5f5f" : "#d64545" }}>{video ? (ok ? "Under 3 seconds" : "Too long to say") : ok ? "Fits the fold" : "Cut by the fold"}</span></span>
+                <span className="min-w-0 flex-1 text-body font-medium leading-snug">{h.text}</span>
+                <span className="flex shrink-0 flex-col items-end gap-0.5"><span className="text-meta font-semibold">{h.kind}</span><span className="num text-meta" style={{ color: ok ? "#5f5f5f" : "#d64545" }}>{video ? (ok ? "Under 3 seconds" : "Too long to say") : ok ? "Fits the fold" : "Cut by the fold"}</span></span>
               </button>); })}
             <label className="card flex flex-col gap-2 p-3.5"><span className="label">Or write the opening line</span><input className="field" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="One line that stands on its own" /></label>
           </div>}
 
           {step === S.draft && !video && <div className="flex flex-col gap-3">
             <AngleBar />
-            <H t="Shape the draft" sub="Three drafts to choose from. Edit freely; every rule is checked as you type." right={<span className="text-[12.5px] text-muted">In {possessive(first)} voice · <Link href={`/w/${ws.slug}/studio`} className="font-semibold text-ink underline underline-offset-2">Voice settings</Link></span>} />
+            <H t="Shape the draft" sub="Three drafts to choose from. Edit freely; every rule is checked as you type." right={<span className="text-meta text-muted">In {possessive(first)} voice · <Link href={`/w/${ws.slug}/studio`} className="font-semibold text-ink underline underline-offset-2">Voice settings</Link></span>} />
             <div className="flex flex-wrap gap-2">
-              {drafts.map((d, i) => <button key={i} aria-pressed={dIdx === i} className={pick(dIdx === i) + " !flex-1 !gap-1 !p-3"} onClick={() => { setDIdx(i); setText(d.text); }}><span className="text-[13px] font-semibold">Draft {"ABC"[i]} · {d.angle || "Angle"}</span><span className="num flex gap-3 text-[11.5px]"><span>Human {humanScore(d.text).score}</span><span style={{ color: d.impact >= 70 ? "#d64545" : "#5f5f5f" }}>Impact {d.impact || "–"}</span></span></button>)}
+              {drafts.map((d, i) => <button key={i} aria-pressed={dIdx === i} className={pick(dIdx === i) + " !flex-1 !gap-1 !p-3"} onClick={() => { setDIdx(i); setText(d.text); }}><span className="text-body font-semibold">Draft {"ABC"[i]} · {d.angle || "Angle"}</span><span className="num flex gap-3 text-meta"><span>Human {humanScore(d.text).score}</span><span style={{ color: d.impact >= 70 ? "#d64545" : "#5f5f5f" }}>Impact {d.impact || "–"}</span></span></button>)}
               {editable && <button className="btn h-auto min-h-[56px] px-4" disabled={!!busy || !hook} onClick={getDrafts}><Sparkles size={14} /> {busy === "drafts" ? "Writing" : drafts.length ? "Write three more" : "Write three drafts"}</button>}
             </div>
             <div className="card overflow-hidden" data-tour="editor">
               <label htmlFor="draft-box" className="sr-only">Draft text</label>
-              <textarea id="draft-box" className="block min-h-[300px] w-full resize-y border-0 px-5 py-4 text-[14.5px] leading-relaxed outline-none" value={text} onChange={(e) => setText(e.target.value)} placeholder="The draft appears here, or write it yourself." />
+              <textarea id="draft-box" className="block min-h-[300px] w-full resize-y border-0 px-5 py-4 text-body leading-relaxed outline-none" value={text} onChange={(e) => setText(e.target.value)} placeholder="The draft appears here, or write it yourself." />
               <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-3 py-2.5">
-                {QUICK.map(([l, how]) => <button key={l} className="h-[30px] rounded-full border border-line bg-white px-3 text-[12.5px] hover:border-[#141414] disabled:opacity-40" disabled={!text || !!busy} onClick={() => quick(l, how)}>{busy === "quick" ? "…" : l}</button>)}
-                <span className="num ml-auto text-[11.5px] text-muted">{Array.from(text).length.toLocaleString()} / {type === "Article" ? "125,000" : "3000"} · {text.trim().split(/\s+/).filter(Boolean).length} words</span>
+                {QUICK.map(([l, how]) => <button key={l} className="h-[30px] rounded-full border border-line bg-white px-3 text-meta hover:border-[#141414] disabled:opacity-40" disabled={!text || !!busy} onClick={() => quick(l, how)}>{busy === "quick" ? "…" : l}</button>)}
+                <span className="num ml-auto text-meta text-muted">{Array.from(text).length.toLocaleString()} / {type === "Article" ? "125,000" : "3000"} · {text.trim().split(/\s+/).filter(Boolean).length} words</span>
               </div>
             </div>
-            {!!human.flags.length && <p className="m-0 text-[12.5px] text-[#9e1c1c]">House rules: {human.flags.join(" · ")}</p>}
+            {!!human.flags.length && <p className="m-0 text-meta text-[#9e1c1c]">House rules: {human.flags.join(" · ")}</p>}
           </div>}
 
           {step === S.draft && video && <div className="flex flex-col gap-3">
             <AngleBar />
-            <H t="Write the script" sub={`What ${first} says, and what shows on screen while it is said.`} right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-[12px] text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
-            <label className="flex flex-col gap-2 rounded-2xl bg-[#141414] p-4 text-white"><span className="text-[12.5px] font-semibold text-[#ff8a80]">Hook · first 3 seconds</span><input className="h-11 rounded-xl border border-white/20 bg-white/5 px-3 text-[15px] font-semibold text-white outline-none" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
+            <H t="Write the script" sub={`What ${first} says, and what shows on screen while it is said.`} right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-meta text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
+            <label className="flex flex-col gap-2 rounded-2xl bg-surface-2 p-4 text-ink"><span className="text-meta font-semibold text-ink">Hook · first 3 seconds</span><input className="field h-11 text-title font-semibold" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
             {script.beats.map((b, i) => (
               <div key={i} className="card flex gap-3 p-3.5">
-                <span className="num grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#d64545] text-[12px] text-white">{i + 1}</span>
+                <span className="num grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#d64545] text-meta text-white">{i + 1}</span>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <label className="flex flex-col gap-1"><span className="label">Say</span><input className="field" value={b.say} onChange={(e) => setScript({ ...script, beats: script.beats.map((x, j) => (j === i ? { ...x, say: e.target.value } : x)) })} /></label>
-                  <label className="flex flex-col gap-1"><span className="label">Show on screen</span><input className="field border-dashed text-[13px] text-muted" value={b.show} onChange={(e) => setScript({ ...script, beats: script.beats.map((x, j) => (j === i ? { ...x, show: e.target.value } : x)) })} /></label>
+                  <label className="flex flex-col gap-1"><span className="label">Show on screen</span><input className="field border-dashed text-body text-muted" value={b.show} onChange={(e) => setScript({ ...script, beats: script.beats.map((x, j) => (j === i ? { ...x, show: e.target.value } : x)) })} /></label>
                 </div>
                 <button className="btn h-8 w-8 p-0" aria-label="Remove beat" disabled={script.beats.length <= 3} onClick={() => setScript({ ...script, beats: script.beats.filter((_, j) => j !== i) })}><X size={14} /></button>
               </div>
@@ -446,20 +446,20 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <H t="Cover and captions" sub="The first frame people see in the feed, and how the words appear on screen." />
               <div className="grid grid-cols-3 gap-2.5">{[["dark", "#141414", "#fff"], ["red", "#d64545", "#fff"], ["white", "#fff", "#141414"]].map(([k, bg, fg]) => (
                 <button key={k} aria-pressed={script.cover === k} className={pick(script.cover === k) + " !p-2.5"} onClick={() => setScript({ ...script, cover: k })}>
-                  <span className="flex aspect-[4/5] w-full flex-col gap-2 rounded-xl p-3 text-left" style={{ background: bg, color: fg, border: k === "white" ? "1px solid #e8e8e8" : 0 }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-[14px] font-bold leading-snug">{script.hook || hook}</span></span>
-                  <span className="text-[12.5px] font-semibold capitalize">{k} cover</span></button>))}</div>
-              <div className="card flex flex-wrap items-center gap-3 p-4"><span className="min-w-[200px] flex-1"><b className="block">Burned-in captions</b><span className="text-[12.5px] text-muted">Most feed videos play muted, so the words carry the point.</span></span>
-                <div className="flex rounded-lg border border-line p-0.5">{[["bold", "Bold block"], ["line", "Clean line"], ["off", "Off"]].map(([k, l]) => <button key={k} className={`h-8 rounded-md px-3 text-[13px] font-semibold ${script.captions === k ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => setScript({ ...script, captions: k })}>{l}</button>)}</div></div>
-              <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-3 text-[13px] text-white">Prax writes the script and captions; {first} records the video.</p>
+                  <span className="flex aspect-[4/5] w-full flex-col gap-2 rounded-xl p-3 text-left" style={{ background: bg, color: fg, border: k === "white" ? "1px solid #e8e8e8" : 0 }}><span className="text-meta font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-body font-semibold leading-snug">{script.hook || hook}</span></span>
+                  <span className="text-meta font-semibold capitalize">{k} cover</span></button>))}</div>
+              <div className="card flex flex-wrap items-center gap-3 p-4"><span className="min-w-[200px] flex-1"><b className="block">Burned-in captions</b><span className="text-meta text-muted">Most feed videos play muted, so the words carry the point.</span></span>
+                <div className="flex rounded-lg border border-line p-0.5">{[["bold", "Bold block"], ["line", "Clean line"], ["off", "Off"]].map(([k, l]) => <button key={k} className={`h-8 rounded-md px-3 text-body font-semibold ${script.captions === k ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => setScript({ ...script, captions: k })}>{l}</button>)}</div></div>
+              <p className="m-0 rounded-xl bg-surface-2 px-3.5 py-3 text-body text-ink">Prax writes the script and captions; {first} records the video.</p>
             </> : type === "Carousel" ? <>
               <H t="Build the carousel" sub="The house template keeps the text sharp. LinkedIn takes it as a PDF document." right={<span className="flex gap-2">{editable && <button className="btn h-9" disabled={!!busy} onClick={getSlides}><Sparkles size={14} /> {busy === "slides" ? "Writing" : slides.length ? "Write again" : "Write the slides"}</button>}<button className="btn btn-primary h-9" disabled={!slides.length} onClick={() => { const b = carouselPdf(slides, byline.replace(" · ", " - ")); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([b.buffer as ArrayBuffer], { type: "application/pdf" })); a.download = `${(idea?.title || "carousel").slice(0, 40).replace(/[^\w]+/g, "-").toLowerCase()}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }}><Download size={14} /> Download PDF</button></span>} />
               <div className="flex gap-2.5 overflow-x-auto pb-2">{slides.map((s, i) => { const dark = i === 0 || i === slides.length - 1; return (
                 <div key={i} className="flex h-[200px] w-[160px] shrink-0 flex-col gap-1.5 rounded-xl border p-3" style={{ background: dark ? "#141414" : "#fff", color: dark ? "#fff" : "#141414", borderColor: dark ? "#141414" : "#e8e8e8" }}>
-                  <span className="num text-[10px] text-[#d64545]">{String(i + 1).padStart(2, "0")}</span>
-                  <input className="bg-transparent text-[13px] font-semibold outline-none" value={s.title} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} aria-label={`Slide ${i + 1} title`} />
-                  <textarea className="flex-1 resize-none bg-transparent text-[11px] opacity-80 outline-none" value={s.body} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, body: e.target.value } : x)))} aria-label={`Slide ${i + 1} text`} />
+                  <span className="num text-meta text-[#d64545]">{String(i + 1).padStart(2, "0")}</span>
+                  <input className="bg-transparent text-body font-semibold outline-none" value={s.title} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} aria-label={`Slide ${i + 1} title`} />
+                  <textarea className="flex-1 resize-none bg-transparent text-meta opacity-80 outline-none" value={s.body} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, body: e.target.value } : x)))} aria-label={`Slide ${i + 1} text`} />
                 </div>); })}
-                {!slides.length && <p className="m-0 text-[13px] text-muted">Write the slides from the draft, then edit any of them here.</p>}</div>
+                {!slides.length && <p className="m-0 text-body text-muted">Write the slides from the draft, then edit any of them here.</p>}</div>
             </> : type === "Poll" ? <>
               <H t="Poll options" sub="Two to four options, each under 30 characters." />
               {pollOpts.map((o, i) => <div key={i} className="flex gap-2"><input className="field" maxLength={30} value={o} onChange={(e) => setPollOpts(pollOpts.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`Option ${i + 1}`} /><button className="btn h-9 w-9 p-0" aria-label="Remove option" disabled={pollOpts.length <= 2} onClick={() => setPollOpts(pollOpts.filter((_, j) => j !== i))}><X size={14} /></button></div>)}
@@ -469,12 +469,12 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <div className="grid grid-cols-3 gap-2.5">{[["statement", "Statement card", "The key line, set large."], ["diagram", "Simple diagram", "Boxes that show a flow."], ["photo", "Photo with caption", "An editorial image."]].map(([k, t, sub]) => (
                 <button key={k} aria-pressed={layout === k} className={pick(layout === k) + " !p-2.5"} onClick={() => setLayout(k)}>
                   <svg viewBox="0 0 120 80" className="w-full rounded-lg border border-[#ececec]" aria-hidden="true"><rect width="120" height="80" fill="#fff" />{k === "statement" ? <><rect x="14" y="18" width="78" height="6" fill="#141414" /><rect x="14" y="30" width="66" height="6" fill="#141414" /><rect x="14" y="42" width="40" height="6" fill="#141414" /><rect x="14" y="62" width="14" height="2" fill="#d64545" /></> : k === "diagram" ? <><rect x="10" y="30" width="26" height="20" rx="2" fill="none" stroke="#141414" /><rect x="47" y="30" width="26" height="20" rx="2" fill="none" stroke="#141414" /><rect x="84" y="30" width="26" height="20" rx="2" fill="#141414" /><path d="M37 40h9M74 40h9" stroke="#d64545" /></> : <><rect x="10" y="10" width="100" height="44" rx="2" fill="#ececec" /><rect x="10" y="62" width="62" height="4" fill="#141414" /></>}</svg>
-                  <span className="text-[13px] font-semibold">{t}</span><span className="text-[12px] text-muted">{sub}</span></button>))}</div>
+                  <span className="text-body font-semibold">{t}</span><span className="text-meta text-muted">{sub}</span></button>))}</div>
               <label className="flex flex-col gap-1.5"><span className="label">Anything to add to the image brief</span><input className="field" value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder="For example: a settlement line meeting a ledger" /></label>
               {ext?.searchKeys?.openai || ext?.searchKeys?.gemini ? (
-                <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-[12.5px] text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-[12.5px]" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : image ? "Make another" : "Make the image"}</button>{image && <a className="btn" href={image} download="post-visual.png"><Download size={14} /> Download</a>}{image && <button className="btn btn-ghost" onClick={() => setImage(null)}>Remove</button>}</div>
+                <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-meta text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-meta" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : image ? "Make another" : "Make the image"}</button>{image && <a className="btn" href={image} download="post-visual.png"><Download size={14} /> Download</a>}{image && <button className="btn btn-ghost" onClick={() => setImage(null)}>Remove</button>}</div>
               ) : (
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><KeyState on={false} className="text-[12.5px]" /><span className="text-[12.5px] text-muted">Images use the OpenAI or Google Gemini (Nano Banana) key. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect</Link></div>
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><KeyState on={false} className="text-meta" /><span className="text-meta text-muted">Images use the OpenAI or Google Gemini (Nano Banana) key. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect</Link></div>
               )}
             </>}
           </div>}
@@ -482,22 +482,22 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
           {step === S.plan && <div className="flex flex-col gap-3.5" data-tour="handoff">
             {angleText && <AngleBar />}
             <H t="Plan and hand off" sub={`Prax never posts. It copies the post, opens LinkedIn and reminds ${first} at the planned time.`} right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
-            {type === "Article" && settings.newsletter.name && <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-3 text-[13.5px]"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} />Part of the <b>{settings.newsletter.name}</b> newsletter</label>}
+            {type === "Article" && settings.newsletter.name && <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-3 text-body"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} />Part of the <b>{settings.newsletter.name}</b> newsletter</label>}
             {!!flags.length && <div className="rounded-xl border-2 border-[#d64545] bg-white p-4" data-tour="claims">
-              <div className="mb-2 text-[13px] font-semibold">Check before it goes to {first}</div>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">{flags.map((f, i) => <li key={i} className="text-[13px]"><span className="font-semibold text-[#d64545]">{f.kind === "returns" ? "Returns" : f.kind === "timeline" ? "Timeline" : f.kind === "client" ? "Client named" : f.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{f.text}&rdquo;<span className="block text-[12px] text-muted">{f.why}</span></li>)}</ul>
-              <label className="mt-3 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
+              <div className="mb-2 text-body font-semibold">Check before it goes to {first}</div>
+              <ul className="m-0 flex list-none flex-col gap-2 p-0">{flags.map((f, i) => <li key={i} className="text-body"><span className="font-semibold text-[#d64545]">{f.kind === "returns" ? "Returns" : f.kind === "timeline" ? "Timeline" : f.kind === "client" ? "Client named" : f.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{f.text}&rdquo;<span className="block text-meta text-muted">{f.why}</span></li>)}</ul>
+              <label className="mt-3 flex items-center gap-2 text-body"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
             </div>}
             <div className="card flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between"><span className="label">Approval</span>{live ? <StatusPill s={live.status} /> : <span className="pill border border-[#d4d4d4] bg-white text-muted">Not saved</span>}</div>
               {st === "In review" ? (owner ? <>
-                <textarea className="field text-[13px]" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
+                <textarea className="field text-body" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
                 <div className="flex gap-2"><button className="btn btn-primary" onClick={() => decide(true)}>Approve</button><button className="btn" onClick={() => decide(false)}>Ask for changes</button></div>
-              </> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13px]">With {first}. It is in the approval session on Today.</span><button className="btn" onClick={withdraw}>Withdraw</button></div>)
-                : st === "Ready" || st === "Posted" ? <span className="text-[13px]">Approved. It can go on the plan.</span>
+              </> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-body">With {first}. It is in the approval session on Today.</span><button className="btn" onClick={withdraw}>Withdraw</button></div>)
+                : st === "Ready" || st === "Posted" ? <span className="text-body">Approved. It can go on the plan.</span>
                 : <>
-                  {live?.decision === "changes" && live.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">{first} asked for changes: &ldquo;{live.decision_note}&rdquo;</p>}
-                  <p className="m-0 text-[13px] leading-relaxed">{cap(first)} owns this profile, so team drafts need a yes before they are planned. They arrive in one weekly approval session on Today.</p>
+                  {live?.decision === "changes" && live.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-body">{first} asked for changes: &ldquo;{live.decision_note}&rdquo;</p>}
+                  <p className="m-0 text-body leading-relaxed">{cap(first)} owns this profile, so team drafts need a yes before they are planned. They arrive in one weekly approval session on Today.</p>
                   {editable && <div className="flex flex-wrap gap-2"><button className="btn" onClick={saveDraft}>Save draft</button><button className="btn btn-primary" onClick={sendForApproval}>Send to {first} for approval</button>{owner && <button className="btn btn-ghost" onClick={() => decide(true)}>Approve it myself</button>}</div>}
                 </>}
             </div>
@@ -514,16 +514,16 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           <div className="flex items-center justify-between gap-2.5 pt-0.5">
             <button className="btn h-10 px-4" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
-            <span className="num text-[12px] text-faint">Step {step + 1} of {names.length}</span>
+            <span className="num text-meta text-faint">Step {step + 1} of {names.length}</span>
             <button className="btn btn-primary h-10 px-5" disabled={step === S.plan || !canNext} onClick={() => { const n = step + 1; setStep(n); if (n === S.idea && !ideas.length && editable) getIdeas(); if (n === S.hook && !hooks.length && editable && idea) getHooks(); if (n === S.draft && !video && !drafts.length && !text && editable && hook) getDrafts(); }}>{step === S.plan ? "Done" : "Continue"}</button>
           </div>
         </section>
 
         <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
           <LinkedInPreview text={body || hook} image={image} company={channel === "company"} device={device} setDevice={setDevice}
-            video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-[17px] font-bold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-[13px] font-bold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
+            video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-meta font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-title font-semibold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-body font-semibold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
             footer={!video && <> · Human {human.score}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />
-          {channel === "company" && <p className="m-0 text-center text-[12.5px] font-semibold">Company content, not for {possessive(first)} profile</p>}
+          {channel === "company" && <p className="m-0 text-center text-meta font-semibold">Company content, not for {possessive(first)} profile</p>}
         </aside>
       </div>
     </div>

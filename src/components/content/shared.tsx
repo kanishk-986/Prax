@@ -25,8 +25,9 @@ export const statusOf = (s: string) => (s === "Approved" || s === "Scheduled" ? 
 
 export function StatusPill({ s }: { s: string }) {
   const v = statusOf(s);
-  const style = v === "Ready" ? { background: "#d64545", color: "#fff" } : v === "Drafting" ? { background: "#141414", color: "#fff" } : v === "Posted" ? { background: "#9e1c1c", color: "#fff" }
-    : v === "In review" ? { background: "#fff", color: "#d64545", border: "1px solid #d64545" } : v === "On hold" ? { background: "#ececec", color: "#5f5f5f" } : { background: "#fff", color: "#141414", border: "1px solid #d4d4d4" };
+  // Status only, never a call to action: dark red for what waits on someone, ink and grey for the rest.
+  const style = v === "Ready" ? { background: "#141414", color: "#fff" } : v === "Drafting" ? { background: "#ececec", color: "#141414" } : v === "Posted" ? { background: "#fff", color: "#5f5f5f", border: "1px solid #d4d4d4" }
+    : v === "In review" ? { background: "#fbeaea", color: "#9e1c1c" } : v === "On hold" ? { background: "#f3f3f3", color: "#5f5f5f" } : { background: "#fff", color: "#141414", border: "1px solid #d4d4d4" };
   return <span className="pill" style={style}>{v}</span>;
 }
 
@@ -35,7 +36,7 @@ export function ChannelFlag({ p, long }: { p: { channel?: string }; long?: boole
   const { ws } = useWorkspace();
   if (p.channel !== "company") return null;
   const line = `Company content, not for ${possessive(firstNameOf(ws))} profile`;
-  return <span className="pill" style={{ background: "#141414", color: "#fff" }} title={line}>{long ? line : "Company content"}</span>;
+  return <span className="pill" style={{ background: "#ececec", color: "#141414" }} title={line}>{long ? line : "Company content"}</span>;
 }
 
 export const logActivity = (wsId: string, kind: string, label: string, refId?: string | null) =>
@@ -75,18 +76,18 @@ export function DayPopover({ anchor, initial, onPick, onClose }: { anchor: HTMLE
     <div ref={ref} role="dialog" aria-label="Pick a day" className="card anim-rise fixed z-[70] w-[320px] p-3" style={{ top: pos.top, left: pos.left, boxShadow: "var(--shadow-lg)" }}>
       <div className="mb-2 flex items-center justify-between">
         <button className="btn btn-ghost h-7 w-7 p-0" aria-label="Previous week" onClick={() => setWeek(addDays(week, -7))} disabled={week <= weekStart(t)}><ChevronLeft size={14} /></button>
-        <span className="text-[12.5px] font-semibold">Week of {fmtDay(week, { day: "numeric", month: "short" })}</span>
+        <span className="text-meta font-semibold">Week of {fmtDay(week, { day: "numeric", month: "short" })}</span>
         <button className="btn btn-ghost h-7 w-7 p-0" aria-label="Next week" onClick={() => setWeek(addDays(week, 7))}><ChevronRight size={14} /></button>
       </div>
       <div className="grid grid-cols-7 gap-1">
         {Array.from({ length: 7 }, (_, i) => addDays(week, i)).map((d) => (
-          <button key={d} disabled={d < t} onClick={() => onPick(d, time)} className="flex flex-col items-center rounded-lg border border-line py-1.5 text-[12px] hover:border-[#d64545] disabled:opacity-40"
+          <button key={d} disabled={d < t} onClick={() => onPick(d, time)} className="flex flex-col items-center rounded-lg border border-line py-1.5 text-meta hover:border-[#d64545] disabled:opacity-40"
             style={d === t ? { background: "#141414", color: "#fff", borderColor: "#141414" } : undefined}>
-            <span className="text-[10px] font-semibold">{fmtDay(d, { weekday: "short" })}</span><span className="num">{d.slice(8)}</span>
+            <span className="text-meta font-semibold">{fmtDay(d, { weekday: "short" })}</span><span className="num">{d.slice(8)}</span>
           </button>
         ))}
       </div>
-      <label className="mt-2.5 flex items-center gap-2 text-[12.5px] text-muted">Time, Dubai<input type="time" className="field h-8 w-[110px]" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+      <label className="mt-2.5 flex items-center gap-2 text-meta text-muted">Time, Dubai<input type="time" className="field h-8 w-[110px]" value={time} onChange={(e) => setTime(e.target.value)} /></label>
     </div>
   );
 }
@@ -108,7 +109,7 @@ export function ActionMenu({ anchor, items, onClose }: { anchor: HTMLElement; it
   useEffect(() => { ref.current?.querySelector("button")?.focus(); }, []);
   return (
     <div ref={ref} role="menu" className="card anim-rise fixed z-[70] min-w-[190px] p-1" style={{ top: pos.top, left: pos.left, boxShadow: "var(--shadow-lg)" }}>
-      {items.map((it) => <button key={it.label} role="menuitem" onClick={() => { onClose(); it.run(); }} className={`flex w-full items-center rounded-md px-3 py-2 text-left text-[13px] font-medium hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${it.danger ? "text-[#d64545]" : "text-ink"}`}>{it.label}</button>)}
+      {items.map((it) => <button key={it.label} role="menuitem" onClick={() => { onClose(); it.run(); }} className={`flex w-full items-center rounded-md px-3 py-2 text-left text-body font-medium hover:bg-surface-2 focus:bg-surface-2 focus:outline-none ${it.danger ? "text-[#d64545]" : "text-ink"}`}>{it.label}</button>)}
     </div>
   );
 }
@@ -120,7 +121,7 @@ export function Modal({ title, onClose, children, wide, footer }: { title: strin
     <div className="fixed inset-0 z-[55] grid place-items-center bg-black/40 p-4" onMouseDown={onClose}>
       <div role="dialog" aria-label={title} className={`card anim-rise flex max-h-[90vh] w-full flex-col overflow-hidden ${wide ? "max-w-[860px]" : "max-w-[560px]"}`} style={{ boxShadow: "var(--shadow-lg)" }} onMouseDown={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-          <h2 className="m-0 min-w-0 truncate text-[16px] font-semibold">{title}</h2>
+          <h2 className="m-0 min-w-0 truncate text-title font-semibold">{title}</h2>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close">Close</button>
         </header>
         <div className="flex-1 overflow-auto px-5 py-4">{children}</div>

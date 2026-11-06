@@ -1,5 +1,5 @@
 // Checks the section shell rules: entry moment and tour gating, and tour step maths. Run: node scripts/test-shell.ts
-import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, type Store } from "../src/lib/shell.ts";
+import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, tourPlace, type Store } from "../src/lib/shell.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -11,13 +11,22 @@ const mem = (): Store => { const m: Record<string, string> = {}; return { getIte
 const broken: Store = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
 
 const ss = mem();
-eq("intro plays first time", shouldPlayIntro(ss, "today", false), true);
-markIntro(ss, "today");
-eq("intro skipped after it played", shouldPlayIntro(ss, "today", false), false);
-eq("other sections still play", shouldPlayIntro(ss, "network", false), true);
-eq("reduced motion never plays", shouldPlayIntro(mem(), "today", true), false);
-eq("no storage never plays", shouldPlayIntro(null, "today", false), false);
-eq("blocked storage never plays and never throws", shouldPlayIntro(broken, "today", false), false);
+const D = "2026-11-06";
+eq("intro plays on the Dashboard the first time today", shouldPlayIntro(ss, "dashboard", false, D), true);
+markIntro(ss, "dashboard", D);
+eq("intro skipped after it played today", shouldPlayIntro(ss, "dashboard", false, D), false);
+eq("intro plays again the next day", shouldPlayIntro(ss, "dashboard", false, "2026-11-07"), true);
+eq("other sections never play (they fade)", shouldPlayIntro(mem(), "today", false, D), false);
+eq("reduced motion never plays", shouldPlayIntro(mem(), "dashboard", true, D), false);
+eq("no storage never plays", shouldPlayIntro(null, "dashboard", false, D), false);
+eq("blocked storage never plays and never throws", shouldPlayIntro(broken, "dashboard", false, D), false);
+const V = { width: 1280, height: 800 }, CARD = { width: 380, height: 220 };
+eq("tour card sits below its target", tourPlace({ top: 100, left: 300, width: 600, height: 80 }, CARD, V), { top: 192, left: 300 });
+eq("tour card goes above a target low on the screen", tourPlace({ top: 600, left: 300, width: 600, height: 120 }, CARD, V), { top: 368, left: 300 });
+eq("tour card stays inside the right edge", tourPlace({ top: 100, left: 1100, width: 160, height: 40 }, CARD, V), { top: 152, left: 884 });
+eq("tall target: beside it", tourPlace({ top: 40, left: 40, width: 500, height: 720 }, CARD, V), { top: 40, left: 552 });
+eq("no target: bottom left", tourPlace(null, CARD, V), { top: 564, left: 16 });
+eq("phone: full width card below", tourPlace({ top: 80, left: 16, width: 358, height: 60 }, { width: 358, height: 220 }, { width: 390, height: 844 }), { top: 152, left: 16 });
 
 const ls = mem();
 eq("tour auto-starts once", shouldAutoTour(ls, "today", "u1"), true);
@@ -29,7 +38,7 @@ let t = { index: 0 as number | null, done: [] as number[] };
 t = moveTour(t, "next", 3); eq("next marks done", t, { index: 1, done: [0] });
 t = moveTour(t, "skip", 3); eq("skip moves without marking", t, { index: 2, done: [0] });
 t = moveTour(t, "back", 3); eq("back keeps done", t, { index: 1, done: [0] });
-eq("label", tourLabel(t, 3), "Step 2 of 3 · 1 completed");
+eq("label", tourLabel(t, 3), "Step 2 of 3");
 t = moveTour(t, "next", 3); t = moveTour(t, "next", 3); eq("past the last step closes", t, { index: null, done: [0, 1, 2] });
 eq("percent", tourPercent(t, 3), 100);
 eq("back at the first step stays", moveTour({ index: 0, done: [] }, "back", 3), { index: 0, done: [] });

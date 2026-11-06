@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import { PenLine, CalendarRange, Type, Target } from "lucide-react";
 import { useWorkspace, today, addDays, weekStart, fmtDay } from "@/lib/workspace";
-import { greeting, firstName } from "@/lib/dashboard";
+
 import { firstNameOf } from "@/lib/persona";
 import { StartCards } from "@/components/shell";
 import { whatWorks, nextIssue } from "@/lib/content";
@@ -17,13 +17,11 @@ type Need = { id: string; label: string; sub: string; post: Post; act: "open" | 
 export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, planCampaign }: {
   posts: Post[]; campaigns: Campaign[]; settings: ContentSettings; go: (tab: string) => void; openPost: (p: Post) => void; writeFrom: (p: Post) => void; planCampaign: () => void;
 }) {
-  const { ws, email, name, can } = useWorkspace();
+  const { ws, can } = useWorkspace();
   // AI citations gap topics show for the tracked profile in view there (db/017).
   const { scope: citScope } = useCitationProfile();
   const t = today(), tomorrow = addDays(t, 1), wk = weekStart(t), wkEnd = addDays(wk, 6);
-  const hour = new Date().getHours();
-  // Same greeting as the Dashboard: the signed-in member's own name, then a readable email name, then none.
-  const greet = greeting(hour, firstName(name, email));
+
   const s = (p: Post) => statusOf(p.status);
   const first = firstNameOf(ws);
 
@@ -57,10 +55,9 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
 
   return (
     <div className="flex flex-col gap-5">
-      <div><h2 className="m-0 text-[22px] font-semibold tracking-tight">{greet}</h2><p className="m-0 mt-1 text-[13.5px] text-muted">{fmtDay(t, { weekday: "long", day: "numeric", month: "long" })} · {ws.name}</p></div>
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4" data-tour="tiles">
-        {tiles.map((x) => <button key={x.k} type="button" className="card card-hover flex flex-col items-start gap-1 p-4 text-left" onClick={() => go(x.go)}>
-          <span className="num text-[28px] font-medium leading-none">{x.v}</span><span className="text-[12.5px] font-semibold text-muted">{x.k}</span></button>)}
+        {tiles.map((x) => <button key={x.k} type="button" className="tile hit" onClick={() => go(x.go)}>
+          <span className="tile-label">{x.k}</span><span className="num tile-num">{x.v}</span></button>)}
       </div>
 
       <div className="flex flex-wrap items-start gap-5">
@@ -68,15 +65,15 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
           <div className="panel">
             <div className="panel-head">Needs you</div>
             {needs.map((n) => (
-              <div key={n.id} className="flex items-center gap-3 border-t border-line px-4 py-3">
-                <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="truncate text-[14px] font-semibold">{n.label}</span><ChannelFlag p={n.post} /></span><span className="text-[12.5px] text-muted">{n.sub}</span></span>
+              <div key={n.id} className="group flex items-center gap-3 border-t border-line px-4 py-3">
+                <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="truncate text-body font-semibold">{n.label}</span><ChannelFlag p={n.post} /></span><span className="text-meta text-muted">{n.sub}</span></span>
                 <StatusPill s={n.post.status} />
-                <button className={`btn h-8 shrink-0 ${n.act === "write" ? "btn-primary" : "btn-dark"}`} onClick={() => (n.act === "write" && can("editor") ? writeFrom(n.post) : openPost(n.post))}>{n.act === "write" && can("editor") ? "Write it" : "Open"}</button>
+                <button className="btn btn-quiet row-act h-8 shrink-0" onClick={() => (n.act === "write" && can("editor") ? writeFrom(n.post) : openPost(n.post))}>{n.act === "write" && can("editor") ? "Write it" : "Open"}</button>
               </div>
             ))}
-            {!needs.length && <p className="m-0 border-t border-line p-7 text-center text-[13px] text-muted">Nothing needs you right now. Approvals, posts due soon and new topics show here.</p>}
+            {!needs.length && <p className="m-0 border-t border-line p-7 text-center text-body text-muted">Nothing needs you right now. Approvals, posts due soon and new topics show here.</p>}
           </div>
-          {settings.newsletter.name && <p className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-[13px]"><span className="mr-2 font-semibold text-[#d64545]">Newsletter</span>Next issue of {settings.newsletter.name}: {fmtDay(nextIssue(settings.newsletter, t), { weekday: "long", day: "numeric", month: "short" })}</p>}
+          {settings.newsletter.name && <p className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-body"><span className="mr-2 font-semibold">Newsletter</span>Next issue of {settings.newsletter.name}: {fmtDay(nextIssue(settings.newsletter, t), { weekday: "long", day: "numeric", month: "short" })}</p>}
         </section>
 
         <aside className="flex min-w-0 flex-[2_1_320px] flex-col gap-2.5">
@@ -84,12 +81,12 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
           <div className="panel" data-tour="works">
             <div className="panel-head">What works</div>
             <div className="border-t border-line p-4">
-            {!ww.enough ? <p className="m-0 text-[13px] text-muted">Not enough results yet. Add the reactions and comments of {ww.need - ww.have} more posted {ww.need - ww.have === 1 ? "piece" : "pieces"} and Prax shows which formats, pillars, days and openings work best.</p>
-              : <div className="flex flex-col gap-2.5 text-[13px]">
+            {!ww.enough ? <p className="m-0 text-body text-muted">Not enough results yet. Add the reactions and comments of {ww.need - ww.have} more posted {ww.need - ww.have === 1 ? "piece" : "pieces"} and Prax shows which formats, pillars, days and openings work best.</p>
+              : <div className="flex flex-col gap-2.5 text-body">
                 {([["Format", ww.byFormat], ["Pillar", ww.byPillar], ["Day", ww.byDay], ["Time", ww.bySlot], ["Opening", ww.byHook]] as const).map(([k, g]) => g[0] && (
-                  <div key={k} className="flex items-baseline gap-3"><span className="w-[64px] shrink-0 text-[12px] text-muted">{k}</span><span className="min-w-0 flex-1 font-semibold">{g[0].k}</span><span className="num text-[12px] text-muted">{g[0].avg} avg · {g[0].n} posts</span></div>
+                  <div key={k} className="flex items-baseline gap-3"><span className="w-[64px] shrink-0 text-meta text-muted">{k}</span><span className="min-w-0 flex-1 font-semibold">{g[0].k}</span><span className="num text-meta text-muted">{g[0].avg} avg · {g[0].n} posts</span></div>
                 ))}
-                <p className="m-0 text-[11.5px] text-faint">Based on {ww.have} posted pieces. Reactions plus twice the comments.</p>
+                <p className="m-0 text-meta text-faint">Based on {ww.have} posted pieces. Reactions plus twice the comments.</p>
               </div>}
             </div>
           </div>

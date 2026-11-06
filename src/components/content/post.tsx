@@ -20,21 +20,21 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
   const { ws, can } = useWorkspace();
   const first = firstNameOf(ws), name = fullNameOf(ws), company = companyOf(ws);
   const camp = campaigns.find((c) => c.id === post.campaign_id);
-  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-[13px] last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
+  const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-body last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
     <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
-      {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] font-semibold text-white">Company content, not for {possessive(first)} profile</p>}
+      {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body font-semibold text-ink">Company content, not for {possessive(first)} profile</p>}
       <div className="grid gap-5 md:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="label mb-2">Draft, as it reads on LinkedIn</div>
           <div className="rounded-xl border border-line bg-white p-4 shadow-[var(--shadow)]">
-            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-[13px] font-semibold text-white">{initialsOf(post.channel === "company" ? companyOf(ws, "") : fullNameOf(ws, ""))}</span><span className="flex flex-col"><span className="text-[14px] font-semibold">{post.channel === "company" ? cap(company) : cap(name)}</span><span className="text-[12px] text-muted">{post.channel === "company" ? "Company page" : ws.headline || "LinkedIn profile"}</span></span></div>
-            <p className="m-0 whitespace-pre-wrap text-[14px] leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
+            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-body font-semibold text-white">{initialsOf(post.channel === "company" ? companyOf(ws, "") : fullNameOf(ws, ""))}</span><span className="flex flex-col"><span className="text-body font-semibold">{post.channel === "company" ? cap(company) : cap(name)}</span><span className="text-meta text-muted">{post.channel === "company" ? "Company page" : ws.headline || "LinkedIn profile"}</span></span></div>
+            <p className="m-0 whitespace-pre-wrap text-body leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
           </div>
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
         </div>
         <aside>
-          {post.angle && <p className="m-0 mb-3 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Angle</b> {post.angle}</p>}
+          {post.angle && <p className="m-0 mb-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body leading-snug text-ink"><b className="font-semibold">Angle</b> {post.angle}</p>}
           {post.source_kind === "discovery" && <Row k="From" v={`Discovery Studio${post.discovery?.rank ? ` · #${post.discovery.rank}` : ""}${post.discovery?.score != null ? ` · ${post.discovery.score}` : ""}`} />}
           <Row k="Campaign" v={camp ? <span className="text-[#d64545]">{camp.name}</span> : "Independent"} />
           <Row k="Type" v={post.format || "Text post"} />
@@ -45,8 +45,8 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
           <Row k="Planned" v={when(post)} />
           {post.phase && <Row k="Phase" v={post.phase} />}
           <div className="label mb-1.5 mt-4">Approval history</div>
-          {!post.requested_at && !post.decided_at ? <p className="text-[13px] text-muted">Not sent for approval.</p> : (
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[13px]">
+          {!post.requested_at && !post.decided_at ? <p className="text-body text-muted">Not sent for approval.</p> : (
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-body">
               {post.requested_at && <li>Sent for approval by {members[post.requested_by ?? ""] || "the team"}, {stamp(post.requested_at)}</li>}
               {post.decided_at && <li>{post.decision === "approved" ? "Approved" : "Changes asked"} by {members[post.decided_by ?? ""] || first}, {stamp(post.decided_at)}</li>}
               {post.decision_note && <li className="rounded-lg bg-surface-2 px-2.5 py-1.5">&ldquo;{post.decision_note}&rdquo;</li>}
@@ -140,7 +140,7 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     <div className="fixed inset-0 z-[56] flex justify-end bg-black/30" onMouseDown={onClose}>
       <aside role="dialog" aria-label="Edit post" className="cs flex h-full w-full max-w-[560px] flex-col border-l border-line bg-white shadow-[var(--shadow-lg)]" onMouseDown={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
-          <div className="flex min-w-0 items-center gap-2"><StatusPill s={f.status} /><ChannelFlag p={f} /><span className="truncate text-[13px] text-muted">{camp ? camp.name : "Independent"}</span></div>
+          <div className="flex min-w-0 items-center gap-2"><StatusPill s={f.status} /><ChannelFlag p={f} /><span className="truncate text-body text-muted">{camp ? camp.name : "Independent"}</span></div>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </header>
         <div className="flex-1 overflow-auto px-5 py-4">
@@ -149,13 +149,13 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
             <label className="flex flex-col gap-1"><span className="label">Type</span><select className="field" value={f.format || "Text post"} onChange={(e) => set("format", e.target.value)}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="flex flex-col gap-1"><span className="label">Pillar</span><select className="field" value={f.pillar} onChange={(e) => set("pillar", e.target.value)}><option value="">Not set</option>{pillars.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="flex flex-col gap-1"><span className="label">Where it goes</span><select className="field" value={f.channel ?? PROFILE_CHANNEL} onChange={(e) => set("channel", e.target.value as Channel)}><option value={PROFILE_CHANNEL}>{possessive(first)} own profile</option><option value="company">{cap(company)} company page</option></select></label>
-            <label className="flex items-end gap-2 pb-2 text-[13px]">{f.format === "Article" && settings?.newsletter.name ? <><input type="checkbox" checked={!!f.newsletter} onChange={(e) => set("newsletter", e.target.checked)} />Part of {settings.newsletter.name}</> : null}</label>
-            {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-[#141414] px-3 py-2 text-[12.5px] font-semibold text-white">Company content, not for {possessive(first)} profile</p>}
+            <label className="flex items-end gap-2 pb-2 text-body">{f.format === "Article" && settings?.newsletter.name ? <><input type="checkbox" checked={!!f.newsletter} onChange={(e) => set("newsletter", e.target.checked)} />Part of {settings.newsletter.name}</> : null}</label>
+            {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-surface-2 px-3 py-2 text-meta font-semibold text-ink">Company content, not for {possessive(first)} profile</p>}
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Campaign</span><select className="field" value={f.campaign_id ?? ""} onChange={(e) => set("campaign_id", e.target.value || null)}><option value="">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <div className="col-span-2 flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-2"><span className="label">Draft</span>{post.id && f.draft.trim().length > 80 && <a className="ml-auto text-[12px] font-semibold underline underline-offset-2" href={`/w/${ws.slug}/citations?draft=${post.id}`} title="Test whether AI tools would cite this draft. Save first.">Is this citable?</a>}<button type="button" className="btn btn-dark h-7 text-[12px]" disabled={!!busy} onClick={aiDraft}><Sparkles size={13} /> {busy === "draft" ? "Writing" : f.draft ? "Improve with AI" : "AI draft"}</button></div>
-              <textarea className="field min-h-[220px] text-[14px]" value={f.draft} onChange={(e) => set("draft", e.target.value)} placeholder={`Write here, or press AI draft. ${cap(possessive(first))} voice and locked rules apply.`} />
-              <span className="num text-right text-[11.5px] text-muted">{Array.from(f.draft).length.toLocaleString()} / 3000</span>
+              <div className="flex items-center justify-between gap-2"><span className="label">Draft</span>{post.id && f.draft.trim().length > 80 && <a className="ml-auto text-meta font-semibold underline underline-offset-2" href={`/w/${ws.slug}/citations?draft=${post.id}`} title="Test whether AI tools would cite this draft. Save first.">Is this citable?</a>}<button type="button" className="btn btn-dark h-7 text-meta" disabled={!!busy} onClick={aiDraft}><Sparkles size={13} /> {busy === "draft" ? "Writing" : f.draft ? "Improve with AI" : "AI draft"}</button></div>
+              <textarea className="field min-h-[220px] text-body" value={f.draft} onChange={(e) => set("draft", e.target.value)} placeholder={`Write here, or press AI draft. ${cap(possessive(first))} voice and locked rules apply.`} />
+              <span className="num text-right text-meta text-muted">{Array.from(f.draft).length.toLocaleString()} / 3000</span>
             </div>
             <label className="flex flex-col gap-1"><span className="label">Day</span><input type="date" className="field" value={f.publish_date ?? ""} onChange={(e) => set("publish_date", e.target.value || null)} /></label>
             <label className="flex flex-col gap-1"><span className="label">Time, Dubai</span><input type="time" className="field" value={f.planned_time} onChange={(e) => set("planned_time", e.target.value)} /></label>
@@ -163,28 +163,28 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
           {editable && <div className="mt-3 flex justify-end"><button className="btn btn-primary" onClick={() => save({}, "Saved")}>Save</button></div>}
 
           {!!flags.length && st !== "Posted" && <section className="mt-5 rounded-xl border-2 border-[#d64545] p-4">
-            <div className="mb-2 text-[13px] font-semibold">Claims check before approval</div>
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{flags.map((x, i) => <li key={i} className="text-[13px]"><span className="font-semibold text-[#d64545]">{x.kind === "returns" ? "Returns" : x.kind === "timeline" ? "Timeline" : x.kind === "client" ? "Client named" : x.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{x.text}&rdquo;<span className="block text-[12px] text-muted">{x.why}</span></li>)}</ul>
-            <label className="mt-2.5 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={ack} disabled={!editable} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
+            <div className="mb-2 text-body font-semibold">Claims check before approval</div>
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">{flags.map((x, i) => <li key={i} className="text-body"><span className="font-semibold text-[#d64545]">{x.kind === "returns" ? "Returns" : x.kind === "timeline" ? "Timeline" : x.kind === "client" ? "Client named" : x.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{x.text}&rdquo;<span className="block text-meta text-muted">{x.why}</span></li>)}</ul>
+            <label className="mt-2.5 flex items-center gap-2 text-body"><input type="checkbox" checked={ack} disabled={!editable} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
           </section>}
 
           <section className="mt-5 rounded-xl border border-line p-4">
             <div className="mb-2 flex items-center justify-between"><span className="label">Approval</span><StatusPill s={f.status} /></div>
             {st === "In review" ? (owner ? (
               <div className="flex flex-col gap-2">
-                <p className="m-0 text-[13px]">Waiting for your decision.</p>
-                <textarea className="field text-[13px]" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
+                <p className="m-0 text-body">Waiting for your decision.</p>
+                <textarea className="field text-body" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
                 <div className="flex gap-2"><button className="btn btn-primary" onClick={() => decide(true)}>Approve</button><button className="btn" onClick={() => decide(false)}>Ask for changes</button></div>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2"><p className="m-0 text-[13px]">With {first} since {stamp(f.requested_at)}.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="m-0 text-body">With {first} since {stamp(f.requested_at)}.</p>
                 {editable && <button className="btn" onClick={() => save({ status: "Drafting", requested_at: null, requested_by: null }, `Withdrawn. ${cap(first)} no longer sees it.`, { status: "In review", requested_at: f.requested_at, requested_by: f.requested_by })}>Withdraw</button>}</div>
             )) : st === "Ready" || st === "Posted" ? (
-              <p className="m-0 text-[13px]">{f.decision === "approved" ? `Approved ${stamp(f.decided_at)}.` : st === "Posted" ? "Posted." : "Ready to post."}</p>
+              <p className="m-0 text-body">{f.decision === "approved" ? `Approved ${stamp(f.decided_at)}.` : st === "Posted" ? "Posted." : "Ready to post."}</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {f.decision === "changes" && f.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">{cap(first)} asked for changes: &ldquo;{f.decision_note}&rdquo;</p>}
-                <p className="m-0 text-[13px] text-muted">{cap(first)} approves team drafts in one weekly session on Today.</p>
+                {f.decision === "changes" && f.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-body">{cap(first)} asked for changes: &ldquo;{f.decision_note}&rdquo;</p>}
+                <p className="m-0 text-body text-muted">{cap(first)} approves team drafts in one weekly session on Today.</p>
                 {editable && <div><button className="btn btn-primary" onClick={sendForApproval}>Send to {first}</button>{owner && <button className="btn btn-ghost ml-1" onClick={() => decide(true)}>Approve it myself</button>}</div>}
               </div>
             )}
@@ -194,19 +194,19 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
             <section className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-4">
               <button className="btn btn-primary" onClick={handOff}><Copy size={14} /> Copy and open LinkedIn</button>
               {st !== "Posted" && editable && <button className="btn" onClick={() => save({ status: "Posted", publish_date: f.publish_date || new Date().toISOString().slice(0, 10) }, "Marked as posted", { status: f.status, publish_date: f.publish_date })}>Mark as posted</button>}
-              <span className="text-[12px] text-muted">Prax never posts. {cap(first)} presses Post on LinkedIn.</span>
+              <span className="text-meta text-muted">Prax never posts. {cap(first)} presses Post on LinkedIn.</span>
             </section>
           )}
 
           <section className="mt-3 rounded-xl border border-line p-4">
-            <div className="mb-2 flex items-center justify-between"><span className="label">Company page and reshare notes</span><button className="btn h-7 text-[12px]" disabled={!!busy} onClick={genReshare}>{busy === "reshare" ? "Writing" : reshare ? "Write again" : "Write them"}</button></div>
-            {!reshare ? <p className="m-0 text-[12.5px] text-muted">A version for the {company} page and a short note for each colleague named in the campaign. Copy them by hand; nothing is posted.</p> : (
+            <div className="mb-2 flex items-center justify-between"><span className="label">Company page and reshare notes</span><button className="btn h-7 text-meta" disabled={!!busy} onClick={genReshare}>{busy === "reshare" ? "Writing" : reshare ? "Write again" : "Write them"}</button></div>
+            {!reshare ? <p className="m-0 text-meta text-muted">A version for the {company} page and a short note for each colleague named in the campaign. Copy them by hand; nothing is posted.</p> : (
               <div className="flex flex-col gap-2">
-                <div className="rounded-lg bg-surface-2 p-3 text-[13px]"><div className="label mb-1">{cap(company)} page</div><p className="m-0 whitespace-pre-wrap">{reshare.page}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-[12px]" onClick={() => copy(reshare.page, "Page text")}>Copy</button><button className="btn btn-ghost h-7 text-[12px]" onClick={() => { logActivity(ws.id, "reshare", `${cap(company)} page shared: ${f.title}`, post.id); toast(`Logged as shared on the ${company} page`); }}>Log as shared</button></div></div>
+                <div className="rounded-lg bg-surface-2 p-3 text-body"><div className="label mb-1">{cap(company)} page</div><p className="m-0 whitespace-pre-wrap">{reshare.page}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-meta" onClick={() => copy(reshare.page, "Page text")}>Copy</button><button className="btn btn-ghost h-7 text-meta" onClick={() => { logActivity(ws.id, "reshare", `${cap(company)} page shared: ${f.title}`, post.id); toast(`Logged as shared on the ${company} page`); }}>Log as shared</button></div></div>
                 {reshare.notes.map((n) => (
-                  <div key={n.name} className="rounded-lg bg-surface-2 p-3 text-[13px]"><div className="label mb-1">{n.name}</div><p className="m-0">{n.text}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-[12px]" onClick={() => copy(n.text, `Note for ${n.name}`)}>Copy</button><button className="btn btn-ghost h-7 text-[12px]" onClick={() => { logActivity(ws.id, "reshare", `${n.name} reshared: ${f.title}`, post.id); toast(`Logged: ${n.name} reshared`); }}>Log as reshared</button></div></div>
+                  <div key={n.name} className="rounded-lg bg-surface-2 p-3 text-body"><div className="label mb-1">{n.name}</div><p className="m-0">{n.text}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-meta" onClick={() => copy(n.text, `Note for ${n.name}`)}>Copy</button><button className="btn btn-ghost h-7 text-meta" onClick={() => { logActivity(ws.id, "reshare", `${n.name} reshared: ${f.title}`, post.id); toast(`Logged: ${n.name} reshared`); }}>Log as reshared</button></div></div>
                 ))}
-                {!reshare.notes.length && <p className="m-0 text-[12.5px] text-muted">Add colleagues to the campaign to get reshare notes.</p>}
+                {!reshare.notes.length && <p className="m-0 text-meta text-muted">Add colleagues to the campaign to get reshare notes.</p>}
               </div>
             )}
           </section>

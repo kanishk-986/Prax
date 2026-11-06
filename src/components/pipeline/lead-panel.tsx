@@ -128,20 +128,20 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
       <div className="fixed inset-0 z-[54] bg-[rgba(20,20,20,.22)]" onClick={onClose} />
       <aside role="dialog" aria-label={lead.name} className={`pl-slide fixed inset-y-0 right-0 z-[55] flex flex-col gap-[18px] overflow-y-auto bg-white px-6 py-[22px] shadow-[-12px_0_30px_rgba(20,20,20,.12)] transition-[width] duration-200 max-sm:px-4 ${wide ? "w-[min(860px,100vw)]" : "w-[min(480px,100vw)]"}`}>
         <span className="flex items-start gap-3">
-          <span className="flex min-w-0 flex-1 flex-col gap-[3px]"><span className="text-[18px] font-[650]">{lead.name}</span><span className="text-[13px] text-muted">{[lead.role, lead.company].filter(Boolean).join(" · ") || "No role or company"}</span></span>
+          <span className="flex min-w-0 flex-1 flex-col gap-[3px]"><span className="text-page font-semibold">{lead.name}</span><span className="text-body text-muted">{[lead.role, lead.company].filter(Boolean).join(" · ") || "No role or company"}</span></span>
           {lead.linkedin && <a href={lead.linkedin} target="_blank" rel="noopener" className="btn h-8! w-8! shrink-0 p-0!" aria-label="Open LinkedIn profile"><ExternalLink size={14} /></a>}
-          <button type="button" className="btn h-8! shrink-0 whitespace-nowrap px-2.5! text-[12.5px] font-semibold max-sm:hidden!" onClick={() => setWide(!wide)}>{wide ? "Side view" : "Full view"}</button>
+          <button type="button" className="btn h-8! shrink-0 whitespace-nowrap px-2.5! text-meta font-semibold max-sm:hidden!" onClick={() => setWide(!wide)}>{wide ? "Side view" : "Full view"}</button>
           <button type="button" className="btn h-8! w-8! shrink-0 p-0!" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </span>
 
         <div className="flex flex-col gap-2.5 rounded-[14px] bg-[#f7f7f7] p-[18px]">
-          <span className="text-[12.5px] font-semibold text-muted">Next action</span>
-          <span className={`text-[19px] font-[650] leading-[1.35] tracking-[-0.01em] ${lead.next_action ? "" : "text-muted"}`}>{lead.next_action || "No next action set"}</span>
-          {lostLine && <span className="text-[13px] font-semibold">{lostLine}</span>}
-          <span className={`text-[12.5px] ${tone === "overdue" ? "font-semibold text-[#d64545]" : tone === "today" ? "font-semibold" : "text-muted"}`}>{dueLong(lead.next_date, t)}</span>
+          <span className="text-meta font-semibold text-muted">Next action</span>
+          <span className={`text-page font-semibold leading-[1.35] tracking-[-0.01em] ${lead.next_action ? "" : "text-muted"}`}>{lead.next_action || "No next action set"}</span>
+          {lostLine && <span className="text-body font-semibold">{lostLine}</span>}
+          <span className={`text-meta ${tone === "overdue" ? "font-semibold text-[#d64545]" : tone === "today" ? "font-semibold" : "text-muted"}`}>{dueLong(lead.next_date, t)}</span>
           {editable && <span className="mt-1 flex flex-wrap gap-2">
-            <button type="button" className="btn h-[38px]! px-4! text-[13.5px] font-semibold" onClick={() => onMove(lead.stage)}>Done</button>
-            <button type="button" className="btn btn-primary h-[38px]! px-4! text-[13.5px] font-semibold" disabled={!next} onClick={() => next && onMove(next)}>{next ? `Move to ${next}` : "Last stage"}</button>
+            <button type="button" className="btn h-[38px]! px-4! text-body font-semibold" onClick={() => onMove(lead.stage)}>Done</button>
+            <button type="button" className="btn btn-primary h-[38px]! px-4! text-body font-semibold" disabled={!next} onClick={() => next && onMove(next)}>{next ? `Move to ${next}` : "Last stage"}</button>
           </span>}
         </div>
 
@@ -154,7 +154,7 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
                 className={`pl-seg h-2 flex-1 rounded-full ${now_ ? "bg-[#141414]" : past ? "bg-[#a3a3a3]" : "bg-[#e6e6e6]"}`} />;
             })}
           </span>
-          <span className="text-[12.5px] text-muted">{lead.stage} · {here === 0 ? "new today" : `${here} ${here === 1 ? "day" : "days"} here`} · stage {ci + 1} of {pipe.stages.length} in {pipe.name}</span>
+          <span className="text-meta text-muted">{lead.stage} · {here === 0 ? "new today" : `${here} ${here === 1 ? "day" : "days"} here`} · stage {ci + 1} of {pipe.stages.length} in {pipe.name}</span>
         </div>
 
         <div className="flex flex-col border-t border-[#ececec]">
@@ -164,50 +164,50 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
               <div key={k} className="border-b border-[#ececec]">
                 <button type="button" aria-expanded={o} onClick={() => setOpen({ ...open, [k]: !open[k] })} className="pl-quiet flex min-h-[46px] w-full items-center gap-2.5 rounded-md px-1.5 text-left">
                   <svg className={`pl-chev shrink-0 ${o ? "rotate-90" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f5f5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
-                  <span className="text-[14px] font-semibold">{LABEL[k]}</span>
-                  <span className="ml-auto max-w-[60%] truncate text-[12.5px] text-muted">{summary[k]}</span>
+                  <span className="text-body font-semibold">{LABEL[k]}</span>
+                  <span className="ml-auto max-w-[60%] truncate text-meta text-muted">{summary[k]}</span>
                 </button>
                 {o && <div className="flex flex-col gap-2.5 pb-4 pl-[30px] pr-1.5 pt-0.5">
                   {k === "timeline" && (!detail ? <span className="h-16 animate-pulse rounded-lg bg-surface-2" /> : (
                     <ol className="ml-1 flex flex-col border-l-2 border-[#ececec]">
                       {evs.map((e, i) => (
-                        <li key={i} className="relative pb-3 pl-4 text-[13px] leading-[1.45]">
+                        <li key={i} className="relative pb-3 pl-4 text-body leading-[1.45]">
                           <span className="absolute -left-1.5 top-[5px] h-2.5 w-2.5 rounded-full shadow-[0_0_0_3px_#fff]" style={{ background: e.strong ? "#141414" : "#c4c4c4" }} />
-                          <span className="num text-[11.5px] text-muted">{ago(e.at, t)}</span> {e.text}
+                          <span className="num text-meta text-muted">{ago(e.at, t)}</span> {e.text}
                         </li>
                       ))}
                     </ol>
                   ))}
-                  {k === "warm" && <span className="text-[13.5px] leading-normal">{info?.warmText ?? "None found in the LinkedIn export yet."}</span>}
+                  {k === "warm" && <span className="text-body leading-normal">{info?.warmText ?? "None found in the LinkedIn export yet."}</span>}
                   {k === "plan" && (plan.length ? plan.map((s, i) => {
                     const st = stepState(i), done = st === "done";
                     return (
                       <span key={s} className="flex items-center gap-2.5">
                         <button type="button" aria-label={done ? "Mark not done" : "Mark done"} disabled={!editable} onClick={() => step(i, !done)}
                           className={`grid h-5 w-5 shrink-0 place-items-center rounded-md ${done ? "bg-[#d64545]" : "border-[1.5px] border-[#c4c4c4] bg-white"}`}>{done && <Check size={12} strokeWidth={3} className="text-white" />}</button>
-                        <span className={`min-w-0 flex-1 text-[13.5px] leading-snug ${done ? "text-muted line-through" : ""}`}>{s}</span>
-                        {editable && <button type="button" className="btn h-[30px]! shrink-0 whitespace-nowrap px-2.5! text-[12px] font-semibold" disabled={!!st} onClick={() => step(i, null)}>{done ? "Done" : st === "today" ? "On Today" : "Add to Today"}</button>}
+                        <span className={`min-w-0 flex-1 text-body leading-snug ${done ? "text-muted line-through" : ""}`}>{s}</span>
+                        {editable && <button type="button" className="btn h-[30px]! shrink-0 whitespace-nowrap px-2.5! text-meta font-semibold" disabled={!!st} onClick={() => step(i, null)}>{done ? "Done" : st === "today" ? "On Today" : "Add to Today"}</button>}
                       </span>
                     );
-                  }) : <span className="text-[13px] text-muted">No steps at this stage.</span>)}
+                  }) : <span className="text-body text-muted">No steps at this stage.</span>)}
                   {k === "heat" && heat?.signals.map((g) => (
-                    <span key={g.label} className="flex items-baseline justify-between gap-3 text-[13px]">
+                    <span key={g.label} className="flex items-baseline justify-between gap-3 text-body">
                       <span><b className="font-semibold">{g.label}</b> <span className="text-muted">{g.sub}</span></span>
-                      <span className="num whitespace-nowrap text-[12px] text-muted">{g.pts} pts</span>
+                      <span className="num whitespace-nowrap text-meta text-muted">{g.pts} pts</span>
                     </span>
                   ))}
-                  {k === "heat" && heat && <span className="flex items-center gap-2 text-[12.5px] text-muted"><span className="h-2 w-2 rounded-full" style={{ background: HEAT_DOT[heat.band] }} />Hot from 70, warm from 40.</span>}
+                  {k === "heat" && heat && <span className="flex items-center gap-2 text-meta text-muted"><span className="h-2 w-2 rounded-full" style={{ background: HEAT_DOT[heat.band] }} />Hot from 70, warm from 40.</span>}
                   {k === "notes" && <>
                     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={saveNotes} disabled={!editable} placeholder="What you know about them, what they care about" aria-label="Notes"
-                      className="min-h-24 resize-y rounded-[10px] border border-[#e3e3e3] px-3 py-2.5 text-[13.5px] leading-normal focus-visible:outline-2 focus-visible:outline-[#d64545]" />
+                      className="min-h-24 resize-y rounded-[10px] border border-[#e3e3e3] px-3 py-2.5 text-body leading-normal focus-visible:outline-2 focus-visible:outline-[#d64545]" />
                     {can("commenter") && <span className="flex gap-2">
                       <input value={note} onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addNote()} placeholder="Add a note to the timeline" aria-label="Add a note to the timeline" className="field h-9! flex-1" />
                       <button type="button" className="btn h-9! px-3! font-semibold" disabled={!note.trim()} onClick={addNote}>Add</button>
                     </span>}
                   </>}
                   {k === "msg" && <>
-                    {draft ? <textarea value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Message draft" className="min-h-[110px] resize-y rounded-[10px] border border-[#e3e3e3] px-3 py-2.5 text-[13.5px] leading-normal focus-visible:outline-2 focus-visible:outline-[#d64545]" />
-                      : <span className="text-[13px] text-muted">Prax drafts a message that fits {lead.stage}. You copy it and send it yourself.</span>}
+                    {draft ? <textarea value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Message draft" className="min-h-[110px] resize-y rounded-[10px] border border-[#e3e3e3] px-3 py-2.5 text-body leading-normal focus-visible:outline-2 focus-visible:outline-[#d64545]" />
+                      : <span className="text-body text-muted">Prax drafts a message that fits {lead.stage}. You copy it and send it yourself.</span>}
                     <span className="flex gap-2">
                       <button type="button" className="btn h-[34px]! px-3! font-semibold" disabled={drafting} onClick={makeDraft}>{drafting ? "Drafting" : draft ? "Draft again" : "Draft the message"}</button>
                       <button type="button" className="btn h-[34px]! px-3! font-semibold" disabled={!draft} onClick={() => { navigator.clipboard?.writeText(draft).catch(() => {}); toast("Copied. Paste it in LinkedIn and send it yourself."); }}>Copy</button>
@@ -219,14 +219,14 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
             );
           })}
         </div>
-        {closed && lead.stage === pipe.won_stage && <span className="text-[12.5px] text-muted">Won. The next action stays on Today until you mark it done.</span>}
+        {closed && lead.stage === pipe.won_stage && <span className="text-meta text-muted">Won. The next action stays on Today until you mark it done.</span>}
       </aside>
     </>
   );
 }
 
 function F({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
-  return <label className={`flex flex-col gap-1 text-[12.5px] font-semibold ${wide ? "col-span-2" : "max-sm:col-span-2"}`}>{label}{children}</label>;
+  return <label className={`flex flex-col gap-1 text-meta font-semibold ${wide ? "col-span-2" : "max-sm:col-span-2"}`}>{label}{children}</label>;
 }
 
 function Details({ lead, data, api, onClose }: { lead: Prospect; data: PipelineData; api: PipelineApi; onClose: () => void }) {
@@ -261,7 +261,7 @@ function Details({ lead, data, api, onClose }: { lead: Prospect; data: PipelineD
       <F label="LinkedIn URL" wide><input className="field font-normal" value={f.linkedin} onChange={set("linkedin")} placeholder="https://www.linkedin.com/in/" /></F>
       <F label="Why they fit" wide><textarea rows={3} className="field h-auto! py-2! font-normal" value={f.why} onChange={set("why")} /></F>
       {editable && <span className="col-span-2 flex flex-wrap items-center justify-between gap-2">
-        {confirm ? <span className="flex items-center gap-2 text-[13px] text-[#9e1c1c]">Delete for everyone?<button type="button" className="btn h-8!" onClick={del}>Delete</button><button type="button" className="btn btn-ghost h-8!" onClick={() => setConfirm(false)}>Keep</button></span>
+        {confirm ? <span className="flex items-center gap-2 text-body text-[#9e1c1c]">Delete for everyone?<button type="button" className="btn h-8!" onClick={del}>Delete</button><button type="button" className="btn btn-ghost h-8!" onClick={() => setConfirm(false)}>Keep</button></span>
           : <button type="button" className="btn btn-ghost h-8! hover:text-[#9e1c1c]" onClick={() => setConfirm(true)}>Delete lead</button>}
         <button type="button" className="btn btn-primary h-8! font-semibold" disabled={!changed || !f.name.trim()} onClick={save}>Save details</button>
       </span>}

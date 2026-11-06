@@ -45,12 +45,12 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
   }
   const List = ({ items, onRemove }: { items: React.ReactNode[]; onRemove: (i: number) => void }) => (
     <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">{items.map((x, i) => (
-      <li key={i} className="flex items-start gap-2 rounded-lg border border-line bg-white px-3 py-2 text-[13px]"><span className="min-w-0 flex-1">{x}</span>{ed && <button className="text-muted hover:text-[#d64545]" aria-label="Remove" onClick={() => onRemove(i)}><X size={14} /></button>}</li>
-    ))}{!items.length && <li className="text-[12.5px] text-muted">Nothing yet.</li>}</ul>
+      <li key={i} className="flex items-start gap-2 rounded-lg border border-line bg-white px-3 py-2 text-body"><span className="min-w-0 flex-1">{x}</span>{ed && <button className="text-muted hover:text-[#d64545]" aria-label="Remove" onClick={() => onRemove(i)}><X size={14} /></button>}</li>
+    ))}{!items.length && <li className="text-meta text-muted">Nothing yet.</li>}</ul>
   );
   return (
     <Modal title="Point of view" wide onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button>{ed && <button className="btn btn-primary" onClick={done}>Save</button>}</>}>
-      <p className="m-0 mb-4 text-[13px] leading-relaxed text-muted">What {first} believes, can prove, and the numbers {first} allows. Every draft and campaign plan uses only what is here, so nothing is made up. Proof points must be ticked as cleared before the AI may use them.</p>
+      <p className="m-0 mb-4 text-body leading-relaxed text-muted">What {first} believes, can prove, and the numbers {first} allows. Every draft and campaign plan uses only what is here, so nothing is made up. Proof points must be ticked as cleared before the AI may use them.</p>
       <div className="grid gap-5 md:grid-cols-2">
         <section>
           <div className="label">Stances</div>
@@ -59,7 +59,7 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
         </section>
         <section>
           <div className="label">Proof points</div>
-          <List items={p.proofs.map((x, i) => <label key={i} className="flex items-start gap-2"><input type="checkbox" disabled={!ed} checked={x.cleared} onChange={(e) => setP({ ...p, proofs: p.proofs.map((y, j) => (j === i ? { ...y, cleared: e.target.checked } : y)) })} /><span>{x.text} <span className="text-[11.5px] font-semibold" style={{ color: x.cleared ? "#141414" : "#d64545" }}>{x.cleared ? "Cleared" : "Not cleared"}</span></span></label>)} onRemove={(i) => setP({ ...p, proofs: p.proofs.filter((_, j) => j !== i) })} />
+          <List items={p.proofs.map((x, i) => <label key={i} className="flex items-start gap-2"><input type="checkbox" disabled={!ed} checked={x.cleared} onChange={(e) => setP({ ...p, proofs: p.proofs.map((y, j) => (j === i ? { ...y, cleared: e.target.checked } : y)) })} /><span>{x.text} <span className="text-meta font-semibold" style={{ color: x.cleared ? "#141414" : "#d64545" }}>{x.cleared ? "Cleared" : "Not cleared"}</span></span></label>)} onRemove={(i) => setP({ ...p, proofs: p.proofs.filter((_, j) => j !== i) })} />
           {ed && <div className="mt-2 flex gap-2"><input className="field" placeholder="For example: in business since 2011" value={add.proof} onChange={(e) => setAdd({ ...add, proof: e.target.value })} /><button className="btn" aria-label="Add proof point" onClick={() => { if (add.proof.trim()) { setP({ ...p, proofs: [...p.proofs, { text: add.proof.trim(), cleared: false }] }); setAdd({ ...add, proof: "" }); } }}><Plus size={14} /></button></div>}
         </section>
         <section>
@@ -75,13 +75,13 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
       </div>
       <section className="mt-6 rounded-xl border border-line p-4">
         <div className="label">LinkedIn newsletter</div>
-        <p className="m-0 mt-1 text-[12.5px] text-muted">Articles marked for the newsletter get their own rhythm in Plan. Subscribers are notified, and long articles are what AI tools cite most.</p>
+        <p className="m-0 mt-1 text-meta text-muted">Articles marked for the newsletter get their own rhythm in Plan. Subscribers are notified, and long articles are what AI tools cite most.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1"><span className="label">Name</span><input className="field" disabled={!ed} placeholder="Operator Notes" value={n.name} onChange={(e) => setN({ ...n, name: e.target.value })} /></label>
           <label className="flex flex-col gap-1"><span className="label">Every</span><select className="field" disabled={!ed} value={n.cadence} onChange={(e) => setN({ ...n, cadence: e.target.value as Newsletter["cadence"], start: n.start || today() })}><option value="weekly">Week</option><option value="fortnightly">Two weeks</option><option value="monthly">Four weeks</option></select></label>
           <label className="flex flex-col gap-1"><span className="label">On</span><select className="field" disabled={!ed} value={n.weekday} onChange={(e) => setN({ ...n, weekday: Number(e.target.value), start: n.start || today() })}>{["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((d, i) => <option key={d} value={i + 1}>{d}</option>)}</select></label>
         </div>
-        {n.name && <p className="m-0 mt-2 text-[12.5px]">Next issue: <b>{fmtDay(nextIssue(n, today()), { weekday: "long", day: "numeric", month: "long" })}</b></p>}
+        {n.name && <p className="m-0 mt-2 text-meta">Next issue: <b>{fmtDay(nextIssue(n, today()), { weekday: "long", day: "numeric", month: "long" })}</b></p>}
       </section>
     </Modal>
   );

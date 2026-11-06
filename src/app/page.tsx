@@ -17,15 +17,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   return (
     <main className="mx-auto max-w-[880px] px-4 py-12">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2"><Logo /><span className="text-[15px] font-semibold tracking-tight">Prax</span></div>
+        <div className="flex items-center gap-2"><Logo /><span className="text-title font-semibold tracking-tight">Prax</span></div>
         <form action="/auth/signout" method="post" className="flex min-w-0 items-center gap-3">
-          <span className="truncate text-[13px] text-muted">{user.email}</span>
+          <span className="truncate text-body text-muted">{user.email}</span>
           <button className="btn btn-ghost">Sign out</button>
         </form>
       </div>
-      <h1 className="mt-10 text-[24px] font-semibold tracking-tight">Profiles</h1>
+      <h1 className="mt-10 text-page font-semibold tracking-tight">Profiles</h1>
       <p className="mt-1 text-muted">Each profile is one LinkedIn presence with its own plan, pipeline and team.</p>
-      {deleted && <p className="mt-4 rounded-xl border border-line-strong bg-white px-4 py-2.5 text-[13px]" role="status">The profile and all its data were deleted.</p>}
+      {deleted && <p className="mt-4 rounded-xl border border-line-strong bg-white px-4 py-2.5 text-body" role="status">The profile and all its data were deleted.</p>}
       <ProfileList list={list} />
     </main>
   );

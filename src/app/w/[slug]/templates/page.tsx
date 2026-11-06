@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Section, KpiTiles } from "@/components/shell";
+import { Section } from "@/components/shell";
 import { RecordList, AddButton } from "@/components/record-list";
 import { useLive } from "@/lib/live";
 import { useWorkspace } from "@/lib/workspace";
@@ -22,16 +22,11 @@ export default function Templates() {
   const { ws } = useWorkspace();
   const { rows } = useLive<{ id: string; kind: string; name: string }>("templates", ws.id, {});
   const [adding, setAdding] = useState(false);
-  const n = (g: string) => rows.filter((r) => groupOf(r) === g).length;
+
   return (
     <Section id="templates" title="Templates" status="Connection notes, first messages, resource replies and call offers." entryStatus={`${rows.length} templates ready to copy.`}
       actions={<AddButton label="Add template" onClick={() => setAdding(true)} />}>
-      <KpiTiles items={[
-        { label: "Templates", value: rows.length, sub: "in total" },
-        { label: "Connection notes", value: n("Connection notes") },
-        { label: "Messages", value: n("Messages"), sub: `${n("Resource replies") + n("Call offers")} resource replies and call offers` },
-        { label: "Replies and posts", value: n("Replies and posts") },
-      ]} />
+
       <RecordList table="templates" order="sort" groupBy={groupOf} groupOrder={GROUPS} empty="No templates yet." defaults={{ kind: "note", sort: 0 }} adding={adding} onAdding={setAdding}
         cols={[{ key: "name", label: "Name", className: "font-medium w-[240px]" }, { key: "body", label: "Text", className: "text-ink-2", render: (r) => <span className="line-clamp-2">{r.body}</span> }]}
         fields={[{ key: "name", label: "Name", wide: true }, { key: "kind", label: "Type", type: "select", options: Object.keys(KIND_LABEL), optionLabels: KIND_LABEL }, { key: "sort", label: "Order", type: "number" }, { key: "body", label: "Text", type: "textarea" }]} />

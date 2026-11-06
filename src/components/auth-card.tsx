@@ -5,16 +5,18 @@ import { Logo } from "@/components/logo";
 
 // The sign-in, forgot and reset pages share this: logo and wordmark, one centred card, a quiet note below.
 // The card carries the Corners mark at its own corners: ink top left, red bottom right.
-export function AuthShell({ title, sub, children, foot }: { title: string; sub?: React.ReactNode; children: React.ReactNode; foot?: React.ReactNode }) {
+// promise: what Prax is and what it never does, under the logo (the sign-in page).
+export function AuthShell({ title, sub, children, foot, promise }: { title: string; sub?: React.ReactNode; children: React.ReactNode; foot?: React.ReactNode; promise?: { line: string; trust: string } }) {
   return (
     <main className="flex min-h-full flex-col items-center px-4 pb-12 pt-[min(14vh,120px)]">
-      <div className="flex items-center gap-2.5"><Logo size={28} /><span className="text-[18px] font-semibold tracking-tight">Prax</span></div>
-      <section className="auth-card card anim-rise mt-10 w-full max-w-[400px] p-6 sm:p-8" aria-labelledby="auth-title">
-        <h1 id="auth-title" className="text-[22px] font-semibold tracking-tight">{title}</h1>
-        {sub && <p className="mt-1.5 text-[13.5px] text-muted">{sub}</p>}
+      <div className="flex items-center gap-2.5"><Logo size={28} /><span className="text-page font-semibold tracking-tight">Prax</span></div>
+      {promise && <div className="mt-3 flex flex-col items-center gap-1 text-center"><p className="text-title text-ink-2">{promise.line}</p><p className="text-meta text-muted">{promise.trust}</p></div>}
+      <section className={`auth-card card anim-rise w-full max-w-[400px] p-6 sm:p-8 ${promise ? "mt-8" : "mt-10"}`} aria-labelledby="auth-title">
+        <h1 id="auth-title" className="text-page font-semibold tracking-tight">{title}</h1>
+        {sub && <p className="mt-1.5 text-body text-muted">{sub}</p>}
         <div className="mt-6">{children}</div>
       </section>
-      {foot && <div className="mt-6 w-full max-w-[400px] text-center text-[13px] text-muted">{foot}</div>}
+      {foot && <div className="mt-6 w-full max-w-[400px] text-center text-body text-muted">{foot}</div>}
     </main>
   );
 }
@@ -30,12 +32,12 @@ export function Field({ id, label, value, onChange, onBlur, error, type = "text"
   const isPassword = type === "password";
   return (
     <div className="relative flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] font-medium text-ink-2">{label}<span aria-hidden="true" className="ml-0.5 text-dark-red">*</span></label>
+      <label htmlFor={id} className="text-body font-medium text-ink-2">{label}<span aria-hidden="true" className="ml-0.5 text-dark-red">*</span></label>
       <div className="relative">
         <input id={id} name={id} type={isPassword && shown ? "text" : type} value={value} autoComplete={autoComplete} placeholder={placeholder} autoFocus={autoFocus}
           aria-required="true" aria-invalid={error ? true : undefined} aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
           onChange={(e) => onChange(e.target.value)} onBlur={onBlur}
-          className={`field auth-field h-10 text-[14px] ${isPassword ? "pr-11" : ""} ${error ? "border-bad" : ""}`} />
+          className={`field auth-field h-10 text-body ${isPassword ? "pr-11" : ""} ${error ? "border-bad" : ""}`} />
         {isPassword && (
           <button type="button" onClick={() => setShown(!shown)} aria-label={shown ? "Hide password" : "Show password"} aria-pressed={shown} aria-controls={id}
             className="absolute right-1 top-1 grid h-8 w-8 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-ink">
@@ -43,8 +45,8 @@ export function Field({ id, label, value, onChange, onBlur, error, type = "text"
           </button>
         )}
       </div>
-      {error ? <p id={`${id}-error`} className="text-[12.5px] text-bad">{error}</p>
-        : hint && <p id={`${id}-hint`} className="text-[12.5px] text-muted">{hint}</p>}
+      {error ? <p id={`${id}-error`} className="text-meta text-bad">{error}</p>
+        : hint && <p id={`${id}-hint`} className="text-meta text-muted">{hint}</p>}
       {/* Sits in the label row but comes after the input in the DOM, so Tab goes from the field to it, not the other way round. */}
       {aside && <div className="absolute right-0 top-0 leading-[19.5px]">{aside}</div>}
     </div>
@@ -54,7 +56,7 @@ export function Field({ id, label, value, onChange, onBlur, error, type = "text"
 export function SubmitButton({ busy, children, busyText }: { busy: boolean; children: React.ReactNode; busyText: string }) {
   return (
     // While busy the button stays readable: dark red at full opacity instead of the faded disabled look.
-    <button type="submit" className={`btn btn-primary h-10 w-full text-[14px] ${busy ? "border-dark-red bg-dark-red disabled:opacity-100" : ""}`} disabled={busy} aria-busy={busy || undefined}>
+    <button type="submit" className={`btn btn-primary h-10 w-full text-body ${busy ? "border-dark-red bg-dark-red disabled:opacity-100" : ""}`} disabled={busy} aria-busy={busy || undefined}>
       {busy ? <><Loader2 size={15} className="animate-spin" aria-hidden="true" />{busyText}</> : children}
     </button>
   );
@@ -64,7 +66,7 @@ export function SubmitButton({ busy, children, busyText }: { busy: boolean; chil
 export function Notice({ tone, children }: { tone: "bad" | "ok"; children: React.ReactNode }) {
   return (
     <div role={tone === "bad" ? "alert" : "status"}
-      className={`rounded-lg px-3 py-2.5 text-[13px] ${tone === "bad" ? "bg-bad-soft text-bad" : "bg-surface-2 text-ink-2"}`}>
+      className={`rounded-lg px-3 py-2.5 text-body ${tone === "bad" ? "bg-bad-soft text-bad" : "bg-surface-2 text-ink-2"}`}>
       {children}
     </div>
   );

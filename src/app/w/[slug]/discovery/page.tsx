@@ -335,24 +335,24 @@ function RunPanel({ d, plan, links, chosen, setChosen, runner, saveWindow, onClo
   return (
     <SidePanel title="Run discovery" onClose={onClose} width={480}>
       <span className="label text-ink">Sources</span>
-      <span className="flex items-center gap-2.5 text-[13.5px]"><Box on={doCrawl} onClick={() => setDoCrawl(!doCrawl)} label="Link lists" />Link lists<span className="text-[12px] text-faint">{links.length} links, read on the server</span></span>
-      <span className="flex items-center gap-2.5 text-[13.5px]"><Box on={doAi} onClick={() => setDoAi(!doAi)} label="AI search" />AI search<span className="text-[12px] text-faint">{plan.length} searches: pillars, entities, events, gaps, yours</span></span>
-      <span className="flex items-center gap-2.5 text-[13.5px] text-muted"><span className="w-5" />LinkedIn inbox<span className="text-[12px] text-faint">{d.findings.filter((f) => f.found_by.includes("linkedin")).length} posts you sent, already in</span></span>
+      <span className="flex items-center gap-2.5 text-body"><Box on={doCrawl} onClick={() => setDoCrawl(!doCrawl)} label="Link lists" />Link lists<span className="text-meta text-faint">{links.length} links, read on the server</span></span>
+      <span className="flex items-center gap-2.5 text-body"><Box on={doAi} onClick={() => setDoAi(!doAi)} label="AI search" />AI search<span className="text-meta text-faint">{plan.length} searches: pillars, entities, events, gaps, yours</span></span>
+      <span className="flex items-center gap-2.5 text-body text-muted"><span className="w-5" />LinkedIn inbox<span className="text-meta text-faint">{d.findings.filter((f) => f.found_by.includes("linkedin")).length} posts you sent, already in</span></span>
       <span className="label text-ink">AI tools</span>
       {d.engines.map((e) => (
-        <span key={e.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13.5px]">
+        <span key={e.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-body">
           <Box on={chosen.includes(e.id as Engine)} onClick={() => e.ready && setChosen(chosen.includes(e.id as Engine) ? chosen.filter((x) => x !== e.id) : [...chosen, e.id as Engine])} label={e.name} />
           <ProviderMark id={e.id} bold={false} className={e.ready ? "" : "opacity-70"} />
-          <KeyState on={e.ready} className="ml-auto text-[12px]" />
+          <KeyState on={e.ready} className="ml-auto text-meta" />
         </span>
       ))}
       <span className="label text-ink">Window</span>
-      <span className="flex self-start rounded-[10px] border border-line p-[3px]">{[7, 3].map((w) => <button key={w} type="button" className={`h-[30px] rounded-lg px-3 text-[13px] font-semibold ${d.settings.window_days === w ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => saveWindow(w)}>{w === 3 ? "Last 72 hours" : "Last 7 days"}</button>)}</span>
-      <div className="rounded-[10px] border border-[#ececec] bg-[#fafafa] px-3.5 py-3 text-[13px]">About <b className="num">{calls}</b> AI calls · about <b className="num">${cost.toFixed(2)}</b> on your keys (list prices, rough). The crawl costs nothing.</div>
+      <span className="flex self-start rounded-[10px] border border-line p-[3px]">{[7, 3].map((w) => <button key={w} type="button" className={`h-[30px] rounded-lg px-3 text-body font-semibold ${d.settings.window_days === w ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => saveWindow(w)}>{w === 3 ? "Last 72 hours" : "Last 7 days"}</button>)}</span>
+      <div className="rounded-[10px] border border-[#ececec] bg-[#fafafa] px-3.5 py-3 text-body">About <b className="num">{calls}</b> AI calls · about <b className="num">${cost.toFixed(2)}</b> on your keys (list prices, rough). The crawl costs nothing.</div>
       {started && (
         <div className="flex flex-col gap-2 rounded-[10px] border border-[#ececec] px-3.5 py-3">
           <span className="h-1.5 overflow-hidden rounded-full bg-[#ececec]"><span className="block h-full bg-[#d64545] transition-[width] duration-200" style={{ width: `${prog}%` }} /></span>
-          {passes.map(([n, s]) => <span key={n} className="flex items-center justify-between gap-2.5 text-[12.5px]"><span>{n}</span><span className="text-right text-[12px] font-semibold" style={{ color: s.startsWith("running") ? "#d64545" : s === "waiting" || s === "not in this run" ? "#8c8c8c" : "#141414" }}>{s}</span></span>)}
+          {passes.map(([n, s]) => <span key={n} className="flex items-center justify-between gap-2.5 text-meta"><span>{n}</span><span className="text-right text-meta font-semibold" style={{ color: s.startsWith("running") ? "#d64545" : s === "waiting" || s === "not in this run" ? "#8c8c8c" : "#141414" }}>{s}</span></span>)}
         </div>
       )}
       <span className="mt-auto flex justify-end gap-2">

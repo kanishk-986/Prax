@@ -53,7 +53,7 @@ export default function Reset() {
   if (state === "checking") {
     return (
       <AuthShell title={invite ? "Set your password" : "Choose a new password"}>
-        <p role="status" className="flex items-center gap-2 text-[13.5px] text-muted"><Loader2 size={15} className="animate-spin" aria-hidden="true" />Checking your link</p>
+        <p role="status" className="flex items-center gap-2 text-body text-muted"><Loader2 size={15} className="animate-spin" aria-hidden="true" />Checking your link</p>
       </AuthShell>
     );
   }
@@ -62,7 +62,7 @@ export default function Reset() {
     return (
       <AuthShell title="This link has expired" sub="Links work once, in the browser that asked for them. Request a new one and open it here."
         foot={<Link href="/login" className={authLink}>Back to sign in</Link>}>
-        <Link href="/login/forgot" className="btn btn-primary h-10 w-full text-[14px]">Email me a new link</Link>
+        <Link href="/login/forgot" className="btn btn-primary h-10 w-full text-body">Email me a new link</Link>
       </AuthShell>
     );
   }

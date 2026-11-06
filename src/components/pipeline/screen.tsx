@@ -139,7 +139,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
   const status = data.loading ? "Loading" : `${dn.open} open in ${P.name} · ${dn.overdue ? `${dn.overdue} overdue · ` : ""}${dn.today} due today`;
   const entry = `${dn.overdue ? `${dn.overdue} overdue and ` : ""}${dn.today} due today, out of ${dn.open} open in ${P.name}.`;
 
-  const heat = (b: HeatBand, cls: string) => <span className={`inline-flex shrink-0 items-center gap-[7px] text-[12.5px] ${cls}`}><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: HEAT_DOT[b] }} />{b}</span>;
+  const heat = (b: HeatBand, cls: string) => <span className={`inline-flex shrink-0 items-center gap-[7px] text-meta ${cls}`}><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: HEAT_DOT[b] }} />{b}</span>;
   const row = (l: Prospect, second: string) => {
     const closed = isClosed(P, l.stage), b = bandOf(l), tone = dueTone(l.next_date, t);
     const lostLine = l.stage === P.lost_stage && l.lost_reason ? `${P.lost_stage}: ${l.lost_reason}` : "";
@@ -147,14 +147,14 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
       <button key={l.id} type="button" onClick={() => openLead(l.id)} onKeyDown={(e) => onRowKey(e, l)} aria-label={`${l.name}, ${l.stage}`}
         className={`pl-row flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#f0f0f0] py-[13px] pl-5 pr-5 text-left sm:gap-y-2 sm:pl-11 ${sel === l.id ? "bg-[#fff5f5]" : "bg-white"}`}>
         <span className="flex min-w-0 flex-[1_1_200px] flex-col gap-0.5">
-          <span className="flex items-center justify-between gap-3"><span className="text-[14px] font-semibold">{l.name}</span>{heat(b, "sm:hidden")}</span>
-          <span className="truncate text-[12.5px] text-muted">{l.role || "No role"}<span className="sm:hidden">{second ? ` · ${second}` : ""}</span></span>
+          <span className="flex items-center justify-between gap-3"><span className="text-body font-semibold">{l.name}</span>{heat(b, "sm:hidden")}</span>
+          <span className="truncate text-meta text-muted">{l.role || "No role"}<span className="sm:hidden">{second ? ` · ${second}` : ""}</span></span>
         </span>
-        <span className="min-w-0 flex-[1_1_160px] truncate text-[13px] max-sm:hidden">{second}</span>
+        <span className="min-w-0 flex-[1_1_160px] truncate text-body max-sm:hidden">{second}</span>
         <span className="flex min-w-0 flex-[2_1_240px] flex-col gap-0.5">
-          <span className={`text-[13.5px] leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || l.next_action || "No next action set"}</span>
-          {closed ? <span className="text-[12.5px] text-muted">{l.stage === P.won_stage ? P.won_stage : l.next_date ? `Check in ${fmtShort(l.next_date)}` : P.lost_stage}</span>
-            : <span className={`whitespace-nowrap text-[12.5px] ${toneCls(tone)}`}>{dueText(l.next_date, t)}</span>}
+          <span className={`text-body leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || l.next_action || "No next action set"}</span>
+          {closed ? <span className="text-meta text-muted">{l.stage === P.won_stage ? P.won_stage : l.next_date ? `Check in ${fmtShort(l.next_date)}` : P.lost_stage}</span>
+            : <span className={`whitespace-nowrap text-meta ${toneCls(tone)}`}>{dueText(l.next_date, t)}</span>}
         </span>
         {heat(b, "flex-[0_0_72px] max-sm:hidden")}
       </button>
@@ -163,22 +163,22 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
 
   const header = (
     <span className="relative">
-      <button type="button" data-tour="pipemenu" className="btn h-10 gap-2 px-3 text-[14px] font-semibold" aria-haspopup="menu" aria-expanded={menu === "pipe"} onClick={() => setMenu(menu === "pipe" ? null : "pipe")}>
-        <span className="text-[12.5px] font-medium text-muted">Pipeline</span>{P.name}<ChevronDown size={14} className="text-muted" />
+      <button type="button" data-tour="pipemenu" className="btn h-10 gap-2 px-3 text-body font-semibold" aria-haspopup="menu" aria-expanded={menu === "pipe"} onClick={() => setMenu(menu === "pipe" ? null : "pipe")}>
+        <span className="text-meta font-medium text-muted">Pipeline</span>{P.name}<ChevronDown size={14} className="text-muted" />
       </button>
       {menu === "pipe" && <>
         <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
         <div role="menu" className="pl-pop absolute right-0 top-[46px] z-[41] flex w-[260px] flex-col rounded-xl border border-[#e3e3e3] bg-white p-1.5 shadow-[0_16px_40px_rgba(20,20,20,.14)] max-sm:left-0 max-sm:right-auto">
           {data.pipes.map((p) => (
-            <button key={p.id} type="button" role="menuitem" className="pl-quiet flex h-[38px] items-center gap-2.5 rounded-lg px-2.5 text-left text-[13.5px]" onClick={() => { pickPipe(p.id); setMenu(null); setSel(null); }}>
+            <button key={p.id} type="button" role="menuitem" className="pl-quiet flex h-[38px] items-center gap-2.5 rounded-lg px-2.5 text-left text-body" onClick={() => { pickPipe(p.id); setMenu(null); setSel(null); }}>
               <Check size={14} strokeWidth={2.5} className={`text-[#d64545] ${p.id === P.id ? "" : "opacity-0"}`} />
               <span className="flex-1 font-semibold">{p.name}</span>
-              <span className="num text-[12px] text-muted">{data.leads.filter((l) => pipeOf(l).id === p.id && !isClosed(p, l.stage)).length}</span>
+              <span className="num text-meta text-muted">{data.leads.filter((l) => pipeOf(l).id === p.id && !isClosed(p, l.stage)).length}</span>
             </button>
           ))}
           <span className="mx-1 my-1.5 h-px bg-[#ececec]" />
-          {data.ready && editable && <button type="button" role="menuitem" className="pl-quiet h-[38px] rounded-lg px-2.5 text-left text-[13.5px]" onClick={() => { setSide("pipes"); setMenu(null); }}>New pipeline from a template</button>}
-          <button type="button" role="menuitem" className="pl-quiet h-[38px] rounded-lg px-2.5 text-left text-[13.5px]" onClick={() => { setSide("pipes"); setMenu(null); }}>Stages and lost reasons</button>
+          {data.ready && editable && <button type="button" role="menuitem" className="pl-quiet h-[38px] rounded-lg px-2.5 text-left text-body" onClick={() => { setSide("pipes"); setMenu(null); }}>New pipeline from a template</button>}
+          <button type="button" role="menuitem" className="pl-quiet h-[38px] rounded-lg px-2.5 text-left text-body" onClick={() => { setSide("pipes"); setMenu(null); }}>Stages and lost reasons</button>
         </div>
       </>}
     </span>
@@ -193,16 +193,16 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
       <div className="flex flex-col gap-7">
         <section data-tour="donext" className="pl-rise flex flex-col overflow-hidden rounded-2xl border border-line bg-white">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-[18px]">
-            <span className="flex flex-col gap-[3px]"><span className="text-[16px] font-[650]">Do next</span><span className="text-[13px] text-muted">Overdue first, then today.</span></span>
-            {dn.more > 0 && <span className="text-[12.5px] text-muted">{dn.more} more due</span>}
+            <span className="flex flex-col gap-[3px]"><span className="text-title font-semibold">Do next</span><span className="text-body text-muted">Overdue first, then today.</span></span>
+            {dn.more > 0 && <span className="text-meta text-muted">{dn.more} more due</span>}
           </div>
           {data.loading ? [0, 1, 2].map((i) => <div key={i} className="mx-5 mb-3 h-10 animate-pulse rounded-lg bg-surface-2" />)
-            : dn.rows.length === 0 ? <span className="border-t border-[#f0f0f0] px-5 pb-[18px] pt-3.5 text-[13.5px] text-muted">Nothing overdue or due today.{dn.upcoming ? ` Next up: ${dn.upcoming.name}, ${dueText(dn.upcoming.next_date, t)}.` : ""}</span>
+            : dn.rows.length === 0 ? <span className="border-t border-[#f0f0f0] px-5 pb-[18px] pt-3.5 text-body text-muted">Nothing overdue or due today.{dn.upcoming ? ` Next up: ${dn.upcoming.name}, ${dueText(dn.upcoming.next_date, t)}.` : ""}</span>
             : dn.rows.map((l) => (
               <div key={l.id} className="pl-row flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#f0f0f0] px-5 py-3">
-                <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5"><span className="text-[14px] font-semibold">{l.name}</span><span className="text-[12.5px] text-muted">{l.company || "No company"}</span></span>
-                <span className="min-w-0 flex-[2_1_260px] text-[13.5px] leading-snug">{l.next_action || "No next action set"}</span>
-                <span className={`min-w-[104px] shrink-0 whitespace-nowrap text-right text-[12.5px] max-sm:text-left ${toneCls(dueTone(l.next_date, t))}`}>{dueText(l.next_date, t)}</span>
+                <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5"><span className="text-body font-semibold">{l.name}</span><span className="text-meta text-muted">{l.company || "No company"}</span></span>
+                <span className="min-w-0 flex-[2_1_260px] text-body leading-snug">{l.next_action || "No next action set"}</span>
+                <span className={`min-w-[104px] shrink-0 whitespace-nowrap text-right text-meta max-sm:text-left ${toneCls(dueTone(l.next_date, t))}`}>{dueText(l.next_date, t)}</span>
                 <button type="button" className="btn h-[34px]! shrink-0 px-3.5! font-semibold" onClick={() => openLead(l.id)}>Open</button>
               </div>
             ))}
@@ -210,12 +210,12 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
 
         <section className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between gap-2.5">
-            <span className="text-[16px] font-[650]">Everyone</span>
-            <span className="text-[12.5px] text-muted">{filtered.length} {filtered.length === 1 ? "person" : "people"}{anyFilter ? " match" : ""}</span>
+            <span className="text-title font-semibold">Everyone</span>
+            <span className="text-meta text-muted">{filtered.length} {filtered.length === 1 ? "person" : "people"}{anyFilter ? " match" : ""}</span>
           </div>
           <div data-tour="tools" className="flex flex-wrap items-center gap-2 rounded-xl">
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people and companies" aria-label="Search people and companies"
-              className="h-[38px] min-w-0 flex-[1_1_240px] rounded-[10px] border border-[#e3e3e3] bg-white px-3 text-[13.5px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d64545]" />
+              className="h-[38px] min-w-0 flex-[1_1_240px] rounded-[10px] border border-[#e3e3e3] bg-white px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d64545]" />
             <button type="button" aria-pressed={fOverdue} onClick={() => setFOverdue(!fOverdue)} className={`pl-chip ${fOverdue ? "on" : ""}`}>Overdue</button>
             <button type="button" aria-pressed={fHot} onClick={() => setFHot(!fHot)} className={`pl-chip ${fHot ? "on" : ""}`}>Hot</button>
             <span className="relative">
@@ -223,15 +223,15 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
               {menu === "filters" && <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
                 <div className="pl-pop absolute left-0 top-11 z-[41] flex w-[280px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-[#e3e3e3] bg-white p-3.5 shadow-[0_16px_40px_rgba(20,20,20,.14)] max-sm:left-auto max-sm:right-0">
-                  <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold">Segment
+                  <label className="flex flex-col gap-1.5 text-meta font-semibold">Segment
                     <select value={fSeg} onChange={(e) => setFSeg(e.target.value)} className="field h-9! font-normal"><option value="">All</option>{Object.entries(segs).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></label>
-                  <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold">Owner
+                  <label className="flex flex-col gap-1.5 text-meta font-semibold">Owner
                     <select value={fOwner} onChange={(e) => setFOwner(e.target.value)} className="field h-9! font-normal"><option value="">All</option>{data.members.map((m) => <option key={m.user_id} value={m.user_id}>{ownerName(m.email)}</option>)}<option value="none">No owner</option></select></label>
-                  <button type="button" className="btn h-8! self-start px-3! text-[12.5px] font-semibold" onClick={clearFilters}>Clear all filters</button>
+                  <button type="button" className="btn h-8! self-start px-3! text-meta font-semibold" onClick={clearFilters}>Clear all filters</button>
                 </div>
               </>}
             </span>
-            <button type="button" role="switch" aria-checked={grouped} onClick={() => setGrouped(!grouped)} className="ml-auto inline-flex h-[38px] items-center gap-2.5 whitespace-nowrap rounded-lg px-1 text-[13px] font-semibold focus-visible:outline-2 focus-visible:outline-[#d64545]">
+            <button type="button" role="switch" aria-checked={grouped} onClick={() => setGrouped(!grouped)} className="ml-auto inline-flex h-[38px] items-center gap-2.5 whitespace-nowrap rounded-lg px-1 text-body font-semibold focus-visible:outline-2 focus-visible:outline-[#d64545]">
               <span className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors ${grouped ? "bg-[#141414]" : "bg-[#d6d6d6]"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-[0_1px_2px_rgba(20,20,20,.25)] transition-[left] duration-200 ${grouped ? "left-4" : "left-0.5"}`} /></span>
               Group by company
             </button>
@@ -245,21 +245,21 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
                   <div key={g.key} className={i ? "border-t border-[#ececec]" : ""}>
                     <button type="button" aria-expanded={open} onClick={() => setGx({ ...gx, [g.key]: !open })} className="pl-quiet flex h-[46px] w-full items-center gap-2.5 px-5 text-left">
                       <ChevronRight size={14} className={`pl-chev shrink-0 text-muted ${open ? "rotate-90" : ""}`} />
-                      <span className={`truncate text-[14px] font-semibold ${g.dim ? "text-muted" : ""}`}>{g.label}</span>
-                      <span className="num text-[12px] text-muted">{g.people.length}</span>
-                      <span className="ml-auto hidden text-[12px] text-muted sm:inline">{g.sub}</span>
+                      <span className={`truncate text-body font-semibold ${g.dim ? "text-muted" : ""}`}>{g.label}</span>
+                      <span className="num text-meta text-muted">{g.people.length}</span>
+                      <span className="ml-auto hidden text-meta text-muted sm:inline">{g.sub}</span>
                     </button>
                     {open && g.people.slice().sort((a, b) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999")).map((l) => row(l, g.second(l)))}
                   </div>
                 );
               })}
               {strays.length > 0 && <div className="border-t border-[#ececec]">
-                <div className="flex h-[46px] items-center gap-2.5 px-5 text-[14px] font-semibold">Stage not in {P.name}<span className="num text-[12px] font-normal text-muted">{strays.length}</span></div>
+                <div className="flex h-[46px] items-center gap-2.5 px-5 text-body font-semibold">Stage not in {P.name}<span className="num text-meta font-normal text-muted">{strays.length}</span></div>
                 {strays.map((l) => row(l, l.stage))}
               </div>}
               {!groups.length && !strays.length && (anyFilter
-                ? <span className="flex flex-wrap items-center gap-3 p-5 text-[13.5px] text-muted">No one matches these filters.<button type="button" className="btn h-8! px-3! text-[12.5px] font-semibold text-ink" onClick={clearFilters}>Clear filters</button></span>
-                : <span className="block p-5 text-[13.5px] text-muted">No one in {P.name} yet. Add a lead or import from Network.</span>)}
+                ? <span className="flex flex-wrap items-center gap-3 p-5 text-body text-muted">No one matches these filters.<button type="button" className="btn h-8! px-3! text-meta font-semibold text-ink" onClick={clearFilters}>Clear filters</button></span>
+                : <span className="block p-5 text-body text-muted">No one in {P.name} yet. Add a lead or import from Network.</span>)}
             </>}
           </section>
         </section>

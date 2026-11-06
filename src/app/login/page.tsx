@@ -65,6 +65,7 @@ export default function Login() {
 
   return (
     <AuthShell title="Sign in" sub={mode === "password" ? "Use the email your invitation was sent to." : "We will email you a link that signs you in."}
+      promise={{ line: "LinkedIn authority and outreach.", trust: "No LinkedIn password. Nothing is posted for you." }}
       foot={<>Access is by invitation. Ask a Prax owner to invite you.</>}>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
         {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
@@ -73,10 +74,10 @@ export default function Login() {
         {mode === "password" && (
           <Field id="password" label="Password" type="password" autoComplete="current-password"
             value={password} onChange={setPassword} error={show("password")}
-            aside={<Link href="/login/forgot" className={`${authLink} text-[12.5px]`}>Forgot password?</Link>} />
+            aside={<Link href="/login/forgot" className={`${authLink} text-meta`}>Forgot password?</Link>} />
         )}
         <div className="mt-1"><SubmitButton busy={busy} busyText={mode === "password" ? "Signing in" : "Sending link"}>{mode === "password" ? "Sign in" : "Email me a link"}</SubmitButton></div>
-        <p className="text-center text-[13px] text-muted">
+        <p className="text-center text-body text-muted">
           {mode === "password"
             ? <button type="button" className={`${authLink} font-normal text-muted`} onClick={() => switchMode("link")}>Email me a sign-in link instead</button>
             : <button type="button" className={`${authLink} font-normal text-muted`} onClick={() => switchMode("password")}>Use my password instead</button>}

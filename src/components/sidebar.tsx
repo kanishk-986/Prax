@@ -39,7 +39,7 @@ export function Sidebar() {
     const active = navActive(path, base, href);
     return (
       <Link key={href} href={full} onClick={() => setOpen(false)} aria-current={active ? "page" : undefined}
-        className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors ${active ? "bg-surface text-ink shadow-[var(--shadow)] ring-1 ring-line" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>
+        className={`flex h-8 items-center gap-2.5 rounded-md px-2.5 text-body font-medium transition-colors ${active ? "bg-surface text-ink shadow-[var(--shadow)] ring-1 ring-line" : "text-muted hover:bg-surface-2 hover:text-ink"}`}>
         <Icon size={15} strokeWidth={1.8} />{label}
       </Link>
     );
@@ -49,21 +49,21 @@ export function Sidebar() {
       <Link href="/" className="flex items-center gap-2.5 rounded-md px-1.5 py-1 hover:bg-surface-2">
         <Logo />
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13.5px] font-semibold leading-tight text-ink">{ws.name}</span>{ws.is_demo && <DemoTag />}</div>
-          <div className="mt-0.5 text-[11.5px] capitalize leading-tight text-muted">{role}</div>
+          <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-body font-semibold leading-tight text-ink">{ws.name}</span>{ws.is_demo && <DemoTag />}</div>
+          <div className="mt-0.5 text-meta capitalize leading-tight text-muted">{role}</div>
         </div>
         <ChevronsUpDown size={14} className="text-faint" />
       </Link>
       <button onClick={() => { setOpen(false); window.dispatchEvent(new Event("prax:cmdk")); }}
-        className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted shadow-[var(--shadow)] transition-colors hover:border-line-strong hover:text-ink">
+        className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-body text-muted shadow-[var(--shadow)] transition-colors hover:border-line-strong hover:text-ink">
         <Search size={14} /> Search <span className="ml-auto flex items-center gap-1"><span className="kbd">⌘</span><span className="kbd">K</span></span>
       </button>
       <nav className="flex flex-col gap-0.5">{NAV.map((n) => item(n.href, n.label, n.icon))}</nav>
       <div className="mt-auto flex flex-col gap-0.5">
         {item("/settings", "Settings", Settings)}
         <form action="/auth/signout" method="post" className="flex items-center gap-2 pl-2.5 pt-2">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-faint">{email}</span>
-          <button className="rounded px-1.5 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink">Sign out</button>
+          <span className="min-w-0 flex-1 truncate text-meta text-faint">{email}</span>
+          <button className="rounded px-1.5 py-0.5 text-meta font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink">Sign out</button>
         </form>
       </div>
     </div>

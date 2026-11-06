@@ -80,8 +80,10 @@ export default function NetworkPage() {
   return (
     <Section id="network" title="Network" status={`Who ${first} already knows at each target account, so every approach starts warm.`}
       entryStatus={conns ? `${conns.toLocaleString()} connections imported. The warmest routes to your prospects are on Home.` : `Import ${possessive(first)} LinkedIn connections to find warm routes to every prospect.`}
-      tabs={TABS.map((t) => ({ id: t, label: t }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={netTour(first)}
-      actions={<button className="btn btn-primary h-10 px-4" onClick={() => setTab("Import")}><Upload size={14} /> Import connections</button>}>
+      // Before the first export, Segments, Warm paths and Topics would be empty, so only Home and Import show, and the
+      // one Import button is the one on Home.
+      tabs={TABS.filter((t) => loading || people.length || t === "Home" || t === "Import").map((t) => ({ id: t, label: t }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={netTour(first)}
+      primary={people.length ? <button className="btn btn-primary h-10 px-4" onClick={() => setTab("Import")}><Upload size={14} /> Import connections</button> : undefined}>
       {loading ? <div className="card h-64 animate-pulse bg-surface-2" />
         : tab === "Home" ? <NetworkHome people={people} idx={idx} prospects={prospects.rows} comments={comments.rows} imports={imports} onImport={() => setTab("Import")} />
         : tab === "Import" ? <div data-tour="import" className="rounded-2xl"><UploadTab imports={imports} people={people} prospects={prospects.rows} onDone={reload} /></div>
@@ -114,10 +116,10 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
   const n = (l: number) => rows.filter((r) => r.w.level === l).length;
 
   if (!people.length) return (
-    <section data-tour="known" className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-6">
-      <h2 className="text-[19px] font-semibold">Who {firstNameOf(ws)} already knows at each target account</h2>
-      <p className="max-w-[640px] text-[14px] leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people he does not know yet. Import his connections once and Prax shows, for every prospect, whether he is connected, has talked before, or knows someone there.</p>
-      <ol className="ml-4 list-decimal space-y-1 text-[13px] text-ink-2">
+    <section data-tour="known" className="panel flex flex-col gap-4 p-6">
+      <h2 className="text-title font-semibold">Not started: import the LinkedIn export to see who {firstNameOf(ws)} already knows</h2>
+      <p className="max-w-[640px] text-body leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people he does not know yet. Import his connections once and Prax shows, for every prospect, whether he is connected, has talked before, or knows someone there.</p>
+      <ol className="ml-4 list-decimal space-y-1 text-body text-ink-2">
         <li>On LinkedIn: Me, Settings &amp; Privacy, Data privacy, Get a copy of your data.</li>
         <li>Choose the larger archive, or pick Connections, Messages, Invitations, Shares and Comments.</li>
         <li>LinkedIn emails a link, sometimes after up to 24 hours. Drop the zip in Import.</li>
@@ -147,31 +149,31 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
         { label: "Knows someone there", value: n(3), of: `of ${rows.length}`, sub: "a colleague is a connection" },
         { label: "No route yet", value: rows.filter((r) => !r.w.level).length, of: `of ${rows.length}`, sub: "comment first" },
       ]} />
-      <div data-tour="freshness" className={`flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 text-[13px] ${ageDays != null && ageDays >= 60 ? "bg-[#141414] text-white" : "border border-line bg-surface text-muted"}`}>
-        <span className="flex-1">{ageDays == null ? "No import recorded yet." : ageDays >= 60 ? `Re-import due: the last export is ${ageDays} days old, so newer connections are missing.` : `Last import ${ageDays === 0 ? "today" : `${ageDays} days ago`}: ${people.filter((x) => x.is_connection).length.toLocaleString()} connections.`}</span>
-        {ageDays != null && ageDays >= 60 && <button className="btn btn-primary h-8" onClick={onImport}>Import again</button>}
+      <div data-tour="freshness" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-body text-muted">
+        <span className={`flex-1 ${ageDays != null && ageDays >= 60 ? "font-medium text-dark-red" : ""}`}>{ageDays == null ? "No import recorded yet." : ageDays >= 60 ? `Re-import due: the last export is ${ageDays} days old, so newer connections are missing.` : `Last import ${ageDays === 0 ? "today" : `${ageDays} days ago`}: ${people.filter((x) => x.is_connection).length.toLocaleString()} connections.`}</span>
+        {ageDays != null && ageDays >= 60 && <button className="btn h-8" onClick={onImport}>Import again</button>}
       </div>
       <section data-tour="known" className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5"><span className="text-[15px] font-semibold">Who {firstNameOf(ws)} already knows at each target account</span><span className="text-[12px] text-muted">warmest route first</span></div>
-        {rows.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">No open prospects yet. Add people in Pipeline, or from Segments.</p> : rows.map(({ p, w }, i) => {
+        <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5"><span className="text-title font-semibold">Who {firstNameOf(ws)} already knows at each target account</span><span className="text-meta text-muted">warmest route first</span></div>
+        {rows.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-body text-muted">No open prospects yet. Add people in Pipeline, or from Segments.</p> : rows.map(({ p, w }, i) => {
           const r = route(w, p);
           return (
-            <div key={p.id} data-tour={i === 0 ? "row" : undefined} className="flex flex-wrap items-center gap-3 border-t border-line px-[18px] py-3">
+            <div key={p.id} data-tour={i === 0 ? "row" : undefined} className="group flex flex-wrap items-center gap-3 border-t border-line px-[18px] py-3">
               <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
-                <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-[14px] font-semibold hover:underline">{p.name}</Link>
-                <span className="text-[12px] text-muted">{[p.role, p.company].filter(Boolean).join(" · ")} · {p.stage}</span>
+                <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-body font-semibold hover:underline">{p.name}</Link>
+                <span className="text-meta text-muted">{[p.role, p.company].filter(Boolean).join(" · ")} · {p.stage}</span>
               </span>
-              <span className="min-w-[240px] flex-[2] text-[13px] text-ink-2">{r.text}</span>
+              <span className="min-w-[240px] flex-[2] text-body text-ink-2">{r.text}</span>
               <span className="flex flex-wrap items-center gap-2">
-                {r.url ? <a href={r.url} target="_blank" rel="noopener" className={`btn h-8 ${w.level ? "btn-primary" : "btn-dark"}`}>{r.cta} <ExternalLink size={12} /></a> : <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="btn h-8">{r.cta}</Link>}
+                {r.url ? <a href={r.url} target="_blank" rel="noopener" className="btn btn-quiet row-act h-8">{r.cta} <ExternalLink size={12} /></a> : <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="btn btn-quiet row-act h-8">{r.cta}</Link>}
                 {can("editor") && camps.length > 0 && (pick === p.id
-                  ? <select autoFocus className="field h-8 w-44 text-[12px]" defaultValue="" onBlur={() => setPick(null)} onChange={(e) => e.target.value && addTarget(p, e.target.value)} aria-label={`Campaign for ${p.name}`}><option value="" disabled>Pick a campaign</option>{camps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                  : <button className="btn h-8" onClick={() => setPick(p.id)}><UserPlus size={13} /> Add to campaign targets</button>)}
+                  ? <select autoFocus className="field h-8 w-44 text-meta" defaultValue="" onBlur={() => setPick(null)} onChange={(e) => e.target.value && addTarget(p, e.target.value)} aria-label={`Campaign for ${p.name}`}><option value="" disabled>Pick a campaign</option>{camps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                  : <button className="btn btn-quiet row-act h-8" onClick={() => setPick(p.id)}><UserPlus size={13} /> Add to campaign targets</button>)}
               </span>
             </div>
           );
         })}
-        <p className="border-t border-line px-[18px] py-2.5 text-[11.5px] text-faint">Prax only opens LinkedIn. {firstNameOf(ws)} writes and sends every message by hand.</p>
+        <p className="border-t border-line px-[18px] py-2.5 text-meta text-faint">Prax only opens LinkedIn. {firstNameOf(ws)} writes and sends every message by hand.</p>
       </section>
     </div>
   );
@@ -181,7 +183,7 @@ function Empty({ onUpload }: { onUpload: () => void }) {
   return (
     <div className="card grid min-h-[260px] place-items-center p-10 text-center">
       <div>
-        <p className="text-[13px] text-muted">No export uploaded yet.</p>
+        <p className="text-body text-muted">No export uploaded yet.</p>
         <button className="btn btn-primary mt-3" onClick={onUpload}><Upload size={14} /> Upload the LinkedIn export</button>
       </div>
     </div>
@@ -260,24 +262,24 @@ function UploadTab({ imports, people, prospects, onDone }: { imports: Import[]; 
               onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) open(f); }}
               className={`grid w-full place-items-center gap-1.5 rounded-xl border border-dashed px-4 py-10 text-center transition-colors ${drag ? "border-accent bg-accent-soft" : "border-line-strong hover:bg-surface-2"}`}>
               <FileArchive size={22} className="text-muted" />
-              <span className="text-[13px] font-medium">{busy && !parsed ? busy : "Drop the LinkedIn export .zip, or click to choose"}</span>
-              <span className="text-[12px] text-muted">Opened in this browser. The zip itself never leaves your computer.</span>
+              <span className="text-body font-medium">{busy && !parsed ? busy : "Drop the LinkedIn export .zip, or click to choose"}</span>
+              <span className="text-meta text-muted">Opened in this browser. The zip itself never leaves your computer.</span>
             </button>
             <input ref={input} type="file" accept=".zip,application/zip" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) open(f); e.target.value = ""; }} />
 
             {parsed && (
               <div className="anim-rise mt-4 rounded-xl border border-line p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-semibold">{parsed.name}</span>
+                  <span className="truncate text-body font-semibold">{parsed.name}</span>
                   <span className="chip">export of {fmtDay(parsed.x.exportDate, { day: "numeric", month: "short", year: "numeric" })}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   {[["Connections", parsed.x.counts.connections], ["People messaged", parsed.x.counts.messaged], ["Pending invites", parsed.x.counts.invites], ["Posts", parsed.x.counts.posts], ["Comments", parsed.x.counts.comments]].map(([l, v]) => (
-                    <div key={l as string}><div className="label">{l}</div><div className="num mt-1 text-[18px] font-semibold">{v as number}</div></div>
+                    <div key={l as string}><div className="label">{l}</div><div className="num mt-1 text-page font-semibold">{v as number}</div></div>
                   ))}
                 </div>
-                {parsed.x.missing.length > 0 && <p className="mt-3 text-[12px] text-warn">Not in this zip: {parsed.x.missing.join(", ")}. The rest still imports; upload the larger archive later to fill the gaps.</p>}
-                <p className="mt-3 text-[12px] text-muted">Prax saves names, companies, positions, connection dates, message counts and dates, and your own posts and comments. It does not save message text or email addresses.</p>
+                {parsed.x.missing.length > 0 && <p className="mt-3 text-meta text-warn">Not in this zip: {parsed.x.missing.join(", ")}. The rest still imports; upload the larger archive later to fill the gaps.</p>}
+                <p className="mt-3 text-meta text-muted">Prax saves names, companies, positions, connection dates, message counts and dates, and your own posts and comments. It does not save message text or email addresses.</p>
                 {busy === "Importing" && <div className="mt-3 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(progress * 100)}%`, transition: "width .3s" }} /></div>}
                 <div className="mt-4 flex gap-2">
                   <button className="btn btn-primary" disabled={!!busy} onClick={importIt}>{busy === "Importing" ? `Importing ${Math.round(progress * 100)}%` : "Import"}</button>
@@ -289,28 +291,28 @@ function UploadTab({ imports, people, prospects, onDone }: { imports: Import[]; 
         )}
 
         <div className="card">
-          <div className="border-b border-line px-4 py-3 text-[13px] font-semibold">Uploads <span className="num font-normal text-muted">{imports.length}</span></div>
-          {imports.length === 0 ? <p className="p-6 text-center text-[13px] text-muted">Nothing uploaded yet.</p> : imports.map((im) => (
-            <div key={im.id} className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5 text-[13px] last:border-0">
+          <div className="border-b border-line px-4 py-3 text-body font-semibold">Uploads <span className="num font-normal text-muted">{imports.length}</span></div>
+          {imports.length === 0 ? <p className="p-6 text-center text-body text-muted">Nothing uploaded yet.</p> : imports.map((im) => (
+            <div key={im.id} className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5 text-body last:border-0">
               <span className="min-w-0 flex-1 truncate font-medium">{im.file_name || "LinkedIn export"}</span>
               <span className="text-muted">{im.counts.connections ?? 0} connections</span>
               {im.counts.added != null && <span className="num text-good">+{im.counts.added} new</span>}
-              <span className="text-[12px] text-faint">{fmtDay(ymd(new Date(im.created_at)), { day: "numeric", month: "short", year: "numeric" })}</span>
+              <span className="text-meta text-faint">{fmtDay(ymd(new Date(im.created_at)), { day: "numeric", month: "short", year: "numeric" })}</span>
             </div>
           ))}
         </div>
 
         {can("owner") && conn > 0 && (
           <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
-            <div><div className="text-[13px] font-medium">Remove network data</div><div className="text-[12px] text-muted">Deletes every imported connection, message count, post and upload for this profile. Prospects stay as they are.</div></div>
+            <div><div className="text-body font-medium">Remove network data</div><div className="text-meta text-muted">Deletes every imported connection, message count, post and upload for this profile. Prospects stay as they are.</div></div>
             {wipe ? (
-              <span className="flex items-center gap-2 text-[13px] text-bad">Remove {conn} connections? <button className="btn" onClick={removeAll}>Remove</button><button className="btn btn-ghost" onClick={() => setWipe(false)}>Keep</button></span>
+              <span className="flex items-center gap-2 text-body text-bad">Remove {conn} connections? <button className="btn" onClick={removeAll}>Remove</button><button className="btn btn-ghost" onClick={() => setWipe(false)}>Keep</button></span>
             ) : <button className="btn btn-ghost hover:text-bad" onClick={() => setWipe(true)}><Trash2 size={14} /> Remove</button>}
           </div>
         )}
       </div>
 
-      <div className="card h-fit p-4 text-[13px] leading-relaxed">
+      <div className="card h-fit p-4 text-body leading-relaxed">
         <div className="label mb-2">Getting the export</div>
         <ol className="list-decimal space-y-1.5 pl-4 text-ink-2">
           <li>On LinkedIn, click <b>Me</b>, then <b>Settings &amp; Privacy</b>.</li>
@@ -319,7 +321,7 @@ function UploadTab({ imports, people, prospects, onDone }: { imports: Import[]; 
           <li>Click <b>Request archive</b>. LinkedIn emails a link, sometimes after up to 24 hours.</li>
           <li>Download the zip and drop it here. Do it again every month or two to see how the network grows.</li>
         </ol>
-        <p className="mt-3 text-[12px] text-muted">Only the profile owner can request the export, from their own LinkedIn account.</p>
+        <p className="mt-3 text-meta text-muted">Only the profile owner can request the export, from their own LinkedIn account.</p>
       </div>
     </div>
   );
@@ -361,7 +363,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
           <div className="label mb-3">Connections by segment <span className="num ml-1 normal-case tracking-normal text-faint">{conns.length}</span></div>
           {keys.map((k) => (
             <button key={k || "none"} onClick={() => { setSeg(seg === k ? "all" : k); setShown(50); }} className={`mb-1.5 block w-full rounded-md px-1.5 py-1 text-left ${seg === k ? "bg-surface-2" : "hover:bg-surface-2/60"}`}>
-              <div className="flex justify-between text-[12px]"><span>{k ? `${k} · ${segs[k].label}` : "Unsegmented"}</span><span className="num text-muted">{counts[k]}</span></div>
+              <div className="flex justify-between text-meta"><span>{k ? `${k} · ${segs[k].label}` : "Unsegmented"}</span><span className="num text-muted">{counts[k]}</span></div>
               <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full" style={{ width: `${(counts[k] / max) * 100}%`, background: k ? SEGMENTS[k].color : "var(--faint)" }} /></div>
             </button>
           ))}
@@ -371,7 +373,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
           {SENIORITY.map((s, i) => {
             const n = conns.filter((c) => (seg === "all" || c.seg === seg) && c.lvl === i).length;
             return (
-              <button key={s} onClick={() => { setLvl(lvl === i ? -1 : i); setShown(50); }} className={`flex w-full justify-between rounded-md px-1.5 py-1.5 text-[13px] ${lvl === i ? "bg-surface-2" : "hover:bg-surface-2/60"}`}>
+              <button key={s} onClick={() => { setLvl(lvl === i ? -1 : i); setShown(50); }} className={`flex w-full justify-between rounded-md px-1.5 py-1.5 text-body ${lvl === i ? "bg-surface-2" : "hover:bg-surface-2/60"}`}>
                 <span>{s}</span><span className="num text-muted">{n}</span>
               </button>
             );
@@ -381,12 +383,12 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
 
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-          <span className="text-[13px] font-semibold">{seg === "all" ? "All connections" : seg ? `${seg} · ${segs[seg].label}` : "Unsegmented"}{lvl >= 0 && ` · ${SENIORITY[lvl]}`}</span>
-          <span className="num text-[12px] text-muted">{rows.length}</span>
+          <span className="text-body font-semibold">{seg === "all" ? "All connections" : seg ? `${seg} · ${segs[seg].label}` : "Unsegmented"}{lvl >= 0 && ` · ${SENIORITY[lvl]}`}</span>
+          <span className="num text-meta text-muted">{rows.length}</span>
           <input className="field ml-auto h-8 w-full sm:w-64" placeholder="Search name, company, position" value={q} onChange={(e) => { setQ(e.target.value); setShown(50); }} />
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-body">
             <thead><tr className="border-b border-line text-left">{["Name", "Position", "Company", "Segment", "Connected", ""].map((h) => <th key={h} className="label px-3 py-2 font-semibold">{h}</th>)}</tr></thead>
             <tbody>{rows.slice(0, shown).map(({ p, seg: s }) => (
               <tr key={p.key} className="border-b border-line last:border-0">
@@ -395,20 +397,20 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
                 <td className="max-w-[200px] truncate px-3 py-2 text-ink-2" title={p.company}>{p.company}</td>
                 <td className="px-3 py-2">
                   {editable ? (
-                    <select className="field h-7 w-[92px] px-1.5 text-[12px]" value={p.segment_manual} onChange={(e) => setManual(p, e.target.value)} aria-label={`Segment for ${p.name}`}>
+                    <select className="field h-7 w-[92px] px-1.5 text-meta" value={p.segment_manual} onChange={(e) => setManual(p, e.target.value)} aria-label={`Segment for ${p.name}`}>
                       <option value="">{s ? `${s} (rules)` : "None"}</option>
                       {Object.keys(SEGMENTS).map((k) => <option key={k} value={k}>{k}</option>)}
                     </select>
                   ) : <span className="chip" style={{ color: SEGMENTS[s]?.color }}>{s || "None"}</span>}
                 </td>
-                <td className="num whitespace-nowrap px-3 py-2 text-[12px] text-muted">{p.connected_on ? fmtDay(p.connected_on, { month: "short", year: "numeric" }) : ""}</td>
+                <td className="num whitespace-nowrap px-3 py-2 text-meta text-muted">{p.connected_on ? fmtDay(p.connected_on, { month: "short", year: "numeric" }) : ""}</td>
                 <td className="px-3 py-2 text-right">{p.prospect_id && inPipe.has(p.prospect_id) ? <span className="chip text-good">In pipeline</span> : editable && <AddToPipeline p={p} seg={s} people={people} onChange={onChange} />}</td>
               </tr>
             ))}</tbody>
           </table>
         </div>
         {rows.length > shown && <button className="btn btn-ghost m-2 w-[calc(100%-16px)]" onClick={() => setShown(shown + 100)}>Show more <span className="num text-muted">{rows.length - shown}</span></button>}
-        {rows.length === 0 && <p className="p-6 text-center text-[13px] text-muted">No connections match.</p>}
+        {rows.length === 0 && <p className="p-6 text-center text-body text-muted">No connections match.</p>}
       </div>
 
       {editable && <SegmentRules settings={settings} setSettings={setSettings} />}
@@ -432,7 +434,7 @@ function AddToPipeline({ p, seg, people, onChange }: { p: Person; seg: string; p
     });
     setBusy(false);
   }
-  return <button className="btn h-7 whitespace-nowrap px-2 text-[12px]" disabled={busy} onClick={add}><UserPlus size={13} /> Add to pipeline</button>;
+  return <button className="btn h-7 whitespace-nowrap px-2 text-meta" disabled={busy} onClick={add}><UserPlus size={13} /> Add to pipeline</button>;
 }
 
 function SegmentRules({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
@@ -452,17 +454,17 @@ function SegmentRules({ settings, setSettings }: { settings: Settings; setSettin
   }
   return (
     <div className="card">
-      <button className="flex w-full items-center justify-between px-4 py-3 text-[13px] font-semibold" onClick={() => setOpen(!open)}>
+      <button className="flex w-full items-center justify-between px-4 py-3 text-body font-semibold" onClick={() => setOpen(!open)}>
         Segment rules <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="anim-rise border-t border-line p-4">
-          <p className="mb-3 text-[12px] text-muted">Checked top to bottom, first match wins. Companies of prospects already in the pipeline count first, under the prospect&apos;s segment. Separate words with commas. A segment set by hand on a person always wins.</p>
+          <p className="mb-3 text-meta text-muted">Checked top to bottom, first match wins. Companies of prospects already in the pipeline count first, under the prospect&apos;s segment. Separate words with commas. A segment set by hand on a person always wins.</p>
           {draft.map((r, i) => (
             <div key={r.seg} className="mb-3 grid gap-2 md:grid-cols-[120px_1fr_1fr]">
-              <div className="pt-1.5 text-[13px] font-medium" style={{ color: segs[r.seg]?.color }}>{r.seg} · {segs[r.seg]?.label}</div>
-              <label className="flex flex-col gap-1"><span className="label">Company contains</span><textarea rows={2} className="field h-auto py-1.5 text-[12px]" value={r.companies} onChange={(e) => set(i, "companies", e.target.value)} /></label>
-              <label className="flex flex-col gap-1"><span className="label">Position contains</span><textarea rows={2} className="field h-auto py-1.5 text-[12px]" value={r.roles} onChange={(e) => set(i, "roles", e.target.value)} /></label>
+              <div className="pt-1.5 text-body font-medium" style={{ color: segs[r.seg]?.color }}>{r.seg} · {segs[r.seg]?.label}</div>
+              <label className="flex flex-col gap-1"><span className="label">Company contains</span><textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.companies} onChange={(e) => set(i, "companies", e.target.value)} /></label>
+              <label className="flex flex-col gap-1"><span className="label">Position contains</span><textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.roles} onChange={(e) => set(i, "roles", e.target.value)} /></label>
             </div>
           ))}
           <div className="flex gap-2">
@@ -488,15 +490,15 @@ function WarmTab({ people, idx, prospects, comments, segOf, onChange }: { people
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[["Already connected", n(1)], ["Talked before", n(2)], ["Knows someone there", n(3)], ["To confirm", list.filter((x) => x.w.suggest.length).length]].map(([l, v]) => (
-          <div key={l as string} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-[20px] font-semibold">{v as number}</div><div className="text-[11px] text-muted">of {list.length} open prospects</div></div>
+          <div key={l as string} className="card px-4 py-3"><div className="label">{l}</div><div className="num mt-1 text-page font-semibold">{v as number}</div><div className="text-meta text-muted">of {list.length} open prospects</div></div>
         ))}
       </div>
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-          <span className="text-[13px] font-semibold">Prospects, warmest first</span>
-          <label className="flex items-center gap-2 text-[12px] text-muted"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show prospects with no path ({list.length - withPath.length})</label>
+          <span className="text-body font-semibold">Prospects, warmest first</span>
+          <label className="flex items-center gap-2 text-meta text-muted"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show prospects with no path ({list.length - withPath.length})</label>
         </div>
-        {shown.length === 0 ? <p className="p-6 text-center text-[13px] text-muted">No warm paths found yet. They appear when a prospect is a connection, someone you have messaged, or works where one of your connections works.</p>
+        {shown.length === 0 ? <p className="p-6 text-center text-body text-muted">No warm paths found yet. They appear when a prospect is a connection, someone you have messaged, or works where one of your connections works.</p>
           : shown.map(({ p, w }) => <WarmRow key={p.id} p={p} w={w} people={people} segOf={segOf} onChange={onChange} />)}
       </div>
     </div>
@@ -533,25 +535,25 @@ function WarmRow({ p, w, people, segOf, onChange }: { p: ProspectLite; w: Warm; 
   return (
     <div className="flex flex-col gap-2 border-b border-line px-4 py-3 last:border-0 md:flex-row md:items-start md:gap-4">
       <div className="min-w-0 md:w-[260px] md:shrink-0">
-        <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-[13px] font-medium hover:underline">{p.name}</Link>
-        <div className="truncate text-[12px] text-muted">{[p.role, p.company].filter(Boolean).join(" · ")}</div>
+        <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-body font-medium hover:underline">{p.name}</Link>
+        <div className="truncate text-meta text-muted">{[p.role, p.company].filter(Boolean).join(" · ")}</div>
         <div className="mt-1 flex gap-1.5"><span className="chip">{p.stage}</span><span className="chip" style={{ color: tone }}>{LEVEL[w.level]}</span></div>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-[13px] text-ink-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-body text-ink-2">
         {w.linked && (
           <div className="flex flex-wrap items-center gap-2">
             <Check size={13} className="text-good" />
             {w.linked.is_connection ? <>1st-degree connection{w.linked.connected_on && ` since ${fmtDay(w.linked.connected_on, { month: "short", year: "numeric" })}`}</> : w.linked.invite === "sent" ? "Invitation sent, not accepted yet" : "In your messages, not connected"}
             {w.linked.url && <a href={w.linked.url} target="_blank" rel="noopener" className="text-muted hover:text-ink" aria-label="Open profile"><ExternalLink size={12} /></a>}
-            {editable && w.linked.is_connection && OPEN_STAGES.includes(p.stage) && <button className="btn h-6 px-2 text-[12px]" onClick={moveConnected}>Move to Connected <ArrowRight size={12} /></button>}
+            {editable && w.linked.is_connection && OPEN_STAGES.includes(p.stage) && <button className="btn h-6 px-2 text-meta" onClick={moveConnected}>Move to Connected <ArrowRight size={12} /></button>}
           </div>
         )}
         {w.msgs && <div>{w.msgs.count} message{w.msgs.count > 1 ? "s" : ""}, last on {w.msgs.last ? fmtDay(w.msgs.last, { day: "numeric", month: "short", year: "numeric" }) : "unknown date"}, {w.msgs.from === "us" ? "waiting on them" : "they wrote last"}</div>}
         {w.comments.count > 0 && <div>You commented on their posts {w.comments.count} time{w.comments.count > 1 ? "s" : ""}{w.comments.replies ? `, ${w.comments.replies} repl${w.comments.replies > 1 ? "ies" : "y"}` : ""}</div>}
         {w.suggest.map(({ person: x, strong }) => (
           <div key={x.key} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
-            <span className="min-w-0">Possibly <b>{x.name}</b>{x.position || x.company ? `, ${[x.position, x.company].filter(Boolean).join(" at ")}` : ""} <span className="text-[12px] text-muted">({strong ? "same name and company" : "same name only"})</span></span>
-            {editable && <span className="ml-auto flex gap-1"><button className="btn h-6 px-2 text-[12px]" onClick={() => confirm(x)}><Check size={12} /> Same person</button><button className="btn btn-ghost h-6 px-2 text-[12px]" onClick={() => notThem(x)}><X size={12} /> Not them</button></span>}
+            <span className="min-w-0">Possibly <b>{x.name}</b>{x.position || x.company ? `, ${[x.position, x.company].filter(Boolean).join(" at ")}` : ""} <span className="text-meta text-muted">({strong ? "same name and company" : "same name only"})</span></span>
+            {editable && <span className="ml-auto flex gap-1"><button className="btn h-6 px-2 text-meta" onClick={() => confirm(x)}><Check size={12} /> Same person</button><button className="btn btn-ghost h-6 px-2 text-meta" onClick={() => notThem(x)}><X size={12} /> Not them</button></span>}
           </div>
         ))}
         {w.colleagues.length > 0 && (
@@ -594,12 +596,12 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
     setSettings({ ...settings, topics: next }); haptic(); toast("Topics saved");
   }
 
-  if (!posts.length) return <div className="card grid min-h-[220px] place-items-center p-10 text-center"><div><p className="text-[13px] text-muted">No posts or comments in the uploaded export yet.</p><button className="btn btn-primary mt-3" onClick={onUpload}><Upload size={14} /> Upload the LinkedIn export</button></div></div>;
+  if (!posts.length) return <div className="card grid min-h-[220px] place-items-center p-10 text-center"><div><p className="text-body text-muted">No posts or comments in the uploaded export yet.</p><button className="btn btn-primary mt-3" onClick={onUpload}><Upload size={14} /> Upload the LinkedIn export</button></div></div>;
   return (
     <div className="flex flex-col gap-4">
       <div className="card overflow-x-auto">
-        <div className="border-b border-line px-4 py-3 text-[13px] font-semibold">What you post and comment about <span className="ml-1 text-[12px] font-normal text-muted">{tagged.filter((x) => x.p.kind === "post").length} posts, {tagged.filter((x) => x.p.kind === "comment").length} comments; one item can sit in more than one topic</span></div>
-        <table className="w-full text-[13px]">
+        <div className="border-b border-line px-4 py-3 text-body font-semibold">What you post and comment about <span className="ml-1 text-meta font-normal text-muted">{tagged.filter((x) => x.p.kind === "post").length} posts, {tagged.filter((x) => x.p.kind === "comment").length} comments; one item can sit in more than one topic</span></div>
+        <table className="w-full text-body">
           <thead><tr className="border-b border-line text-left">{["Topic", "Posts", "Comments", "Last 6 months", "Latest"].map((h) => <th key={h} className="label px-3 py-2 font-semibold">{h}</th>)}</tr></thead>
           <tbody>{stats.map((s) => (
             <tr key={s.n} className="border-b border-line align-top last:border-0">
@@ -613,12 +615,12 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
               </td>
               <td className="max-w-[420px] px-3 py-2.5">
                 {s.rows.slice(0, 2).map(({ p }) => (
-                  <div key={p.kind + p.key} className="mb-1 truncate text-[12px] text-ink-2" title={p.text}>
+                  <div key={p.kind + p.key} className="mb-1 truncate text-meta text-ink-2" title={p.text}>
                     <span className="text-faint">{p.kind === "post" ? "Post" : "Comment"} · {p.day ? fmtDay(p.day, { day: "numeric", month: "short" }) : ""} · </span>
                     {p.url ? <a href={p.url} target="_blank" rel="noopener" className="hover:underline">{p.text}</a> : p.text}
                   </div>
                 ))}
-                {!s.rows.length && <span className="text-[12px] text-faint">Nothing yet</span>}
+                {!s.rows.length && <span className="text-meta text-faint">Nothing yet</span>}
               </td>
             </tr>
           ))}</tbody>
@@ -627,16 +629,16 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
 
       {can("editor") && (
         <div className="card">
-          <button className="flex w-full items-center justify-between px-4 py-3 text-[13px] font-semibold" onClick={() => setOpen(!open)}>
+          <button className="flex w-full items-center justify-between px-4 py-3 text-body font-semibold" onClick={() => setOpen(!open)}>
             Topic words <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
           {open && (
             <div className="anim-rise border-t border-line p-4">
-              <p className="mb-3 text-[12px] text-muted">A post or comment joins a topic when it contains any of its words. Separate words with commas.</p>
+              <p className="mb-3 text-meta text-muted">A post or comment joins a topic when it contains any of its words. Separate words with commas.</p>
               {draft.map((r) => (
                 <div key={r.id} className="mb-3 grid gap-2 md:grid-cols-[220px_1fr_32px]">
                   <input className="field" value={r.name} onChange={(e) => edit(r.id, { name: e.target.value })} aria-label="Topic name" />
-                  <textarea rows={2} className="field h-auto py-1.5 text-[12px]" value={r.words} onChange={(e) => edit(r.id, { words: e.target.value })} aria-label={`Words for ${r.name}`} />
+                  <textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.words} onChange={(e) => edit(r.id, { words: e.target.value })} aria-label={`Words for ${r.name}`} />
                   <button className="btn btn-ghost h-8 px-0" aria-label={`Remove ${r.name}`} onClick={() => setDraft(draft.filter((x) => x.id !== r.id))}><X size={14} /></button>
                 </div>
               ))}

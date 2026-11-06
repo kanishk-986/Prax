@@ -2,7 +2,7 @@
 // agenda grouping, the row action, Needs you ranking and the copy helpers. Run: node scripts/test-dashboard.ts
 import {
   plusDays, mondayOf, daysBetween, SKIP, isSkipped, skipNote, unskipNote, progressOf, deltaOf, weekOverWeek, dailySeries, countAt,
-  groupOf, typeLabel, agenda, primaryAction, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder, collapseActivity, firstName, greeting,
+  groupOf, typeLabel, agenda, primaryAction, commentDays, weeklyCommentTarget, prefillToday, pageName, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder, collapseActivity, firstName, greeting,
 } from "../src/lib/dashboard.ts";
 
 let fails = 0;
@@ -158,6 +158,60 @@ eq("no name from an unreadable email", firstName("", "x1@antier.com"), "");
 eq("greeting with a name", greeting(9, "Alok"), "Good morning, Alok");
 eq("greeting in the afternoon", greeting(13, "Alok"), "Good afternoon, Alok");
 eq("greeting without a name", greeting(20, ""), "Good evening");
+
+// one weekly comment count (Dashboard and Engagement)
+eq("ticked and logged on the same day count once", commentDays(["2026-11-05", "2026-11-05"], ["2026-11-05"]), ["2026-11-05", "2026-11-05"]);
+eq("only logged still counts", commentDays([], ["2026-11-04T10:00:00Z"]), ["2026-11-04"]);
+eq("days merge in order", commentDays(["2026-11-06"], ["2026-11-03", "2026-11-03"]), ["2026-11-03", "2026-11-03", "2026-11-06"]);
+eq("the audit case: 5 ticks and 0 logs is 5 on both screens", weekOverWeek(commentDays(Array(5).fill("2026-11-05"), []), T).now, 5);
+eq("weekly target is five working days", weeklyCommentTarget(6), 30);
+eq("no quota, no target", weeklyCommentTarget(0), 0);
+
+// Today prefill
+{
+  const L = (id: string, name: string, stage: string, next_date: string | null, next_action = "", linkedin = "") => ({ id, name, company: "Bank " + id, stage, next_action, next_date, linkedin });
+  const leads = [
+    L("a", "Jimena Santillán", "Warming", "2026-11-04", "Comment on her post about stablecoin rails", "https://www.linkedin.com/in/jimena/"),
+    L("b", "Kirill Gertman", "Connected", "2026-11-05", "Send the first message"),
+    L("c", "Priya Raman", "Warming", "2026-11-06"),
+    L("d", "Omar Haddad", "Target", "2026-11-09"),
+    L("e", "Old Lead", "Parked", "2026-11-01"),
+  ];
+  const it = (id: string, kind: string, idx: number, extra: Record<string, unknown> = {}) => ({ id, kind, idx, title: "", done: false, note: "", prospect_id: null, ...extra });
+  const items = [it("c1", "comment", 1), it("c2", "comment", 2), it("c3", "comment", 3), it("c4", "comment", 4), it("r1", "request", 1), it("r2", "request", 2), it("m1", "dm", 1), it("m2", "dm", 2), it("p1", "reply", 1)];
+  const findings = [{ id: "f1", title: "Stablecoin rails in the GCC", url: "https://www.linkedin.com/posts/x", source_type: "LinkedIn", status: "new", comment_target: true, found_at: "2026-11-05T08:00:00Z", found: { linkedin: { author: "Ali Khan" } } },
+    { id: "f2", title: "Old news", url: "https://example.com/a", source_type: "Major media", status: "new", comment_target: false, found_at: "2026-11-05T08:00:00Z" }];
+  const posts = [{ id: "po", title: "Why GCC banks will not lose to stablecoins", status: "Posted", publish_date: "2026-11-03", url: "https://www.linkedin.com/feed/update/1" }];
+  const s = prefillToday(items, { leads, findings, posts, slug: "x", today: T });
+  eq("first comment is the most overdue person, with the next action", s.c1?.title, "Jimena Santillán: Comment on her post about stablecoin rails");
+  eq("the comment opens their recent activity", s.c1?.href, "https://www.linkedin.com/in/jimena/recent-activity/all/");
+  eq("next comments follow Do next order, skipping people to message", [s.c2?.title, s.c3?.title], ["Comment on Priya Raman's latest post", "Comment on Omar Haddad's latest post"]);
+  eq("people run out, then Discovery's LinkedIn finding", s.c4?.title, "Comment on Ali Khan's post: Stablecoin rails in the GCC");
+  eq("each person once a day: nobody left for requests", s.r1, undefined);
+  eq("messages go to connected people", [s.m1?.title, s.m2], ["Message Kirill Gertman: Send the first message", undefined]);
+  eq("parked leads are never suggested", Object.values(s).some((x) => x.title.includes("Old Lead")), false);
+  eq("replies point at the latest own post", s.p1?.title, 'Reply to the comments on "Why GCC banks will not lose to stablecoins"');
+  const s2 = prefillToday([it("r1", "request", 1), it("m1", "dm", 1), it("c1", "comment", 1)], { leads, slug: "x", today: T });
+  eq("comments take the first Warming person", s2.c1?.title, "Jimena Santillán: Comment on her post about stablecoin rails");
+  eq("requests take the next one left", s2.r1?.title, "Send Priya Raman, Bank c, a connection request");
+  eq("messages take Connected people", s2.m1?.title, "Message Kirill Gertman: Send the first message");
+  eq("a message links to the lead in Pipeline", s2.m1?.href, "/w/x/pipeline?p=b");
+  const kept = prefillToday([it("c1", "comment", 1, { title: "My own plan" }), it("c2", "comment", 2, { done: true }), it("c3", "comment", 3, { note: "skip:" }), it("c4", "comment", 4, { prospect_id: "a" })], { leads, slug: "x", today: T });
+  eq("typed, done, skipped and linked rows are left alone", Object.keys(kept), []);
+  eq("a person already on a row is not suggested again", prefillToday([it("c1", "comment", 1), it("c2", "comment", 2, { prospect_id: "a" })], { leads, slug: "x", today: T }).c1?.title, "Comment on Priya Raman's latest post");
+  eq("no data keeps the placeholder", prefillToday(items, { leads: [], slug: "x", today: T }), {});
+}
+
+// page names instead of raw addresses
+{
+  const nav = [{ href: "", label: "Dashboard" }, { href: "/today", label: "Today" }, { href: "/studio", label: "Comment Studio" }, { href: "/studio-content", label: "Content Studio" }, { href: "/citations", label: "AI citations" }];
+  eq("a Prax address becomes the page name", pageName("/w/shashi-pal-p16q/citations", "shashi-pal-p16q", nav), "AI citations");
+  eq("a query string is ignored", pageName("/w/s/studio-content?tab=plan", "s", nav), "Content Studio");
+  eq("studio is not studio-content", pageName("/w/s/studio", "s", nav), "Comment Studio");
+  eq("the workspace root is the Dashboard", pageName("/w/s", "s", nav), "Dashboard");
+  eq("outside links stay as they are", pageName("https://www.linkedin.com/feed/", "s", nav), "https://www.linkedin.com/feed/");
+  eq("empty stays empty", pageName("", "s", nav), "");
+}
 
 console.log(fails ?`\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);
