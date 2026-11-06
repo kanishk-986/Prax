@@ -763,3 +763,7 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - The extension changed after 0.9.6 without a version bump. Connections bumps it to 0.9.7; make sure that release includes the humanize profile-id change, then rebuild the zip.
 - With no extension, the card shows "Add a Pangram key" for about 1.5 s before "Install Prax for Chrome". Show a neutral line until the status resolves.
 - `has_role_of` (db/003) can be called by anon. Add a `revoke` in Agent A's security pass, but first check whether any RLS policy calls it as the querying user; if so, revoking it from `authenticated` would break those policies.
+
+### Update, 7 Nov 2026 evening: humanize deployed; Connections stopped to save usage
+- Deployed to production: main at 174b388 (humanize with QA PASS, "Daily work" rename). Still to do: the owner runs `db/031_humanize.sql`, then sets levels in Settings → Humanization (they default to Off).
+- The Connections build was stopped partway to save weekly usage. All its work is on GitHub branch `connections-wip` (d7e27d8: 98 files, main already merged in, db/032 started). The builder's last note was that 032's function still needed updating from the new 031 version. To resume: check out `connections-wip`, read the Connections spec and the QA inventory in `docs/QA_PLAN.md`, finish the build, run all checks, then QA, then the sidebar (SB1).
