@@ -3254,7 +3254,7 @@ commit;
 
 select 'ok' as status, (select name from workspaces where id = '0de30000-0000-4000-8000-000000000001') as profile,
   (select count(*) from prospects where workspace_id = '0de30000-0000-4000-8000-000000000001') as prospects,
-  (select email from members m join auth.users u on u.id = m.user_id where m.workspace_id = '0de30000-0000-4000-8000-000000000001' and m.role = 'owner' limit 1) as owner;
+  (select u.email from members m join auth.users u on u.id = m.user_id where m.workspace_id = '0de30000-0000-4000-8000-000000000001' and m.role = 'owner' limit 1) as owner;
 
 -- ---------- remove the demo profile ----------
 -- Removes the demo workspace and everything in it (every table cascades from workspaces). Uncomment and run.
