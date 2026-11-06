@@ -376,3 +376,11 @@ Tested: `node scripts/test-extension.ts` (fixtures written by hand to match Link
 5. Authentication, Sessions: JWT expiry (default 3600 seconds is fine; it refreshes itself) and, for Q116, time-box user sessions to 30 days and/or an inactivity timeout (a paid plan feature). Refresh token rotation on.
 6. Authentication, Emails: the built-in mailer sends only a few emails an hour. For invites and resets to arrive reliably, set custom SMTP. The Invite user and Reset password templates can stay on `{{ .ConfirmationURL }}`.
 7. Vercel: `SUPABASE_SERVICE_ROLE_KEY` must be set for production (it already is for the Monday crawl).
+
+## Polish pass agreed (6 Nov 2026, Q117 to Q120), from the design audit (5/10)
+
+- Q117: no new features until the polish pass is done and the audit is rerun, aiming for 8/10 before any prospect demo. Scope: audit items 1 to 8 and 10. Item 9 (navigation in four groups plus "Draft a comment") follows.
+- Q118: remove the "LinkedIn MCP · Coming soon" button from the Dashboard header; at most one quiet line on the Extension page.
+- Q119: the entry screen plays once a day, on the Dashboard only; elsewhere a quick content fade.
+- Q120: a demo profile with about four weeks of realistic sample history, clearly marked Demo, for prospect demos.
+- System rules from the audit, standing: one red primary action per screen; one card style (white panel, hairline border, sentence-case title; no black hero cards, no uppercase eyebrow labels, no solid red cards); no zeros, dashes or empty charts before data, one honest not-started state instead; a five-step type scale (12, 14, 16, 22, 32) with weights 400, 500 and 600; radii 8 for controls and 12 for panels; Geist actually applied.
