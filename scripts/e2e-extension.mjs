@@ -37,8 +37,8 @@ await ctx.route(/^https:\/\/([\w-]+\.)?(linkedin|licdn)\.com\//, (route) => {
   const req = route.request();
   if (req.resourceType() !== "document") return route.abort();
   const p = new URL(req.url()).pathname;
-  const html = p.startsWith("/feed/update/") ? fx("single-post.html") : p.startsWith("/in/") ? fx("profile.html")
-    : p.includes("analytics") ? fx("analytics.html") : p.startsWith("/search/") ? fx("activity-and-search.html") : FEED;
+  const html = p.startsWith("/messaging/") ? fx("messaging-thread.html") : p.startsWith("/feed/update/") ? fx("single-post.html") : p.startsWith("/in/omar-saleh") ? fx("profile-classic.html") : p.startsWith("/in/") ? fx("profile.html")
+    : p.startsWith("/analytics/post-summary/") ? fx("post-analytics.html") : p.includes("analytics") ? fx("analytics.html") : p.startsWith("/search/") ? fx("activity-and-search.html") : FEED;
   return route.fulfill({ status: 200, contentType: "text/html", body: html });
 });
 await ctx.route(/^https:\/\/prax-gamma\.vercel\.app\//, (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Prax</title><main>Prax stub</main>" }));
@@ -55,6 +55,9 @@ async function stub(sw) {
       if (url.endsWith("/api/ext/me")) return J({ workspace: "Shashi Pal", studio: null, rules: null, topics: [], prospects: [] });
       if (url.endsWith("/api/ext/discovery")) return self.__failDiscovery ? J({ error: "Discovery is not set up yet." }, 400) : J({ id: "d1" });
       if (url.endsWith("/api/ext/capture")) return J({ name: "Lena Fischer", score: 72, created: true });
+      if (url.endsWith("/api/ext/profile")) return J({ prospect: "Omar Saleh", prospect_id: "p1", person: true });
+      if (url.endsWith("/api/ext/inbox")) return J({ id: "m1", prospect: "Omar Saleh" });
+      if (url.endsWith("/api/ext/post_results")) return J({ post: self.__noPost ? null : "post-1" });
       if (url.endsWith("/api/ext/snapshot")) return J({ saved: Object.keys(b.metrics || {}).length });
       return J({ ok: true });
     };
@@ -143,6 +146,36 @@ check("panel: Capture this profile", /Lena Fischer scored 72\/100 · added to pi
 const cap = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/capture")).map((c) => c.b)[0]);
 check("capture sends the profile text on screen", /Northbank/.test(cap?.raw || "") && cap?.url === "https://www.linkedin.com/in/lena-fischer/");
 
+// The profile bar (0.9.3): mutual connections and location (N11, N12) and Send to Discovery from a profile (DS15).
+await page.goto("https://www.linkedin.com/in/omar-saleh/?trk=x"); await wait(1200);
+check("profile: one Prax profile bar under the top card", (await page.locator(".prx-profile").count()) === 1 && await page.evaluate(() => document.querySelector(".prx-profile").previousElementSibling.classList.contains("pv-top-card")));
+check("profile: nothing is sent before a click", (await sw.evaluate(() => self.__calls.filter((c) => /\/api\/ext\/profile$/.test(c.url)).length)) === 0);
+await page.locator(".prx-profile [data-act='save']").click();
+await page.waitForFunction(() => /Saved to Omar/.test(document.getElementById("prx-toast")?.textContent || ""), null, { timeout: 5000 }).catch(() => {});
+const prof = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/profile")).map((c) => c.b));
+check("profile: Save sends the count, names and location shown", prof.length === 1 && prof[0].mutual_count === 14 && prof[0].mutual_names.join("|") === "Priya Nair|Tom Becker" && prof[0].location === "Dubai, United Arab Emirates" && prof[0].url === "https://www.linkedin.com/in/omar-saleh/", JSON.stringify(prof));
+check("profile: the toast says where it was saved", /Saved to Omar Saleh in Pipeline and Network: 14 mutual connections and location Dubai, United Arab Emirates/.test(await page.evaluate(() => document.getElementById("prx-toast")?.textContent || "")));
+await sw.evaluate(() => { self.__failDiscovery = false; });
+await page.locator(".prx-profile [data-act='disc']").click();
+await page.waitForFunction(() => document.querySelector(".prx-profile [data-act='disc']")?.textContent === "Sent to Discovery", null, { timeout: 5000 }).catch(() => {});
+const pd = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/discovery")).map((c) => c.b).pop());
+check("profile: Send to Discovery sends the person, headline and visible activity", pd?.kind === "profile" && pd.title === "Omar Saleh: Head of Digital Assets at Gulf Union Bank | Custody, tokenisation and settlement" && pd.company === "Gulf Union Bank" && /Recent activity/.test(pd.text) && /CBUAE guidance/.test(pd.text), JSON.stringify(pd));
+check("profile: the button confirms it was sent", (await page.locator(".prx-profile [data-act='disc']").innerText()) === "Sent to Discovery");
+check("profile: Prax opened nothing on LinkedIn", page.url().startsWith("https://www.linkedin.com/in/omar-saleh/"), page.url());
+
+// Send to Prax Inbox on the open messaging thread (X7): the button shows only there, and reads only on the click.
+await page.goto("https://www.linkedin.com/messaging/"); await wait(1000);
+check("inbox: no button outside a thread", (await page.locator(".prx-thread").count()) === 0);
+await page.goto("https://www.linkedin.com/messaging/thread/2-abc123/"); await wait(1200);
+check("inbox: one button under the thread's title bar", (await page.locator(".prx-thread").count()) === 1 && await page.evaluate(() => document.querySelector(".prx-thread").previousElementSibling.classList.contains("msg-title-bar")));
+check("inbox: nothing is sent before a click", (await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/inbox")).length)) === 0);
+await page.locator(".prx-thread [data-act='inbox']").click();
+await page.waitForFunction(() => /Prax Inbox/.test(document.getElementById("prx-toast")?.textContent || ""), null, { timeout: 5000 }).catch(() => {});
+const ib = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/inbox")).map((c) => c.b));
+check("inbox: sends the person, thread and their last message shown", ib.length === 1 && ib[0].name === "Omar Saleh" && ib[0].company === "Gulf Union Bank" && ib[0].url === "https://www.linkedin.com/in/omar-saleh/" && ib[0].thread_url === "https://www.linkedin.com/messaging/thread/2-abc123/" && /Are you in Dubai/.test(ib[0].text) && ib[0].received_at === "2026-11-05T08:10:00Z", JSON.stringify(ib));
+check("inbox: the toast names the lead", /Sent to Prax Inbox: Omar Saleh, matched to Omar Saleh in Pipeline/.test(await page.evaluate(() => document.getElementById("prx-toast")?.textContent || "")));
+check("inbox: Prax opened no other thread", page.url() === "https://www.linkedin.com/messaging/thread/2-abc123/", page.url());
+
 await page.goto("https://www.linkedin.com/analytics/creator/"); await wait(500);
 await panel.click("#capstats"); await wait(500);
 const stats = (await panel.locator("#stats").innerText().catch(() => "")).replace(/\s+/g, " ");
@@ -150,6 +183,21 @@ check("panel: Read analytics finds all four numbers", /impressions 7d: 12,480/.t
 await panel.click("#sendstats");
 await panel.waitForFunction(() => /Saved 4/.test(document.getElementById("toast").textContent), null, { timeout: 5000 }).catch(() => {});
 check("panel: Save analytics to Prax", /Saved 4 numbers/.test(await panel.locator("#toast").innerText()));
+
+// One post's results (CS29): its analytics page, read on the click, saved to the post with the same activity id.
+await page.goto("https://www.linkedin.com/analytics/post-summary/urn:li:activity:7390000000000000051/"); await wait(500);
+await panel.click("#capstats"); await wait(500);
+const pstats = (await panel.locator("#stats").innerText().catch(() => "")).replace(/\s+/g, " ");
+check("panel: Read analytics on a post finds its four numbers", /impressions: 4,820/.test(pstats) && /reactions: 126/.test(pstats) && /comments: 18/.test(pstats) && /reposts: 7/.test(pstats), pstats);
+await panel.click("#sendstats");
+await panel.waitForFunction(() => /results/.test(document.getElementById("toast").textContent), null, { timeout: 5000 }).catch(() => {});
+const pr = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/post_results")).map((c) => c.b));
+check("panel: post results sent with the post's link", pr.length === 1 && pr[0].impressions === 4820 && pr[0].reposts === 7 && /activity:7390000000000000051/.test(pr[0].url), JSON.stringify(pr));
+check("panel: saved toast", /Saved this post's results/.test(await panel.locator("#toast").innerText()));
+await sw.evaluate(() => { self.__noPost = true; });
+await panel.click("#capstats"); await wait(500); await panel.click("#sendstats");
+await panel.waitForFunction(() => /Content Studio first/.test(document.getElementById("toast").textContent), null, { timeout: 5000 }).catch(() => {});
+check("panel: a post Prax does not know says to save its link first", /Save the post's LinkedIn link in Content Studio first/.test(await panel.locator("#toast").innerText()));
 await panel.goto("about:blank");
 const panelErr = await ctx.newPage();
 await panelErr.goto(`chrome-extension://${extId}/panel.html`);
@@ -202,7 +250,8 @@ const hello = await web.evaluate(() => new Promise((res) => {
   postMessage({ praxWeb: true, id: "t1", type: "status" }, location.origin);
   setTimeout(() => res(null), 3000);
 }));
-check("bridge: status answers with version 0.9.0 and connected", hello?.data?.version === "0.9.0" && hello?.data?.connected === true, JSON.stringify(hello));
+const manifestVersion = JSON.parse(readFileSync(path.join(EXT, "manifest.json"), "utf8")).version;
+check(`bridge: status answers with version ${manifestVersion} and connected`, hello?.data?.version === manifestVersion && hello?.data?.connected === true, JSON.stringify(hello));
 
 await ctx.close();
 console.log(fails ? `\n${fails} failed` : "\nall passed");

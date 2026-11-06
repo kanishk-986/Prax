@@ -398,6 +398,84 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     box.insertAdjacentElement("beforebegin", btn);
   }
 
+  // ---------- the profile bar on a profile page the user has opened ----------
+  // Two buttons under the profile's top card. Each reads only what that card and the Activity section
+  // already show, at the moment it is pressed. Prax never opens the mutual connections list, expands a
+  // section, scrolls or clicks anything on LinkedIn.
+  let profileBar = null;
+  function decorateProfile() {
+    if (!D.isProfilePath(location.pathname)) { if (profileBar) { profileBar.remove(); profileBar = null; } return; }
+    const { h1, card } = D.topCard(document);
+    if (!h1 || !card || card.tagName === "MAIN") return;
+    const key = D.profileUrl(location);
+    if (profileBar && profileBar.isConnected && profileBar.dataset.key === key && profileBar.previousElementSibling === card) return;
+    if (profileBar) profileBar.remove();
+    const bar = document.createElement("div");
+    bar.className = "prx-bar prx-profile"; bar.dataset.key = key;
+    bar.innerHTML = `<span class="prx-write prx-label"><span class="prx-star">✦</span> Prax</span>
+      <button type="button" class="prx-chip" data-act="save" title="Read the mutual connections and location shown on this profile and save them to Prax">Save mutuals and location</button>
+      <button type="button" class="prx-chip prx-disc" data-act="disc" title="Send this person, their headline and the activity shown here to Discovery Studio">Send to Discovery</button>`;
+    bar.addEventListener("click", async (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      const p = D.readProfile(document, location);
+      if (!p.name) return toast("The profile has not loaded yet. Wait a moment and try again.");
+      b.disabled = true;
+      try {
+        if (b.dataset.act === "save") {
+          if (!p.mutual && !p.location) { b.disabled = false; return toast("No mutual connections or location are shown on this profile."); }
+          const r = await send({ type: "prax", action: "profile", body: { url: p.url, name: p.name, location: p.location, mutual_count: p.mutual ? p.mutual.count : null, mutual_names: p.mutual ? p.mutual.names : [] } });
+          const what = [p.mutual ? `${p.mutual.count} mutual connection${p.mutual.count === 1 ? "" : "s"}` : "", p.location ? `location ${p.location}` : ""].filter(Boolean).join(" and ");
+          if (!r.prospect && !r.person) { b.disabled = false; return toast(`${p.name} is not in Pipeline or Network yet. Capture the profile from the Prax side panel first.`); }
+          toast(`Saved to ${[r.prospect ? `${r.prospect} in Pipeline` : "", r.person ? "Network" : ""].filter(Boolean).join(" and ")}: ${what}`);
+          b.textContent = "Saved";
+        } else {
+          const lines = [p.headline, p.location, ...(p.activity.length ? ["", "Recent activity on the profile:", ...p.activity.map((a) => `- ${a.text}${a.url ? ` (${a.url})` : ""}`)] : [])].filter((x) => x != null);
+          await send({ type: "prax", action: "discovery", body: { kind: "profile", url: p.url, title: `${p.name}${p.headline ? `: ${p.headline}` : ""}`, text: lines.join("\n").trim() || p.name, author: p.name, author_url: p.url, company: p.company } });
+          b.textContent = "Sent to Discovery"; toast("Sent to Discovery Studio");
+        }
+      } catch (err) { b.disabled = false; toast(err.message); }
+    });
+    card.insertAdjacentElement("afterend", bar);
+    profileBar = bar;
+  }
+
+  // ---------- Send to Prax Inbox on the messaging thread the user has open (X7) ----------
+  // One button under the thread's title bar, only on /messaging/thread/. On the click it reads the other person,
+  // their headline, the thread link and their last message shown. It never opens, scrolls or reads other threads.
+  let threadBar = null;
+  function decorateThread() {
+    if (!D.isThreadPath(location.pathname)) { if (threadBar) { threadBar.remove(); threadBar = null; } return; }
+    // Placing the button reads only where the thread's title is; the messages are read on the click.
+    const root = D.threadRoot(document);
+    if (!root || root.tagName === "MAIN" || root === document.body) return;
+    let head = root.querySelector(".msg-entity-lockup__entity-title, [data-view-name='thread-title'], .msg-title-bar h2");
+    while (head && head.parentElement && head.parentElement !== root) head = head.parentElement;
+    if (!head) return;
+    const key = location.href.split(/[?#]/)[0];
+    if (threadBar && threadBar.isConnected && threadBar.dataset.key === key && threadBar.previousElementSibling === head) return;
+    if (threadBar) threadBar.remove();
+    const bar = document.createElement("div");
+    bar.className = "prx-bar prx-profile prx-thread"; bar.dataset.key = key;
+    bar.innerHTML = `<span class="prx-write prx-label"><span class="prx-star">✦</span> Prax</span>
+      <button type="button" class="prx-chip prx-disc" data-act="inbox" title="Send this person and their last message shown here to the Prax Inbox">Send to Prax Inbox</button>`;
+    bar.addEventListener("click", async (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      const now = D.readThread(document, location);
+      if (!now.name) return toast("The conversation has not loaded yet. Wait a moment and try again.");
+      if (!now.text) return toast(`No message from ${now.name} is shown in this conversation yet.`);
+      b.disabled = true;
+      try {
+        const r = await send({ type: "prax", action: "inbox", body: { name: now.name, company: now.company, url: now.url, thread_url: now.thread_url, text: now.text, received_at: now.received_at } });
+        b.textContent = "In Prax Inbox";
+        toast(`Sent to Prax Inbox: ${now.name}${r && r.prospect ? `, matched to ${typeof r.prospect === "string" ? r.prospect : "their lead"} in Pipeline` : ""}`);
+      } catch (err) { b.disabled = false; toast(err.message); }
+    });
+    head.insertAdjacentElement("afterend", bar);
+    threadBar = bar;
+  }
+
   // ---------- scanning ----------
   // What the side panel's "Prax bar status" shows for this tab.
   const VERSION = (() => { try { return chrome.runtime.getManifest().version; } catch { return "?"; } })();
@@ -414,6 +492,8 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
       catch (e) { stats.error = "Bar error: " + e.message; }
     }
     try { decorateNoteDialog(); } catch (e) { stats.error = "Note box error: " + e.message; }
+    try { decorateProfile(); } catch (e) { stats.error = "Profile bar error: " + e.message; }
+    try { decorateThread(); } catch (e) { stats.error = "Inbox button error: " + e.message; }
     stats.seen = rowsNow.length;
     stats.attached = rowsNow.filter((r) => barOf.get(r)?.isConnected).length;
     stats.scans++; stats.lastScan = Date.now();

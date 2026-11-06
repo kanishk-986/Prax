@@ -19,6 +19,7 @@ import {
 import { type Data, type Run, type List, type Link, type TopicRow, type LogRow, type Ranked, SidePanel, Box } from "@/components/discovery/shared";
 import { useRunner } from "@/components/discovery/runner";
 import { HomeTab, type Deadline } from "@/components/discovery/home";
+import { targetNews } from "@/lib/network";
 import { SearchTab, PACKS } from "@/components/discovery/search";
 import { CrawlTab, UploadModal } from "@/components/discovery/crawl";
 import { FindingsTab, FindingPanel, DismissModal, NO_FILTERS, type Filters } from "@/components/discovery/findings";
@@ -40,6 +41,7 @@ const STEPS: TourStep[] = [
   { target: "counts", tab: "home", title: "What discovery is for", body: "Each week it finds what to post about, comment on, or watch. These are the counts by band." },
   { target: "flow", tab: "home", title: "How it flows", body: "Run, then Findings, then the Digest. AI search and Crawl bring in articles, Findings scores each one, and the Digest merges them into ranked topics." },
   { target: "fast", tab: "home", title: "Fast response", body: "Regulator news from the last 72 hours lands here, ready for a quick draft and approval." },
+  { target: "news", tab: "home", title: "Target accounts in the news", body: "When a finding names the company of someone in Pipeline, Prax adds a dated note on that person and lists it here." },
   { target: "coverage", tab: "home", title: "Coverage", body: "Every pass reports what it read. Blocked and gated sources are shown, never hidden as a quiet week." },
   { target: "ai", tab: "ai", title: "AI search", body: "By pillar, by company or person, by event word and by AI citations gap, plus your own searches. It runs in this browser on every AI tool you have a key for. Only cited sources are kept." },
   { target: "ailog", tab: "ai", title: "The search log", body: "Every search on every tool, live: results, cited sources and how many dates were confirmed by reading the page." },
@@ -49,7 +51,7 @@ const STEPS: TourStep[] = [
   { target: "dtop", tab: "digest", title: "The Digest", body: "Articles on the same story merged into topics and ranked on fit, coverage, source quality, found both ways, gap, warm and timing. Top 3 here, #4 to #10 below." },
   { target: "opps", tab: "digest", title: "Beyond posts", body: "Speaking and pitch deadlines, journalist requests with a reply you send yourself, and tenders for sales only." },
   { target: "lists", tab: "sources", title: "Sources", body: "Your link lists, the Research Resources List, watched entities and the LinkedIn inbox." },
-  { target: "linkedin", tab: "sources", title: "The LinkedIn rule", body: "Nothing is read from LinkedIn in the background. Only posts you send from the Prax bar while reading them." },
+  { target: "linkedin", tab: "sources", title: "The LinkedIn rule", body: "Nothing is read from LinkedIn in the background. Only posts and profiles you send from the Prax bar while reading them." },
   { target: "weights", tab: "criteria", title: "Criteria", body: "Weights must add up to 100. Prax suggests changes from what you send and dismiss; nothing changes until you accept." },
 ];
 const LIVE_ENGINES = ENGINES.filter((e) => e.live);
@@ -72,7 +74,8 @@ export default function DiscoveryStudio() {
   const campaigns = useLive<Campaign>("campaigns", ws.id, { order: "created_at" });
   const [raw, setRaw] = useState<Partial<Settings> | null>(null);
   const [competitors, setCompetitors] = useState<string[]>([]);
-  const [targets, setTargets] = useState<string[]>([]);
+  const [targetRows, setTargetRows] = useState<{ id: string; name: string; company: string; stage: string }[]>([]);
+  const targets = useMemo(() => [...new Set(targetRows.filter((p) => p.stage !== "Parked").map((p) => p.company))], [targetRows]);
   const [vips, setVips] = useState<string[]>([]);
   const [warmMap, setWarmMap] = useState<Map<string, number>>(new Map());
   const [hidden, setHidden] = useState<string[]>([]);
@@ -92,7 +95,7 @@ export default function DiscoveryStudio() {
     if (q && q in HEAD) setTab(q);
     supabase().from("discovery_settings").select("settings").eq("workspace_id", ws.id).maybeSingle().then(({ data }: { data: { settings: Partial<Settings> } | null }) => setRaw(data?.settings ?? {}));
     supabase().from("citation_entities").select("name,aliases,kind").eq("workspace_id", ws.id).eq("kind", "competitor").then(({ data }: { data: { name: string; aliases: string[] }[] | null }) => setCompetitors([...new Set((data ?? []).flatMap((e) => [e.name, ...(e.aliases ?? [])]))]));
-    supabase().from("prospects").select("company,stage").eq("workspace_id", ws.id).neq("company", "").limit(500).then(({ data }: { data: { company: string; stage: string }[] | null }) => setTargets([...new Set((data ?? []).filter((p) => p.stage !== "Parked").map((p) => p.company))]));
+    supabase().from("prospects").select("id,name,company,stage").eq("workspace_id", ws.id).neq("company", "").limit(500).then(({ data }: { data: { id: string; name: string; company: string; stage: string }[] | null }) => setTargetRows(data ?? []));
     supabase().from("studio_settings").select("safety").eq("workspace_id", ws.id).maybeSingle().then(({ data }: { data: { safety?: { vips?: string[] } } | null }) => setVips(data?.safety?.vips ?? []));
   }, [ws.id]);
 
@@ -122,6 +125,8 @@ export default function DiscoveryStudio() {
   const d: Data = { findings, runs: runs.rows, lists: lists.rows, links: links.rows, topicRows: topicRows.rows, settings, warm, band, total, digest, engines, editable };
   const lastAi = runs.rows.find((r) => r.kind === "ai" && r.status !== "running") ?? null;
   const lastCrawl = runs.rows.find((r) => r.kind === "crawl" && r.status !== "running") ?? null;
+  // DS16: target accounts named in the last 14 days of findings. db/024 writes the dated note on the prospect.
+  const news = useMemo(() => targetNews(findings, targetRows, new Date(Date.parse(today + "T00:00:00Z") - 14 * 864e5).toISOString()), [findings, targetRows, today]);
 
   // The search plan: pillars, a weekly batch of entities, event words, AI citations gaps and your own searches.
   const entities: Entity[] = useMemo(() => [
@@ -296,7 +301,7 @@ export default function DiscoveryStudio() {
       actions={<><button type="button" className="btn h-10 px-3.5" onClick={() => setTab("sources")}>Sources</button>{editable && <button type="button" data-tour="run" className="btn btn-primary h-10 px-[18px]" onClick={() => setRunOpen(true)}>Run discovery</button>}</>}>
       {loading ? <div className="card h-64 animate-pulse bg-surface-2" />
         : tab === "home" ? <HomeTab d={d} today={today} go={(t, b) => { setTab(t as Tab); if (b) setFilters({ ...NO_FILTERS, band: b }); }} openFinding={setPanel} sendFast={(f) => sendFinding(f, { fast: true })}
-            planDeadline={(x: Deadline) => sendFinding(x.finding, { fast: false, title: `Before the deadline: ${x.title}`, date: addDays(today, Math.max(0, x.due - 2)) })} openRun={() => setRunOpen(true)} remind={remind} reminded={reminded} lastAi={lastAi} lastCrawl={lastCrawl} />
+            planDeadline={(x: Deadline) => sendFinding(x.finding, { fast: false, title: `Before the deadline: ${x.title}`, date: addDays(today, Math.max(0, x.due - 2)) })} openRun={() => setRunOpen(true)} remind={remind} reminded={reminded} lastAi={lastAi} lastCrawl={lastCrawl} news={news} slug={ws.slug} />
         : tab === "ai" ? <SearchTab d={d} slug={ws.slug} plan={plan} packCount={packCount} live={runner.ai.log.length ? runner.ai : null} lastAi={lastAi} running={runner.ai.running} chosen={chosen} onRun={() => runner.runAi(plan, chosen)} onStop={runner.stopAi} saveSettings={saveSettings} findingsFor={findingsForLog} />
         : tab === "crawl" ? <CrawlTab d={d} running={runner.crawl.running} progress={runner.crawl} status={runner.crawl.status} onCrawl={() => runner.runCrawl(links.rows)} onStop={runner.stopCrawl} openUpload={() => setUpload(true)} lastCrawl={lastCrawl} findingsFor={findingsForLink} />
         : tab === "findings" ? <FindingsTab d={d} filters={filters} setFilters={setFilters} open={setPanel} act={findingActions} />

@@ -74,7 +74,8 @@ const words = (s: string) => ` ${(s || "").toLowerCase().replace(/[^a-z0-9]+/g, 
 const has = (text: string, kw: string) => { const k = words(kw).trim(); return !!k && text.includes(` ${k} `); };
 
 // ---------- rules ----------
-export type SegRule = { seg: string; companies: string[]; roles: string[] };
+/** places: words matched against the location read from a profile the user opened (N12); older rules have none. */
+export type SegRule = { seg: string; companies: string[]; roles: string[]; places?: string[] };
 export type TopicRule = { name: string; words: string[] };
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
@@ -93,12 +94,13 @@ export const DEFAULT_SEGMENTS: SegRule[] = [
 /** Topic rules start as this profile's pillars (Settings) with no words yet; words are added on the Topics tab. */
 export const defaultTopics = (pillars: string[]): TopicRule[] => pillars.map((name) => ({ name, words: [] }));
 
-/** Prospect companies are added as company rules for their segment, ahead of the keyword rules. */
-export function segmentFor(company: string, position: string, rules: SegRule[], prospectCompanies: Map<string, string>): string {
+/** Prospect companies are added as company rules for their segment, ahead of the keyword rules.
+ *  location is what the extension read from the person's profile (empty until someone opens it and presses the Prax bar). */
+export function segmentFor(company: string, position: string, rules: SegRule[], prospectCompanies: Map<string, string>, location = ""): string {
   const cn = normCompany(company);
   if (cn && prospectCompanies.has(cn)) return prospectCompanies.get(cn)!;
-  const c = words(company), p = words(position);
-  for (const r of rules) if (r.companies.some((k) => has(c, k)) || r.roles.some((k) => has(p, k))) return r.seg;
+  const c = words(company), p = words(position), l = words(location);
+  for (const r of rules) if (r.companies.some((k) => has(c, k)) || r.roles.some((k) => has(p, k)) || (!!location && (r.places ?? []).some((k) => has(l, k)))) return r.seg;
   return "";
 }
 
@@ -221,8 +223,10 @@ export function parseExportFiles(byName: Record<string, string>, fileName = "", 
 }
 
 // ---------- warm paths ----------
-export type Person = PersonRow & { segment_manual: string; prospect_id: string | null; not_prospects: string[]; first_export: string | null; last_export: string | null; company_norm_?: string };
-export type ProspectLite = { id: string; name: string; company: string; role: string; stage: string; segment: string; linkedin: string };
+/** Read from a profile the user opened, when they pressed the Prax bar (db/024). Not in the export. */
+export type ProfileRead = { location?: string; mutual_count?: number | null; mutual_names?: string[]; profile_read_at?: string | null };
+export type Person = PersonRow & ProfileRead & { segment_manual: string; prospect_id: string | null; not_prospects: string[]; first_export: string | null; last_export: string | null; company_norm_?: string };
+export type ProspectLite = ProfileRead & { id: string; name: string; company: string; role: string; stage: string; segment: string; linkedin: string };
 export type CommentLite = { author: string; reply: boolean; day: string };
 export type Warm = {
   linked?: Person;            // confirmed (or matched by profile URL)
@@ -231,7 +235,24 @@ export type Warm = {
   comments: { count: number; replies: number; last: string };
   colleagues: Person[];       // connections at the same company, most senior and most recent first
   level: 0 | 1 | 2 | 3;       // 1 = connection, 2 = talked, 3 = colleague, 0 = none
+  mutual?: Mutual;            // true 2nd-degree paths, read from their profile by the extension; does not change level
 };
+export type Mutual = { count: number; names: string[]; at: string | null };
+
+/** The latest mutual connections line saved for a prospect or for the connection linked to them. */
+export function mutualOf(...from: (ProfileRead | undefined)[]): Mutual | undefined {
+  const got = from.filter((x): x is ProfileRead => !!x && x.mutual_count != null)
+    .sort((a, b) => (b.profile_read_at ?? "").localeCompare(a.profile_read_at ?? ""))[0];
+  return got ? { count: got.mutual_count!, names: got.mutual_names ?? [], at: got.profile_read_at ?? null } : undefined;
+}
+/** "14 mutual connections, including Priya Nair and Tom Becker". */
+export function mutualLine(m: Mutual): string {
+  const n = `${m.count.toLocaleString("en-GB")} mutual connection${m.count === 1 ? "" : "s"}`;
+  const names = m.names.slice(0, 3);
+  if (!names.length) return n;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return m.count === names.length ? `${n}: ${list}` : `${n}, including ${list}`;
+}
 
 export function warmPaths(p: ProspectLite, people: Person[], idx: { byKey: Map<string, Person>; byName: Map<string, Person[]>; byCompany: Map<string, Person[]>; byProspect: Map<string, Person> }, comments: CommentLite[]): Warm {
   const linked = idx.byProspect.get(p.id) ?? (p.linkedin ? idx.byKey.get(normUrl(p.linkedin)) : undefined);
@@ -247,7 +268,7 @@ export function warmPaths(p: ProspectLite, people: Person[], idx: { byKey: Map<s
   const msgs = linked && linked.msg_count ? { count: linked.msg_count, last: linked.msg_last, from: linked.msg_last_from } : undefined;
   const talked = !!msgs || mine.some((c) => c.reply);
   const level = linked?.is_connection ? 1 : talked ? 2 : colleagues.length ? 3 : 0;
-  return { linked, suggest, msgs, comments: { count: mine.length, replies: mine.filter((c) => c.reply).length, last: mine.map((c) => c.day).sort().pop() ?? "" }, colleagues, level };
+  return { linked, suggest, msgs, comments: { count: mine.length, replies: mine.filter((c) => c.reply).length, last: mine.map((c) => c.day).sort().pop() ?? "" }, colleagues, level, mutual: mutualOf(p, linked) };
 }
 
 export function indexPeople(people: Person[]) {
@@ -262,4 +283,80 @@ export function indexPeople(people: Person[]) {
     if (x.prospect_id) byProspect.set(x.prospect_id, x);
   }
   return { byKey, byName, byCompany, byProspect };
+}
+
+// ---------- target accounts in the news (DS16) ----------
+// Same matching as discovery_target_news() in db/024_reach_backlog.sql, which writes the dated note on the
+// prospect: an organisation the finding names equals the company (normCompany = net_norm), or a company name of
+// 4+ characters appears as whole words in the title. Parked prospects, dismissed findings and profiles sent from
+// the Prax bar are skipped. Kept here, beside normCompany, so both sides change together.
+type NewsFinding = { id: string; url: string; title: string; orgs: string[]; status: string; found_at: string; found?: { linkedin?: { kind?: string } } };
+type NewsProspect = { id: string; name: string; company: string; stage: string };
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+export function targetNews<F extends NewsFinding, P extends NewsProspect>(findings: F[], prospects: P[], sinceIso = ""): { finding: F; prospect: P }[] {
+  const ps = prospects.filter((p) => p.stage !== "Parked" && normCompany(p.company));
+  const out: { finding: F; prospect: P }[] = [];
+  for (const f of findings) {
+    if (f.status === "dismissed" || f.found?.linkedin?.kind === "profile" || (sinceIso && f.found_at < sinceIso)) continue;
+    const orgs = new Set(f.orgs.map(normCompany).filter(Boolean));
+    for (const p of ps) {
+      const c = p.company.trim();
+      if (orgs.has(normCompany(c)) || (c.length >= 4 && new RegExp(`(^|[^\\p{L}\\p{N}_])${escRe(c)}($|[^\\p{L}\\p{N}_])`, "iu").test(f.title))) out.push({ finding: f, prospect: p });
+    }
+  }
+  return out.sort((a, b) => b.finding.found_at.localeCompare(a.finding.found_at));
+}
+
+// ---------- Explain with AI on a topic (N10) ----------
+export type TopicPerson = { key: string; name: string; position: string; company: string; url: string; hits: number };
+const topicWords = (t: TopicRule) => (t.words.length ? t.words : (t.name.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []));
+/** Connections whose position or company carries the topic's words (or, with no words yet, the topic name's longer
+ *  words), most matches and most senior first. Only these people can be suggested, so the AI never names someone
+ *  who is not in the network. */
+export function topicPeople(t: TopicRule, people: Person[], max = 25): TopicPerson[] {
+  const ws = topicWords(t);
+  if (!ws.length) return [];
+  return people.filter((p) => p.is_connection).map((p) => {
+    const text = words(`${p.position} ${p.company}`);
+    return { p, hits: ws.filter((k) => has(text, k)).length };
+  }).filter((x) => x.hits > 0)
+    .sort((a, b) => b.hits - a.hits || seniority(a.p.position) - seniority(b.p.position) || a.p.name.localeCompare(b.p.name))
+    .slice(0, max).map(({ p, hits }) => ({ key: p.key, name: p.name, position: p.position, company: p.company, url: p.url, hits }));
+}
+
+/** The one prompt behind Explain with AI: what the topic means for this profile and who in the network to talk to. */
+export function topicExplainPrompt(o: { topic: string; words: string[]; who: string; pillars: string[]; posts: { kind: string; day: string | null; text: string }[]; people: TopicPerson[] }): string {
+  const posts = o.posts.slice(0, 6).map((p) => `- ${p.kind}${p.day ? `, ${p.day}` : ""}: ${p.text.replace(/\s+/g, " ").slice(0, 280)}`).join("\n") || "(none in the export)";
+  const people = o.people.map((p, i) => `${i + 1}. ${p.name}, ${p.position || "position unknown"}${p.company ? ` at ${p.company}` : ""}`).join("\n") || "(none)";
+  return `Profile: ${o.who}. Content pillars: ${o.pillars.join(", ") || "none set"}.
+Topic: ${o.topic}${o.words.length ? ` (words: ${o.words.join(", ")})` : ""}.
+
+What this profile has posted or commented on the topic:
+${posts}
+
+Connections in the profile's network whose role or company fits the topic (numbered):
+${people}
+
+Explain in plain English, for the profile owner:
+1. meaning: what this topic means for this profile right now, in 2 to 3 sentences. Specific to the role and pillars, no hype.
+2. talk: up to 4 people from the numbered list worth talking to about it, each with one sentence on why. Use only people from the list, by their number. If the list is "(none)", return an empty list.
+3. next: one concrete next step, in one sentence.
+No dashes, no contractions, no emoji. Return only JSON: {"meaning": "...", "talk": [{"n": 1, "why": "..."}], "next": "..."}`;
+}
+
+export type TopicExplain = { meaning: string; next: string; talk: (TopicPerson & { why: string })[] };
+/** Keeps only people from the list that was sent, once each; anyone else the model names is dropped. */
+export function parseTopicExplain(j: unknown, people: TopicPerson[]): TopicExplain | null {
+  if (!j || typeof j !== "object") return null;
+  const o = j as { meaning?: unknown; next?: unknown; talk?: unknown };
+  const meaning = typeof o.meaning === "string" ? o.meaning.trim() : "";
+  if (!meaning) return null;
+  const seen = new Set<number>();
+  const talk = (Array.isArray(o.talk) ? o.talk : []).flatMap((x) => {
+    const n = Number((x as { n?: unknown })?.n), why = String((x as { why?: unknown })?.why ?? "").trim();
+    if (!Number.isInteger(n) || n < 1 || n > people.length || seen.has(n)) return [];
+    seen.add(n);
+    return [{ ...people[n - 1], why }];
+  }).slice(0, 4);
+  return { meaning, next: typeof o.next === "string" ? o.next.trim() : "", talk };
 }

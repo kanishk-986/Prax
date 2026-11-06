@@ -41,7 +41,7 @@ export function foundBy(f: Finding): string {
   const parts: string[] = [];
   if (f.found.ai) parts.push(`${f.found.ai.engine ? `${engineName(f.found.ai.engine)} web search` : "AI search"}${f.found.ai.query ? `, "${f.found.ai.query}"` : ""}`);
   if (f.found.crawl) parts.push(`Crawled: ${f.found.crawl.list || "a list"}, ${f.found.crawl.link ? hostOf(f.found.crawl.link) + (new URL(f.found.crawl.link).pathname.replace(/\/$/, "") || "") : ""}`);
-  if (f.found_by.includes("linkedin")) parts.push(`LinkedIn, sent by you from the Prax bar${f.found.linkedin?.author ? ` (${f.found.linkedin.author})` : ""}`);
+  if (f.found_by.includes("linkedin")) parts.push(`${f.found.linkedin?.kind === "profile" ? "LinkedIn profile" : "LinkedIn"}, sent by you from the Prax bar${f.found.linkedin?.author ? ` (${f.found.linkedin.author})` : ""}`);
   return parts.join(" · ") || "None";
 }
 export const foundKinds = (f: Finding) => [f.found_by.includes("ai") && "AI search", f.found_by.includes("crawl") && "Crawl", f.found_by.includes("linkedin") && "LinkedIn"].filter(Boolean) as string[];

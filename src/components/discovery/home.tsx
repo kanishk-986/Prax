@@ -1,14 +1,16 @@
 "use client";
-import { KpiTiles, NotStarted } from "@/components/shell";
+import { KpiTiles, NotStarted, NeedsYou } from "@/components/shell";
 import { type Finding, BANDS, PACK_LABEL, daysBetween } from "@/lib/discovery";
 import { BandPill, type Data, type Run } from "./shared";
 
 export type Deadline = { id: string; title: string; due: number; kind: string; finding: Finding };
 
 /** Home: the week's counts by band, fast response, top findings, coming deadlines and coverage of the last run. */
-export function HomeTab({ d, today, go, openFinding, sendFast, planDeadline, remind, reminded, lastAi, lastCrawl }: {
+export type News = { finding: Finding; prospect: { id: string; name: string; company: string } };
+
+export function HomeTab({ d, today, go, openFinding, sendFast, planDeadline, remind, reminded, lastAi, lastCrawl, news = [], slug = "" }: {
   d: Data; today: string; go: (tab: string, band?: string) => void; openFinding: (f: Finding) => void; sendFast: (f: Finding) => void; planDeadline: (x: Deadline) => void;
-  openRun: () => void; remind: () => void; reminded: boolean; lastAi: Run | null; lastCrawl: Run | null;
+  openRun: () => void; remind: () => void; reminded: boolean; lastAi: Run | null; lastCrawl: Run | null; news?: News[]; slug?: string;
 }) {
   const live = d.findings.filter((f) => f.status !== "dismissed" && daysBetween(f.found_at.slice(0, 10), today) <= 7);
   const count = (b: string) => live.filter((f) => d.band(f) === b).length;
@@ -84,6 +86,10 @@ export function HomeTab({ d, today, go, openFinding, sendFast, planDeadline, rem
           </div>
         </section>
         <aside className="flex min-w-0 flex-[2_1_320px] flex-col gap-4">
+          {/* DS16: a target account in the news. The dated note is already on the prospect in Pipeline. */}
+          <NeedsYou tour="news" title="Needs you" empty="No target account in the news in the last 14 days."
+            items={news.slice(0, 5).map((x) => ({ title: `${x.prospect.company} is in the news`, sub: `${x.finding.title} · note added to ${x.prospect.name} in Pipeline`, cta: "Open", href: `/w/${slug}/pipeline?p=${x.prospect.id}`, tone: "red" as const, when: new Date(x.finding.found_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) }))}
+            count={news.length} />
           <div data-tour="coverage" className="panel">
             <div className="px-[18px] py-3.5"><h2 className="text-body font-semibold">Coverage, last run</h2><div className="mt-0.5 text-meta text-muted">Every pass reports, even when it finds nothing. Blocked is not the same as empty.</div></div>
             {coverage.map((p) => (

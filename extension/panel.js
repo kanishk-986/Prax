@@ -258,8 +258,35 @@ $("capprofile").addEventListener("click", async () => {
   busy(btn, false, "Capture this profile");
 });
 
+// One post's results (CS29): on that post's analytics page, or the post page as its author sees it. Read on this
+// click only; the Prax server matches the post by its LinkedIn activity id against the link saved in Content Studio.
+function readPostNumbers() {
+  const P = globalThis.PraxDOM;
+  return P.postResultsIn(document.querySelector("main, [role='main']") || document.body);
+}
+async function readPostResults(tab) {
+  const nums = await run(readPostNumbers);
+  if (!nums) return toast("No impressions are shown on this page. Under your post, open View analytics and try again.", true);
+  const url = String(tab.url || "").split(/[?#]/)[0];
+  if (!D.activityIdOf(url)) return toast("This page has no post link Prax can match. Open the post itself, then its analytics.", true);
+  const keys = ["impressions", "reactions", "comments", "reposts"];
+  $("stats").innerHTML = `<div class="meta" style="margin-top:10px">This post: ${keys.filter((k) => nums[k] != null).map((k) => `${k}: <b>${nums[k].toLocaleString()}</b>`).join(" · ")}</div>
+    <button class="btn small primary" id="sendstats">Save to the post in Prax</button>`;
+  $("sendstats").onclick = async (ev) => {
+    busy(ev.target, true);
+    try {
+      const r = await prax("post_results", { url, ...Object.fromEntries(keys.map((k) => [k, nums[k] ?? null])) });
+      if (!r || !r.post) { busy(ev.target, false); return toast("No post in Prax has this link. Save the post's LinkedIn link in Content Studio first.", true); }
+      toast("Saved this post's results in Content Studio"); ev.target.textContent = "Saved";
+    } catch (e) { busy(ev.target, false); fail(e); }
+  };
+}
+
 $("capstats").addEventListener("click", async () => {
   try {
+    const tab = await activeTab();
+    let path = ""; try { path = new URL(tab?.url || "").pathname; } catch { /* not a page */ }
+    if (D.isLinkedIn(tab?.url) && D.isPostResultsPage(path)) return await readPostResults(tab);
     const { text } = await run(readPage);
     const metrics = D.parseAnalytics(text);
     if (!Object.keys(metrics).length) return toast("No analytics numbers found on this page. Open Me, then Analytics, and try again.", true);

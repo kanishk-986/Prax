@@ -1,17 +1,19 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload, FileArchive, ExternalLink, Check, X, ChevronDown, Trash2, UserPlus, ArrowRight } from "lucide-react";
+import { Upload, FileArchive, ExternalLink, Check, X, ChevronDown, Trash2, UserPlus, ArrowRight, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, useSegments, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
-import { firstNameOf, pillarsOf, possessive } from "@/lib/persona";
+import { firstNameOf, pillarsOf, possessive, whoLine } from "@/lib/persona";
+import { askExtension, parseJSON } from "@/lib/bridge";
+import { SidePanel } from "@/components/discovery/shared";
 import { Section, KpiTiles, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { decodeText } from "@/lib/text";
 import {
-  readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normUrl,
-  DEFAULT_SEGMENTS, defaultTopics, SENIORITY, type ParsedExport, type Person, type ProspectLite, type CommentLite, type SegRule, type TopicRule, type Warm,
+  readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normUrl, mutualLine, topicPeople, topicExplainPrompt, parseTopicExplain,
+  DEFAULT_SEGMENTS, defaultTopics, SENIORITY, type ParsedExport, type Person, type ProspectLite, type CommentLite, type SegRule, type TopicRule, type Warm, type TopicExplain,
 } from "@/lib/network";
 
 type Post = { kind: "post" | "comment"; key: string; day: string | null; url: string; text: string };
@@ -73,7 +75,7 @@ export default function NetworkPage() {
 
   // Prospect companies act as company rules for their segment.
   const prospectCompanies = useMemo(() => new Map(prospects.rows.filter((p) => p.company && p.segment).map((p) => [normCompany(p.company), p.segment])), [prospects.rows]);
-  const segOf = useCallback((x: Person) => x.segment_manual || segmentFor(x.company, x.position, settings.segments, prospectCompanies), [settings.segments, prospectCompanies]);
+  const segOf = useCallback((x: Person) => x.segment_manual || segmentFor(x.company, x.position, settings.segments, prospectCompanies, x.location ?? ""), [settings.segments, prospectCompanies]);
   const idx = useMemo(() => indexPeople(people), [people]);
 
   const conns = people.filter((p) => p.is_connection).length;
@@ -90,7 +92,7 @@ export default function NetworkPage() {
         : !people.length && tab !== "Topics" ? <Empty onUpload={() => setTab("Import")} />
         : tab === "Segments" ? <SegmentsTab people={people} segOf={segOf} settings={settings} setSettings={setSettings} prospects={prospects.rows} onChange={setPeople} />
         : tab === "Warm paths" ? <WarmTab people={people} idx={idx} prospects={prospects.rows} comments={comments.rows} segOf={segOf} onChange={setPeople} />
-        : <TopicsTab posts={posts} settings={settings} setSettings={setSettings} onUpload={() => setTab("Import")} />}
+        : <TopicsTab posts={posts} people={people} settings={settings} setSettings={setSettings} onUpload={() => setTab("Import")} />}
     </Section>
   );
 }
@@ -108,7 +110,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
       .then(({ data, error }: { data: Camp[] | null; error: unknown }) => { if (!error && data) setCamps(data); });
   }, [ws.id]);
   const rows = useMemo(() => prospects.filter((p) => !["Won", "Parked"].includes(p.stage)).map((p) => ({ p, w: warmPaths(p, people, idx, comments) }))
-    .sort((a, b) => (a.w.level || 9) - (b.w.level || 9)
+    .sort((a, b) => (a.w.level || (a.w.mutual ? 8 : 9)) - (b.w.level || (b.w.mutual ? 8 : 9))
       || (a.w.colleagues[0] ? seniority(a.w.colleagues[0].position) : 9) - (b.w.colleagues[0] ? seniority(b.w.colleagues[0].position) : 9)
       || a.p.name.localeCompare(b.p.name)), [prospects, people, idx, comments]);
   const last = imports[0];
@@ -133,6 +135,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
     if (w.msgs || w.comments.replies) return { text: w.msgs ? `Talked before: ${w.msgs.count} messages, ${w.msgs.from === "us" ? "waiting on them" : "they wrote last"}` : `Replied to his comments ${w.comments.replies} time${w.comments.replies > 1 ? "s" : ""}`, cta: "Message them", url: w.linked?.url || p.linkedin };
     const c = w.colleagues[0];
     if (c) return { text: `Knows ${c.name}${c.position ? `, ${c.position}` : ""}, at ${p.company}${w.colleagues.length > 1 ? `, and ${w.colleagues.length - 1} more` : ""}`, cta: "Ask for an intro", url: c.url };
+    if (w.mutual?.count) return { text: `${mutualLine(w.mutual)}, read from their profile. Ask one of them for an intro.`, cta: "Open their profile", url: p.linkedin };
     return { text: "No warm route yet. Comment on their posts before any request.", cta: "Comment on their posts first", url: p.linkedin };
   };
   async function addTarget(p: ProspectLite, campId: string) {
@@ -341,7 +344,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
   const keys = [...Object.keys(SEGMENTS), ""];
   const counts = Object.fromEntries(keys.map((k) => [k, conns.filter((c) => c.seg === k).length]));
   const max = Math.max(1, ...Object.values(counts));
-  const rows = conns.filter((c) => (seg === "all" || c.seg === seg) && (lvl < 0 || c.lvl === lvl) && (!q || `${c.p.name} ${c.p.company} ${c.p.position}`.toLowerCase().includes(q.toLowerCase())))
+  const rows = conns.filter((c) => (seg === "all" || c.seg === seg) && (lvl < 0 || c.lvl === lvl) && (!q || `${c.p.name} ${c.p.company} ${c.p.position} ${c.p.location ?? ""}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => a.lvl - b.lvl || ((b.p.connected_on ?? "") < (a.p.connected_on ?? "") ? -1 : 1));
   const inPipe = new Set(prospects.map((p) => p.id));
 
@@ -385,7 +388,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
           <span className="text-body font-semibold">{seg === "all" ? "All connections" : seg ? `${seg} · ${segs[seg].label}` : "Unsegmented"}{lvl >= 0 && ` · ${SENIORITY[lvl]}`}</span>
           <span className="num text-meta text-muted">{rows.length}</span>
-          <input className="field ml-auto h-8 w-full sm:w-64" placeholder="Search name, company, position" value={q} onChange={(e) => { setQ(e.target.value); setShown(50); }} />
+          <input className="field ml-auto h-8 w-full sm:w-64" placeholder="Search name, company, position, location" value={q} onChange={(e) => { setQ(e.target.value); setShown(50); }} />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-body">
@@ -394,7 +397,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
               <tr key={p.key} className="border-b border-line last:border-0">
                 <td className="px-3 py-2 font-medium">{p.url ? <a href={p.url} target="_blank" rel="noopener" className="hover:underline">{p.name}</a> : p.name}</td>
                 <td className="max-w-[260px] truncate px-3 py-2 text-ink-2" title={p.position}>{p.position}</td>
-                <td className="max-w-[200px] truncate px-3 py-2 text-ink-2" title={p.company}>{p.company}</td>
+                <td className="max-w-[200px] px-3 py-2 text-ink-2"><div className="truncate" title={p.company}>{p.company}</div>{p.location && <div className="truncate text-meta text-muted" title={`${p.location}, read from their profile`}>{p.location}</div>}</td>
                 <td className="px-3 py-2">
                   {editable ? (
                     <select className="field h-7 w-[92px] px-1.5 text-meta" value={p.segment_manual} onChange={(e) => setManual(p, e.target.value)} aria-label={`Segment for ${p.name}`}>
@@ -442,11 +445,11 @@ function SegmentRules({ settings, setSettings }: { settings: Settings; setSettin
   const { ws } = useWorkspace();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const toDraft = (rs: SegRule[]) => rs.map((r) => ({ seg: r.seg, companies: r.companies.join(", "), roles: r.roles.join(", ") }));
+  const toDraft = (rs: SegRule[]) => rs.map((r) => ({ seg: r.seg, companies: r.companies.join(", "), roles: r.roles.join(", "), places: (r.places ?? []).join(", ") }));
   const [draft, setDraft] = useState(toDraft(settings.segments));
   useEffect(() => setDraft(toDraft(settings.segments)), [settings.segments]);
-  const set = (i: number, k: "companies" | "roles", v: string) => setDraft(draft.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
-  const fromDraft = (): SegRule[] => draft.map((r) => ({ seg: r.seg, companies: splitWords(r.companies), roles: splitWords(r.roles) }));
+  const set = (i: number, k: "companies" | "roles" | "places", v: string) => setDraft(draft.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const fromDraft = (): SegRule[] => draft.map((r) => ({ seg: r.seg, companies: splitWords(r.companies), roles: splitWords(r.roles), places: splitWords(r.places) }));
   async function save(next: SegRule[]) {
     const { error } = await supabase().from("network_settings").upsert({ workspace_id: ws.id, segments: next, topics: settings.topics, updated_at: new Date().toISOString() });
     if (error) { toast(error.message); return; }
@@ -459,12 +462,13 @@ function SegmentRules({ settings, setSettings }: { settings: Settings; setSettin
       </button>
       {open && (
         <div className="anim-rise border-t border-line p-4">
-          <p className="mb-3 text-meta text-muted">Checked top to bottom, first match wins. Companies of prospects already in the pipeline count first, under the prospect&apos;s segment. Separate words with commas. A segment set by hand on a person always wins.</p>
+          <p className="mb-3 text-meta text-muted">Checked top to bottom, first match wins. Companies of prospects already in the pipeline count first, under the prospect&apos;s segment. Separate words with commas. A segment set by hand on a person always wins. Location is known only for people whose LinkedIn profile was opened and saved with Save mutuals and location on the Prax bar.</p>
           {draft.map((r, i) => (
-            <div key={r.seg} className="mb-3 grid gap-2 md:grid-cols-[120px_1fr_1fr]">
+            <div key={r.seg} className="mb-3 grid gap-2 md:grid-cols-[120px_1fr_1fr_1fr]">
               <div className="pt-1.5 text-body font-medium" style={{ color: segs[r.seg]?.color }}>{r.seg} · {segs[r.seg]?.label}</div>
               <label className="flex flex-col gap-1"><span className="label">Company contains</span><textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.companies} onChange={(e) => set(i, "companies", e.target.value)} /></label>
               <label className="flex flex-col gap-1"><span className="label">Position contains</span><textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.roles} onChange={(e) => set(i, "roles", e.target.value)} /></label>
+              <label className="flex flex-col gap-1"><span className="label">Location contains</span><textarea rows={2} className="field h-auto py-1.5 text-meta" value={r.places} onChange={(e) => set(i, "places", e.target.value)} /></label>
             </div>
           ))}
           <div className="flex gap-2">
@@ -482,8 +486,8 @@ const LEVEL = ["No warm path yet", "Already connected", "Talked before", "Knows 
 function WarmTab({ people, idx, prospects, comments, segOf, onChange }: { people: Person[]; idx: ReturnType<typeof indexPeople>; prospects: ProspectLite[]; comments: CommentLite[]; segOf: (x: Person) => string; onChange: (p: Person[]) => void }) {
   const [all, setAll] = useState(false);
   const list = useMemo(() => prospects.filter((p) => !["Won", "Parked"].includes(p.stage)).map((p) => ({ p, w: warmPaths(p, people, idx, comments) }))
-    .sort((a, b) => (a.w.level || 9) - (b.w.level || 9) || b.w.suggest.length - a.w.suggest.length || a.p.name.localeCompare(b.p.name)), [prospects, people, idx, comments]);
-  const withPath = list.filter((x) => x.w.level || x.w.suggest.length);
+    .sort((a, b) => (a.w.level || (a.w.mutual ? 8 : 9)) - (b.w.level || (b.w.mutual ? 8 : 9)) || b.w.suggest.length - a.w.suggest.length || a.p.name.localeCompare(b.p.name)), [prospects, people, idx, comments]);
+  const withPath = list.filter((x) => x.w.level || x.w.suggest.length || x.w.mutual?.count);
   const shown = all ? list : withPath;
   const n = (l: number) => list.filter((x) => x.w.level === l).length;
   return (
@@ -536,7 +540,7 @@ function WarmRow({ p, w, people, segOf, onChange }: { p: ProspectLite; w: Warm; 
     <div className="flex flex-col gap-2 border-b border-line px-4 py-3 last:border-0 md:flex-row md:items-start md:gap-4">
       <div className="min-w-0 md:w-[260px] md:shrink-0">
         <Link href={`/w/${ws.slug}/pipeline?p=${p.id}`} className="text-body font-medium hover:underline">{p.name}</Link>
-        <div className="truncate text-meta text-muted">{[p.role, p.company].filter(Boolean).join(" · ")}</div>
+        <div className="truncate text-meta text-muted">{[p.role, p.company, p.location].filter(Boolean).join(" · ")}</div>
         <div className="mt-1 flex gap-1.5"><span className="chip">{p.stage}</span><span className="chip" style={{ color: tone }}>{LEVEL[w.level]}</span></div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 text-body text-ink-2">
@@ -565,17 +569,25 @@ function WarmRow({ p, w, people, segOf, onChange }: { p: ProspectLite; w: Warm; 
             {w.colleagues.length > 3 && <span className="text-muted"> and {w.colleagues.length - 3} more</span>}
           </div>
         )}
-        {!w.level && !w.suggest.length && <div className="text-muted">Nothing in the export links to them yet.</div>}
+        {w.mutual && (
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <Users size={13} className="relative top-[2px] shrink-0 text-muted" aria-hidden="true" />
+            <span className="min-w-0">{mutualLine(w.mutual)}</span>
+            {w.mutual.at && <span className="text-meta text-faint">read from their profile {fmtDay(ymd(new Date(w.mutual.at)), { day: "numeric", month: "short" })}</span>}
+          </div>
+        )}
+        {!w.level && !w.suggest.length && !w.mutual && <div className="text-muted">Nothing in the export links to them yet. Open their LinkedIn profile and press Save mutuals and location on the Prax bar to add mutual connections.</div>}
       </div>
     </div>
   );
 }
 
 // ---------------- Topics ----------------
-function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; settings: Settings; setSettings: (s: Settings) => void; onUpload: () => void }) {
+function TopicsTab({ posts, people, settings, setSettings, onUpload }: { posts: Post[]; people: Person[]; settings: Settings; setSettings: (s: Settings) => void; onUpload: () => void }) {
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [explain, setExplain] = useState<string | null>(null);
   const toDraft = (ts: TopicRule[]) => ts.map((t, i) => ({ id: i, name: t.name, words: t.words.join(", ") }));
   const [draft, setDraft] = useState(toDraft(settings.topics));
   useEffect(() => setDraft(toDraft(settings.topics)), [settings.topics]);
@@ -602,9 +614,9 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
       <div className="card overflow-x-auto">
         <div className="border-b border-line px-4 py-3 text-body font-semibold">What you post and comment about <span className="ml-1 text-meta font-normal text-muted">{tagged.filter((x) => x.p.kind === "post").length} posts, {tagged.filter((x) => x.p.kind === "comment").length} comments; one item can sit in more than one topic</span></div>
         <table className="w-full text-body">
-          <thead><tr className="border-b border-line text-left">{["Topic", "Posts", "Comments", "Last 6 months", "Latest"].map((h) => <th key={h} className="label px-3 py-2 font-semibold">{h}</th>)}</tr></thead>
+          <thead><tr className="border-b border-line text-left">{["Topic", "Posts", "Comments", "Last 6 months", "Latest", ""].map((h, i) => <th key={i} className="label px-3 py-2 font-semibold" aria-label={h ? undefined : "Explain"}>{h}</th>)}</tr></thead>
           <tbody>{stats.map((s) => (
-            <tr key={s.n} className="border-b border-line align-top last:border-0">
+            <tr key={s.n} className="group border-b border-line align-top last:border-0">
               <td className="px-3 py-2.5 font-medium">{s.n}</td>
               <td className="num px-3 py-2.5">{s.posts}</td>
               <td className="num px-3 py-2.5">{s.comments}</td>
@@ -622,10 +634,13 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
                 ))}
                 {!s.rows.length && <span className="text-meta text-faint">Nothing yet</span>}
               </td>
+              <td className="px-3 py-2 text-right">{s.n !== "Other" && <button type="button" className="btn btn-quiet row-act h-8 whitespace-nowrap" onClick={() => setExplain(s.n)}>Explain with AI</button>}</td>
             </tr>
           ))}</tbody>
         </table>
       </div>
+
+      {explain && <ExplainPanel key={explain} topic={settings.topics.find((t) => t.name === explain) ?? { name: explain, words: [] }} posts={stats.find((x) => x.n === explain)?.rows.map((x) => x.p) ?? []} people={people} onClose={() => setExplain(null)} />}
 
       {can("editor") && (
         <div className="card">
@@ -652,5 +667,56 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
         </div>
       )}
     </div>
+  );
+}
+
+/** Explain with AI (N10): one call through the extension, with the AI key in this browser. It says what the topic
+ *  means for the profile and who in the network to talk to, chosen only from connections whose role or company fits. */
+function ExplainPanel({ topic, posts, people, onClose }: { topic: TopicRule; posts: Post[]; people: Person[]; onClose: () => void }) {
+  const { ws } = useWorkspace();
+  const first = firstNameOf(ws);
+  const fit = useMemo(() => topicPeople(topic, people), [topic, people]);
+  const [res, setRes] = useState<TopicExplain | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(true);
+  const run = useCallback(async () => {
+    setBusy(true); setErr("");
+    try {
+      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You advise a senior business leader on LinkedIn. Be specific and plain. Never invent people or facts.", user: topicExplainPrompt({ topic: topic.name, words: topic.words, who: whoLine(ws), pillars: pillarsOf(ws), posts, people: fit }) }, 120000);
+      const r = parseTopicExplain(parseJSON(out), fit);
+      if (!r) throw new Error("The AI did not return an explanation. Try again.");
+      setRes(r);
+    } catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  }, [topic, ws, posts, fit]);
+  // One click opens the panel and asks once.
+  const asked = useRef(false);
+  useEffect(() => { if (!asked.current) { asked.current = true; run(); } }, [run]);
+  return (
+    <SidePanel kicker="Topic · Explain with AI" title={topic.name} onClose={onClose}>
+      <p className="text-meta text-muted">From {posts.length} of {possessive(first)} posts and comments on this topic and {fit.length} {fit.length === 1 ? "connection" : "connections"} whose role or company fits it. Runs with the AI key in this browser.</p>
+      {busy ? <div className="flex flex-col gap-2" role="status" aria-label="Explaining"><div className="h-20 animate-pulse rounded-xl bg-surface-2" /><div className="h-28 animate-pulse rounded-xl bg-surface-2" /></div>
+        : err ? (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-line p-4">
+            <p className="text-body text-dark-red">{err}</p>
+            <span className="flex flex-wrap gap-2"><button type="button" className="btn h-8" onClick={run}>Try again</button><Link href={`/w/${ws.slug}/extension`} className="btn btn-quiet h-8">Extension and AI key</Link></span>
+          </div>
+        ) : res && (
+          <>
+            <section className="flex flex-col gap-1.5"><h3 className="text-body font-semibold">What it means for {first}</h3><p className="text-body leading-relaxed text-ink-2">{res.meaning}</p></section>
+            <section className="flex flex-col gap-1.5">
+              <h3 className="text-body font-semibold">Who to talk to</h3>
+              {res.talk.length ? res.talk.map((t) => (
+                <div key={t.key} className="flex flex-col gap-0.5 rounded-xl border border-line px-3.5 py-2.5">
+                  <span className="flex flex-wrap items-baseline gap-x-2">{t.url ? <a href={t.url} target="_blank" rel="noopener" className="text-body font-semibold hover:underline">{t.name}</a> : <span className="text-body font-semibold">{t.name}</span>}<span className="text-meta text-muted">{[t.position, t.company].filter(Boolean).join(" at ")}</span></span>
+                  {t.why && <span className="text-body text-ink-2">{t.why}</span>}
+                </div>
+              )) : <p className="text-body text-muted">None in the network fits this topic yet. Add words to the topic so Prax can find people whose role matches.</p>}
+            </section>
+            {res.next && <section className="flex flex-col gap-1.5"><h3 className="text-body font-semibold">Next step</h3><p className="text-body text-ink-2">{res.next}</p></section>}
+            <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3"><button type="button" className="btn h-8" onClick={run}>Explain again</button><span className="text-meta text-muted">Prax only suggests. {first} reaches out on LinkedIn by hand.</span></div>
+          </>
+        )}
+    </SidePanel>
   );
 }

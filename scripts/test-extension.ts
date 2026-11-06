@@ -114,6 +114,77 @@ eq("analytics with a percent change between", D.parseAnalytics("1,234\n12.5%\nPo
 eq("analytics written inline", D.parseAnalytics("1.2M post impressions\n980 followers"), { impressions_7d: 1200000, followers: 980 });
 eq("no analytics on other text", D.parseAnalytics("Home\nMy Network\nJobs"), {});
 
+// ---------- profile pages (Prax profile bar: mutual connections, location, Send to Discovery) ----------
+eq("mutual: names and others", D.parseMutual("Priya Nair, Tom Becker and 12 other mutual connections"), { count: 14, names: ["Priya Nair", "Tom Becker"] });
+eq("mutual: Oxford comma", D.parseMutual("Priya Nair, Tom Becker, and 1 other mutual connection"), { count: 3, names: ["Priya Nair", "Tom Becker"] });
+eq("mutual: two names", D.parseMutual("Priya Nair and Tom Becker are mutual connections"), { count: 2, names: ["Priya Nair", "Tom Becker"] });
+eq("mutual: one name", D.parseMutual("Kim Park is a mutual connection"), { count: 1, names: ["Kim Park"] });
+eq("mutual: count only", D.parseMutual("1,204 mutual connections"), { count: 1204, names: [] });
+eq("mutual: other text", D.parseMutual("500+ connections"), null);
+eq("company from a headline", D.companyOf("Head of Digital Assets at Gulf Union Bank | Custody"), "Gulf Union Bank");
+eq("no company in a headline without at", D.companyOf("Board member, investor"), "");
+eq("profile path", [D.isProfilePath("/in/omar-saleh/"), D.isProfilePath("/in/omar-saleh"), D.isProfilePath("/in/omar-saleh/recent-activity/all/"), D.isProfilePath("/feed/")], [true, true, false, false]);
+{
+  const p = D.readProfile(load("profile-classic.html"), at("https://www.linkedin.com/in/omar-saleh/?miniProfileUrn=x"));
+  eq("classic profile: url without query", p.url, "https://www.linkedin.com/in/omar-saleh/");
+  eq("classic profile: name", p.name, "Omar Saleh");
+  eq("classic profile: headline", p.headline, "Head of Digital Assets at Gulf Union Bank | Custody, tokenisation and settlement");
+  eq("classic profile: company", p.company, "Gulf Union Bank");
+  eq("classic profile: location", p.location, "Dubai, United Arab Emirates");
+  eq("classic profile: mutual connections read once, not from the hidden copy", p.mutual, { count: 14, names: ["Priya Nair", "Tom Becker"] });
+  eq("classic profile: recent activity on screen", p.activity.map((a: { url: string }) => a.url), ["https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000041/", "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000042/"]);
+  eq("classic profile: activity text", p.activity[0].text.startsWith("Tokenised deposits will settle"), true);
+}
+{
+  const p = D.readProfile(load("profile-new.html"), at("https://www.linkedin.com/in/lena-fischer/"));
+  eq("new profile: name", p.name, "Lena Fischer");
+  eq("new profile: headline without a known class", p.headline, "CFO at Northbank | Tokenisation, treasury and payments");
+  eq("new profile: location from the line before Contact info", p.location, "Frankfurt, Hesse, Germany");
+  eq("new profile: one mutual connection", p.mutual, { count: 1, names: ["Kim Park"] });
+  eq("new profile: no Activity section", p.activity, []);
+}
+{
+  const p = D.readProfile(load("profile.html"), at("https://www.linkedin.com/in/lena-fischer/"));
+  eq("capture fixture: no mutual line means none, not zero", p.mutual, null);
+  eq("capture fixture: location from a plain span is not guessed", typeof p.location, "string");
+}
+{
+  // The side list of "People also viewed" names mutual connections of other people: never read as this profile's.
+  const doc = parseHTML(`<main><section><h1>Ana Ruiz</h1><div>Partner at Ruiz Legal</div></section><aside><section><h2>People also viewed</h2><span>Lina Haddad is a mutual connection</span></section></aside></main>`).document;
+  eq("mutual line of another person in a side list is ignored", D.readProfile(doc, at("https://www.linkedin.com/in/ana-ruiz/")).mutual, null);
+}
+
+// ---------- one post's results (side panel Read analytics on a post, CS29) ----------
+{
+  const main = load("post-analytics.html").querySelector("main");
+  eq("post analytics: the four numbers, label above or below its number", D.postResultsIn(main), { impressions: 4820, reactions: 126, comments: 18, reposts: 7 });
+  const own = parseHTML(`<main><div class="post"><p>Our view on tokenised deposits.</p><div><span>1,234 impressions</span><a href="#">View analytics</a></div>
+    <ul><li><button><span>56</span><span class="visually-hidden">56 reactions</span></button></li><li><button>7 comments</button></li><li><button>3 reposts</button></li></ul>
+    <div><button>Like</button><button>Comment</button><button>Repost</button></div></div></main>`).document.querySelector("main");
+  eq("own post page: counts written inline", D.postResultsIn(own), { impressions: 1234, comments: 7, reposts: 3 });
+  eq("someone else's post (no impressions shown) gives nothing", D.postResultsIn(load("single-post.html").querySelector("main")), null);
+  eq("activity id from a post page", D.activityIdOf("https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000051/"), "7390000000000000051");
+  eq("activity id from an analytics page with an encoded urn", D.activityIdOf("https://www.linkedin.com/analytics/post-summary/urn%3Ali%3Aactivity%3A7390000000000000051/"), "7390000000000000051");
+  eq("activity id from a /posts/ link", D.activityIdOf("https://www.linkedin.com/posts/shashi-pal_stablecoins-activity-7390000000000000051-abcd"), "7390000000000000051");
+  eq("post results pages", [D.isPostResultsPage("/analytics/post-summary/urn:li:activity:1/"), D.isPostResultsPage("/feed/update/urn:li:activity:1/"), D.isPostResultsPage("/posts/x-activity-1"), D.isPostResultsPage("/analytics/creator/"), D.isPostResultsPage("/feed/")], [true, true, true, false, false]);
+}
+
+// ---------- a messaging thread the user has open (Send to Prax Inbox, X7) ----------
+{
+  const t = D.readThread(load("messaging-thread.html"), at("https://www.linkedin.com/messaging/thread/2-abc123/?filter=unread"));
+  eq("thread: the other person", [t.name, t.url, t.company], ["Omar Saleh", "https://www.linkedin.com/in/omar-saleh/", "Gulf Union Bank"]);
+  eq("thread: headline", t.headline, "Head of Digital Assets at Gulf Union Bank | Custody, tokenisation and settlement");
+  eq("thread: link without query", t.thread_url, "https://www.linkedin.com/messaging/thread/2-abc123/");
+  eq("thread: their last message, not ours, not another thread's", t.text, "Happy to compare notes on custody. Are you in Dubai next week?");
+  eq("thread: when it was sent, from its group", t.received_at, "2026-11-05T08:10:00Z");
+  eq("thread path", [D.isThreadPath("/messaging/thread/2-abc123/"), D.isThreadPath("/messaging/"), D.isThreadPath("/feed/")], [true, false, false]);
+  const fresh = parseHTML(`<main><div data-view-name="message-thread"><header><a href="/in/kim-park/"><h2 data-view-name="thread-title">Kim Park</h2></a><p data-view-name="thread-headline">COO at Seoul Pay</p></header>
+    <ul><li data-view-name="message-list-item"><span data-view-name="message-sender">Shashi Pal</span><div data-view-name="message-body">Good to meet you.</div></li></ul></div></main>`).document;
+  const k = D.readThread(fresh, at("https://www.linkedin.com/messaging/thread/2-x/"));
+  eq("newer layout: person and company", [k.name, k.company, k.url], ["Kim Park", "Seoul Pay", "https://www.linkedin.com/in/kim-park/"]);
+  eq("newer layout: no message from them yet", k.text, "");
+}
+
 // ---------- pages ----------
 eq("linkedin feed is LinkedIn", D.isLinkedIn("https://www.linkedin.com/feed/"), true);
 eq("prax is not LinkedIn", D.isLinkedIn("https://prax-gamma.vercel.app/extension"), false);
