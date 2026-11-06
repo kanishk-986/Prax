@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { ESTIMATE, type Engine } from "@/lib/citations";
 import { type PlannedSearch, type Settings, type Finding, PACK_LABEL } from "@/lib/discovery";
 import { type Data, type LogRow, type Run, SidePanel, BandPill, Tag, engineName } from "./shared";
+import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 
 export const PACKS: { id: keyof Settings["packs"]; label: string; sub: (n: number) => string }[] = [
   { id: "pillar", label: "By pillar", sub: () => "Six pillars with region" },
@@ -59,8 +60,8 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
           <span className="text-[12px] font-semibold uppercase tracking-[.06em] text-[#ff8a80]">AI tools</span>
           {d.engines.map((e) => (
             <span key={e.id} className="flex items-center justify-between gap-2.5 border-t border-white/10 pt-2 text-[13px]">
-              <span className="min-w-0"><b>{e.name}</b><span className="block text-[11.5px] text-[#cfcfcf]">{e.ready ? "Web search on, key in this browser" : "No key in this browser"}</span></span>
-              {e.ready ? <span className="shrink-0 text-[12px] font-semibold">Ready</span> : <Link href={`/w/${slug}/extension#search-keys`} className="btn btn-primary h-7 shrink-0 px-2.5 text-[12px]">Add key</Link>}
+              <span className="flex min-w-0 flex-col gap-1"><ProviderMark id={e.id} onDark /><span className="flex flex-wrap items-center gap-x-2 pl-6 text-[11.5px] text-[#cfcfcf]"><KeyState on={e.ready} onDark />{e.ready && <ModelId model={e.model} className="text-[11.5px] text-[#cfcfcf]" />}</span></span>
+              {!e.ready && <Link href={`/w/${slug}/extension#search-keys`} className="btn btn-primary h-7 shrink-0 px-2.5 text-[12px]">Connect</Link>}
             </span>
           ))}
           <span className="text-[12.5px] text-[#cfcfcf]">About {calls} calls · about ${cost.toFixed(2)} on your keys (list prices, rough)</span>
@@ -78,7 +79,7 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
               return (
                 <button key={r.id ?? i} type="button" onClick={() => setOpen(r)} className={`grid w-full ${cols} items-center gap-2.5 border-t border-[#ececec] px-[18px] py-2.5 text-left text-[13px] hover:bg-[#fafafa]`}>
                   <span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.error ? "#d64545" : cur ? "#d64545" : done ? ((r.cited ?? 0) ? "#141414" : "#b5b5b5") : "#e3e3e3" }} /><span className="truncate">{r.q}</span></span>
-                  <span className="truncate text-muted">{PACK_LABEL[(r.pack ?? "custom") as keyof typeof PACK_LABEL]}</span><span className="truncate">{engineName(r.engine ?? "")}</span>
+                  <span className="truncate text-muted">{PACK_LABEL[(r.pack ?? "custom") as keyof typeof PACK_LABEL]}</span><span className="min-w-0">{r.engine ? <ProviderMark id={r.engine} short bold={false} /> : ""}</span>
                   <span className="num">{r.error ? "Failed" : done ? r.returned : cur ? "…" : "None"}</span><span className="num">{done && !r.error ? r.cited : "None"}</span><span className="num">{done && !r.error ? r.confirmed : "None"}</span>
                 </button>
               );

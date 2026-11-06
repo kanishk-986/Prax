@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import { type Finding, type Band, type Settings, type Topic, hostOf } from "@/lib/discovery";
+import { providerName } from "@/lib/providers";
 
 export type Run = { id: string; kind: "ai" | "crawl"; trigger: string; status: string; window_days: number; stats: Record<string, number>; log: LogRow[]; started_at: string; finished_at: string | null };
 export type LogRow = { id?: string; q?: string; pack?: string; engine?: string; returned?: number; cited?: number; confirmed?: number; urls?: string[]; error?: string; link?: string; name?: string; status?: string; articles?: number };
@@ -16,7 +17,7 @@ export type Data = {
   findings: Finding[]; runs: Run[]; lists: List[]; links: Link[]; topicRows: TopicRow[]; settings: Settings;
   warm: (orgs: string[]) => number; band: (f: Finding) => Band; total: (f: Finding) => number;
   digest: { top: Ranked[]; list: Ranked[]; rising: Ranked[]; rest: Ranked[]; all: Topic[] };
-  engines: { id: string; name: string; ready: boolean }[]; editable: boolean;
+  engines: { id: string; name: string; model: string; ready: boolean }[]; editable: boolean;
 };
 
 export const BAND_STYLE: Record<Band, React.CSSProperties> = {
@@ -43,7 +44,8 @@ export function foundBy(f: Finding): string {
   return parts.join(" · ") || "None";
 }
 export const foundKinds = (f: Finding) => [f.found_by.includes("ai") && "AI search", f.found_by.includes("crawl") && "Crawl", f.found_by.includes("linkedin") && "LinkedIn"].filter(Boolean) as string[];
-export const engineName = (e: string) => ({ claude: "Claude", openai: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity" } as Record<string, string>)[e] ?? e;
+/** Short provider name ("Claude", "ChatGPT"), from the shared provider list. */
+export const engineName = (e: string) => providerName(e, true);
 export const warmLine = (n: number) => `Warm: you know ${n} ${n === 1 ? "person" : "people"} here, from Network. Comment first.`;
 export const ago = (iso: string | null) => {
   if (!iso) return "never";

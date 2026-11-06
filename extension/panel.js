@@ -224,12 +224,27 @@ $("capstats").addEventListener("click", async () => {
   } catch (e) { toast(e.message); }
 });
 
+// ---------- AI keys: which providers have a key here, the state in plain words and the model. Keys are never shown. ----------
+const SEARCH_MODELS = { claude: "claude-opus-5-5", openai: "gpt-5", gemini: "gemini-3.8-flash", perplexity: "sonar" };
+function renderAI() {
+  const main = cfg.provider || "claude";
+  const has = (p) => !!((cfg.keys && cfg.keys[p]) || (main === p && cfg.apiKey));
+  const state = (on) => `<span class="ks${on ? " on" : ""}"><i></i>${on ? "Connected in this browser" : "No key in this browser"}</span>`;
+  const row = (id, on, model, note) => `<div class="pr"><div class="pr-top">${praxMark(id)}${note ? `<span class="pr-note">${note}</span>` : ""}</div>
+    <div class="pr-facts">${state(on)}${on ? `<code>${esc(model)}</code>` : ""}</div></div>`;
+  $("ai-rows").innerHTML = row(main, !!cfg.apiKey, cfg.model || (PRAX_PROVIDERS[main] || {}).model || "", main in SEARCH_MODELS ? "Drafts and AI search" : "Drafts")
+    + Object.keys(SEARCH_MODELS).filter((p) => p !== main).map((p) => row(p, has(p), (cfg.searchModels && cfg.searchModels[p]) || SEARCH_MODELS[p], "AI search")).join("");
+}
+chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) { cfg = ch.cfg.newValue || {}; renderAI(); } });
+$("openkeys").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension#search-keys" }));
+
 $("openprax").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));
 $("who").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));
 
 // ---------- start ----------
 (async () => {
   cfg = (await chrome.storage.local.get("cfg")).cfg || {};
+  renderAI();
   if (!cfg.praxToken || !cfg.apiKey) $("setup").classList.remove("hidden");
   if (cfg.praxToken) prax("me").then((m) => { me = m; $("who").textContent = m.workspace; }).catch(() => { $("setup").classList.remove("hidden"); });
 })();

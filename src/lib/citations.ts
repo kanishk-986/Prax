@@ -4,10 +4,11 @@
 // display time, so editing an alias list re-scores every past run.
 
 export type Engine = "claude" | "openai" | "gemini" | "perplexity";
+// Names match PROVIDERS in src/lib/providers.ts (scripts/test-providers.ts checks it).
 export const ENGINES: { id: Engine; name: string; model: string; live: boolean }[] = [
-  { id: "openai", name: "ChatGPT (OpenAI)", model: "gpt-5", live: true },
-  { id: "gemini", name: "Gemini", model: "gemini-3.8-flash", live: true },
-  { id: "claude", name: "Claude", model: "claude-opus-5-5", live: true },
+  { id: "openai", name: "OpenAI ChatGPT", model: "gpt-5", live: true },
+  { id: "gemini", name: "Google Gemini", model: "gemini-3.8-flash", live: true },
+  { id: "claude", name: "Anthropic Claude", model: "claude-opus-5-5", live: true },
   { id: "perplexity", name: "Perplexity", model: "sonar", live: true },
 ];
 

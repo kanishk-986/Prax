@@ -10,6 +10,7 @@ import { Section, KpiTiles, DarkCard, StartCards, type TourStep } from "@/compon
 import { useToast, haptic } from "@/components/toaster";
 import { decodeText } from "@/lib/text";
 import { askExtension, parseJSON } from "@/lib/bridge";
+import { DraftModelRow } from "@/components/provider-mark";
 import {
   mergeStudio, humanScore, LENGTHS, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, DEFAULT_TUNING, DEFAULT_SAFETY,
   type Studio, type Style, type Playbook, type Tuning, type Safety, type Fingerprint,
@@ -88,6 +89,7 @@ export default function StudioPage() {
                 ))}
               </section>
             </div>
+            <DraftModelRow href={`/w/${ws.slug}/extension`} />
             <StartCards tour="start" items={[
               { title: fp?.summary ? "Refresh the voice" : "Build the voice", sub: "Add posts and comments he wrote; Prax learns how he sounds.", icon: Wand2, primary: !fp?.summary, onClick: () => setTab("Voice Lab") },
               { title: "Test a rewrite", sub: "Paste a draft and see it rewritten and scored.", icon: Star, onClick: () => setTab("Rewrite Lab") },

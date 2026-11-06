@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, today } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
+import { ProviderMark } from "@/components/provider-mark";
 import { upsertToday } from "@/components/content/shared";
 import { type ReportSnapshot } from "@/components/citations-report";
 import {
@@ -325,13 +326,13 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
         ))}{!active.length && <span className={s.small}>Add and approve questions first.</span>}</div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3"><span className={s.label}>Engines</span>{LIVE.map((e) => (
-        <label key={e.id} className={cx("flex items-center gap-1.5 text-[13px]", !ready.includes(e.id) && "opacity-50")}><input type="checkbox" disabled={!ready.includes(e.id)} checked={engines.includes(e.id)} onChange={(ev) => setPickE(ev.target.checked ? [...engines, e.id] : engines.filter((x) => x !== e.id))} />{e.name}</label>
+        <label key={e.id} className={cx("flex items-center gap-1.5 text-[13px]", !ready.includes(e.id) && "opacity-50")}><input type="checkbox" disabled={!ready.includes(e.id)} checked={engines.includes(e.id)} onChange={(ev) => setPickE(ev.target.checked ? [...engines, e.id] : engines.filter((x) => x !== e.id))} /><ProviderMark id={e.id} bold={false} /></label>
       ))}{!ready.length && <Link href={`/w/${ws.slug}/extension#search-keys`} className={cx(s.btn, s.sm)}>Add a key</Link>}</div>
       <div className="mt-4 flex items-center gap-3"><button className={cx(s.btn, s.red)} disabled={busy || !draft.trim() || !pickQ.length || !engines.length} onClick={run}>{busy ? "Testing" : `Test ${pickQ.length * engines.length} runs`}</button><span className={s.small}>API with web search</span></div>
       {res && res.length > 0 && (
         <div className={cx(s.box, "mt-4 overflow-x-auto")}>
           <table className={s.table}><thead><tr><th>Question</th><th>Engine</th><th>Result</th></tr></thead>
-            <tbody>{res.map((r, i) => <tr key={i}><td className="max-w-[340px]">{r.q}</td><td className={s.small}>{ENGINES.find((e) => e.id === r.engine)?.name}</td><td><span className={cx(s.pill, r.named ? s.pRed : s.pLine)} title={r.answer.slice(0, 400)}>{r.answer.startsWith("Failed") ? "Failed" : r.named ? "Would name him" : "Not named"}</span></td></tr>)}</tbody>
+            <tbody>{res.map((r, i) => <tr key={i}><td className="max-w-[340px]">{r.q}</td><td className={s.small}><ProviderMark id={r.engine} short bold={false} className="text-[#141414]" /></td><td><span className={cx(s.pill, r.named ? s.pRed : s.pLine)} title={r.answer.slice(0, 400)}>{r.answer.startsWith("Failed") ? "Failed" : r.named ? "Would name him" : "Not named"}</span></td></tr>)}</tbody>
           </table>
         </div>
       )}

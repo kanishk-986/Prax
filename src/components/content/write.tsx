@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, today, fmtDay, addDays } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
+import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import { humanScore } from "@/lib/studio";
 import { PILLARS } from "@/lib/campaigns";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS } from "@/lib/content";
@@ -222,7 +223,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   async function genImage() {
     const keys = ext?.searchKeys ?? {};
     const provider = keys.openai ? "openai" : keys.gemini ? "gemini" : "";
-    if (!provider) { setErr("Connect an OpenAI or Google key first, on the Extension page."); return; }
+    if (!provider) { setErr("No OpenAI or Google Gemini key in this browser. Connect one on the Extension page first."); return; }
     setBusy("image"); setErr("");
     const brief = layout === "statement" ? `A clean statement card: the line "${hook}" set large in dark type on white, a thin red rule, generous margins.` : layout === "diagram" ? `A simple diagram of three to five outlined boxes joined by thin red arrows, explaining: ${idea?.title}. Dark lines on white.` : `An editorial photograph for a LinkedIn post about: ${idea?.title}. Calm, professional, no text.`;
     try {
@@ -464,9 +465,9 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                   <span className="text-[13px] font-semibold">{t}</span><span className="text-[12px] text-muted">{sub}</span></button>))}</div>
               <label className="flex flex-col gap-1.5"><span className="label">Anything to add to the image brief</span><input className="field" value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder="For example: a settlement line meeting a ledger" /></label>
               {ext?.searchKeys?.openai || ext?.searchKeys?.gemini ? (
-                <div className="flex flex-wrap items-center gap-2"><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : image ? "Make another" : "Make the image"}</button>{image && <a className="btn" href={image} download="post-visual.png"><Download size={14} /> Download</a>}{image && <button className="btn btn-ghost" onClick={() => setImage(null)}>Remove</button>}</div>
+                <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-[12.5px] text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-[12.5px]" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : image ? "Make another" : "Make the image"}</button>{image && <a className="btn" href={image} download="post-visual.png"><Download size={14} /> Download</a>}{image && <button className="btn btn-ghost" onClick={() => setImage(null)}>Remove</button>}</div>
               ) : (
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="min-w-[220px] flex-1"><b className="block text-[13.5px]">Image key not connected</b><span className="text-[12.5px] text-muted">Add an OpenAI or Google Nano Banana key to make images. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect image key</Link></div>
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><KeyState on={false} className="text-[12.5px]" /><span className="text-[12.5px] text-muted">Images use the OpenAI or Google Gemini (Nano Banana) key. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect</Link></div>
               )}
             </>}
           </div>}
