@@ -12,6 +12,7 @@ import { cap, fullNameOf, firstNameOf, companyOf, pillarsOf, regionText, possess
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS,
   REPURPOSE_KINDS, parseRepurpose, repurposeFormat, repurposeLabel, hasResults, type RepurposeKey, type Piece } from "@/lib/content";
 import { usePostImage, storePostImage, removePostImage, imageDownloadUrl } from "./media";
+import { VideoPanel } from "./video";
 import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
 import { inProfile } from "@/lib/citations";
 import { useCitationProfile } from "@/lib/citation-profile";
@@ -103,6 +104,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const [imgPath, setImgPath] = useState("");
   const storedImg = usePostImage(imgPath);
   const shownImg = image ?? storedImg;
+  // I6: a recorded or uploaded video is stored with the post (db/029), like the image.
+  const [videoPath, setVideoPath] = useState("");
   // CS30: the posted piece to repurpose, the kinds asked for, and the pieces that came back.
   const [rpId, setRpId] = useState("");
   const [rpKinds, setRpKinds] = useState<RepurposeKey[]>(DEFAULT_PIECES);
@@ -134,7 +137,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     setSrc(seed.source_kind && seed.source_kind !== "repurpose" ? (seed.source_kind as SourceKind) : "idea"); setSrcText(seed.resource || seed.title); setIdea({ title: seed.title, why: "", pillar: seed.pillar, score: 0 });
     setPillar(seed.pillar || ""); setChannel(seed.channel === "company" ? "company" : PROFILE_CHANNEL); setNewsletter(!!seed.newsletter);
     setText(seed.draft || ""); setHook(seed.hook || ""); if (seed.script && seed.script.beats) setScript({ ...emptyScript(), ...seed.script } as Script);
-    setImage(null); setImgPath(seed.image_path || ""); if (seed.visual?.layout) setLayout(seed.visual.layout); if (seed.visual?.slides?.length) setSlides(seed.visual.slides);
+    setImage(null); setImgPath(seed.image_path || ""); setVideoPath(seed.video_path || ""); if (seed.visual?.layout) setLayout(seed.visual.layout); if (seed.visual?.slides?.length) setSlides(seed.visual.slides);
     // A Discovery or AI citations topic skips the starting point; Discovery's suggested angle comes preselected.
     const fromDisc = seed.source_kind === "discovery", fromCit = seed.topic === "AI citations" || seed.source_kind === "gap";
     const base = suggestAngles(seed.title, region);
@@ -379,7 +382,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     window.open("https://www.linkedin.com/feed/", "_blank", "noopener");
     toast("Copied. LinkedIn is open in a new tab: paste, then press Post there.");
   }
-  const reset = () => { setAngles([]); setAngle(0); setOwnAngle(""); setTopic(null); setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setImgPath(""); setPieces([]); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
+  const reset = () => { setAngles([]); setAngle(0); setOwnAngle(""); setTopic(null); setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setImgPath(""); setVideoPath(""); setPieces([]); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
 
   const canNext = [
     src === "repurpose" ? false : src === "link" ? !!page : src === "pdf" ? !!pdf : src === "comment" ? !!commentPick : src === "gap" ? !!gapPick : srcText.trim().length > 3,
@@ -592,7 +595,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                   <span className="text-meta font-semibold capitalize">{k} cover</span></button>))}</div>
               <div className="card flex flex-wrap items-center gap-3 p-4"><span className="min-w-[200px] flex-1"><b className="block">Burned-in captions</b><span className="text-meta text-muted">Most feed videos play muted, so the words carry the point.</span></span>
                 <div className="flex rounded-lg border border-line p-0.5">{[["bold", "Bold block"], ["line", "Clean line"], ["off", "Off"]].map(([k, l]) => <button key={k} className={`h-8 rounded-md px-3 text-body font-semibold ${script.captions === k ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => setScript({ ...script, captions: k })}>{l}</button>)}</div></div>
-              <p className="m-0 rounded-xl bg-surface-2 px-3.5 py-3 text-body text-ink">Prax writes the script and captions; {first} records the video.</p>
+              <VideoPanel wsId={ws.id} postId={postId} ensurePost={async () => (await save())?.id ?? null} path={videoPath} setPath={setVideoPath} script={{ ...script, hook: script.hook || hook }} title={idea?.title || hook} editable={editable} />
             </> : type === "Carousel" ? <>
               <H t="Build the carousel" sub="The house template keeps the text sharp. LinkedIn takes it as a PDF document." right={<span className="flex gap-2">{editable && <button className="btn h-9" disabled={!!busy} onClick={getSlides}><Sparkles size={14} /> {busy === "slides" ? "Writing" : slides.length ? "Write again" : "Write the slides"}</button>}<button className="btn btn-primary h-9" disabled={!slides.length} onClick={() => { const b = carouselPdf(slides, byline.replace(" · ", " - ")); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([b.buffer as ArrayBuffer], { type: "application/pdf" })); a.download = `${(idea?.title || "carousel").slice(0, 40).replace(/[^\w]+/g, "-").toLowerCase()}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }}><Download size={14} /> Download PDF</button></span>} />
               <div className="flex gap-2.5 overflow-x-auto pb-2">{slides.map((s, i) => { const dark = i === 0 || i === slides.length - 1; return (

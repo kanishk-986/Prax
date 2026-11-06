@@ -13,7 +13,7 @@ export type Post = {
   impressions: number | null; reactions: number | null; comments: number | null; created_at?: string;
   // db/022: results per post, repurpose link, first comment and reply prep, the stored image.
   reposts?: number | null; results_at?: string | null; results_source?: string; repurposed_from?: string | null;
-  prep?: { first?: string; replies?: { q: string; a: string }[]; at?: string }; image_path?: string;
+  prep?: { first?: string; replies?: { q: string; a: string }[]; at?: string }; image_path?: string; video_path?: string;
   channel?: Channel; newsletter?: boolean; source_kind?: string; source_ref?: string; hook?: string;
   script?: { hook?: string; beats?: { say: string; show: string }[]; close?: string; caption?: string; cover?: string; captions?: string };
   visual?: { mode?: string; layout?: string; prompt?: string; slides?: { title: string; body: string }[] }; claims_ack?: boolean; resource?: string;
