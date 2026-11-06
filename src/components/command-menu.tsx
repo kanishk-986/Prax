@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, CornerDownLeft, User, ArrowRight } from "lucide-react";
+import { Search, CornerDownLeft, User, Settings, type LucideIcon } from "lucide-react";
+import { NAV } from "@/components/sidebar";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace";
 
-type Item = { id: string; label: string; hint?: string; icon: "page" | "person"; go: string };
+type Item = { id: string; label: string; hint?: string; Icon: LucideIcon; kind: "page" | "person"; go: string };
 
-const PAGES: [string, string][] = [["", "Dashboard"], ["/today", "Today"], ["/pipeline", "Pipeline"], ["/network", "Network"], ["/profile", "Profile Studio"], ["/studio-content", "Content Studio"], ["/studio", "Comment Studio"], ["/comments", "Engagement"], ["/templates", "Templates"], ["/citations", "AI citations"], ["/strategy", "Strategy"], ["/notes", "Notes"], ["/settings", "Settings"]];
+// Every page in the sidebar, in the same order and with the same icons, then Settings.
+const PAGES: { href: string; label: string; icon: LucideIcon }[] = [...NAV, { href: "/settings", label: "Settings", icon: Settings }];
 
 /** Cmd+K: jump to any page or person. */
 export function CommandMenu() {
@@ -36,8 +38,8 @@ export function CommandMenu() {
 
   const items: Item[] = useMemo(() => {
     const s = q.toLowerCase();
-    const pages = PAGES.filter(([, l]) => l.toLowerCase().includes(s)).map(([h, l]) => ({ id: "p" + h, label: l, hint: "Go to", icon: "page" as const, go: `/w/${ws.slug}${h}` }));
-    const ppl = s ? people.filter((p) => `${p.name} ${p.company}`.toLowerCase().includes(s)).slice(0, 6).map((p) => ({ id: p.id, label: p.name, hint: `${p.company} · ${p.stage}`, icon: "person" as const, go: `/w/${ws.slug}/pipeline?p=${p.id}` })) : [];
+    const pages = PAGES.filter((p) => p.label.toLowerCase().includes(s)).map((p) => ({ id: "p" + p.href, label: p.label, Icon: p.icon, kind: "page" as const, go: `/w/${ws.slug}${p.href}` }));
+    const ppl = s ? people.filter((p) => `${p.name} ${p.company}`.toLowerCase().includes(s)).slice(0, 6).map((p) => ({ id: p.id, label: p.name, hint: `${p.company} · ${p.stage}`, Icon: User, kind: "person" as const, go: `/w/${ws.slug}/pipeline?p=${p.id}` })) : [];
     return [...ppl, ...pages];
   }, [q, people, ws.slug]);
 
@@ -46,22 +48,23 @@ export function CommandMenu() {
   return (
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/30 px-4 pt-[14vh]" onMouseDown={() => setOpen(false)}>
       <div className="anim-rise w-full max-w-[560px] overflow-hidden rounded-2xl border border-line bg-surface shadow-[var(--shadow-lg)]" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Command menu">
-        <div className="flex items-center gap-2 border-b border-line px-4">
-          <Search size={16} className="text-faint" />
+        <div className="flex h-14 items-center gap-3 border-b border-line px-4">
+          <Search size={16} className="shrink-0 text-muted" aria-hidden="true" />
           <input ref={input} id="cmdk" value={q} onChange={(e) => { setQ(e.target.value); setI(0); }} placeholder="Jump to a page or person"
             onKeyDown={(e) => { if (e.key === "ArrowDown") { e.preventDefault(); setI((x) => Math.min(x + 1, items.length - 1)); } if (e.key === "ArrowUp") { e.preventDefault(); setI((x) => Math.max(x - 1, 0)); } if (e.key === "Enter") run(items[i]); }}
-            className="h-12 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint" />
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
           <span className="kbd">esc</span>
         </div>
-        <ul className="max-h-[360px] overflow-auto p-1.5">
+        <ul className="max-h-[380px] overflow-auto p-1.5">
           {items.length === 0 && <li className="px-3 py-6 text-center text-[13px] text-muted">No matches</li>}
           {items.map((it, k) => (
             <li key={it.id}>
-              <button onMouseEnter={() => setI(k)} onClick={() => run(it)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] ${k === i ? "bg-surface-2" : ""}`}>
-                {it.icon === "person" ? <User size={15} className="text-muted" /> : <ArrowRight size={15} className="text-muted" />}
-                <span className="font-medium">{it.label}</span>
-                <span className="truncate text-muted">{it.hint}</span>
-                {k === i && <CornerDownLeft size={14} className="ml-auto text-faint" />}
+              {(k === 0 || items[k - 1].kind !== it.kind) && <div className="px-3 pt-2 pb-1 text-[11.5px] font-medium text-muted">{it.kind === "person" ? "People" : "Pages"}</div>}
+              <button onMouseEnter={() => setI(k)} onClick={() => run(it)} className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[13.5px] ${k === i ? "bg-surface-2" : ""}`}>
+                <it.Icon size={16} className="shrink-0 text-muted" aria-hidden="true" />
+                <span className="truncate font-medium">{it.label}</span>
+                {it.hint && <span className="truncate text-[12.5px] text-muted">{it.hint}</span>}
+                <CornerDownLeft size={14} className={`ml-auto shrink-0 text-muted ${k === i ? "" : "invisible"}`} aria-hidden="true" />
               </button>
             </li>
           ))}

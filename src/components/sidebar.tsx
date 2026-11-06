@@ -7,7 +7,7 @@ import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
 import { navActive } from "@/lib/shell";
 
-const NAV = [
+export const NAV = [
   { href: "", label: "Dashboard", icon: LayoutDashboard },
   { href: "/today", label: "Today", icon: CheckSquare },
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
@@ -50,8 +50,8 @@ export function Sidebar() {
         <ChevronsUpDown size={14} className="text-faint" />
       </Link>
       <button onClick={() => { setOpen(false); window.dispatchEvent(new Event("prax:cmdk")); }}
-        className="flex h-8 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted shadow-[var(--shadow)] transition-colors hover:border-line-strong hover:text-ink">
-        <Search size={14} /> Search <span className="ml-auto flex gap-0.5"><span className="kbd">⌘</span><span className="kbd">K</span></span>
+        className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-[13px] text-muted shadow-[var(--shadow)] transition-colors hover:border-line-strong hover:text-ink">
+        <Search size={14} /> Search <span className="ml-auto flex items-center gap-1"><span className="kbd">⌘</span><span className="kbd">K</span></span>
       </button>
       <nav className="flex flex-col gap-0.5">{NAV.map((n) => item(n.href, n.label, n.icon))}</nav>
       <div className="mt-auto flex flex-col gap-0.5">
