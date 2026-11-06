@@ -722,3 +722,11 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - P1 (Q154, agreed): Forgot password can't email testers on the free tier. the owner can copy a reset link from Settings → Team; the Forgot password page says to ask the person who invited you.
 - P2: re-running db/011 inserts "Shashi Pal" and "Antier" into any workspace with a lone company entity; guard it to Shashi's workspace only.
 - Q155 (agreed): "?" in each section opens a small menu with Replay tour and Open guide.
+
+## Collapsible sidebar, agreed 7 Nov 2026 (Q156 to Q160)
+
+- Q156: a small rounded-square toggle centred on the sidebar's right edge collapses it to an icon rail and widens the page; click again to expand; smooth slide; shortcut ⌘ + . (period).
+- Q157: the rail shows the Corners mark, section icons in their groups with thin dividers, the current section in red, a tooltip with the name on hover, and counts shown as dots. ⌘K and the account menu still work.
+- Q158: the choice is remembered per browser (localStorage, with try/catch).
+- Q159: below 1280 px wide it starts collapsed, but a saved choice wins; phones keep the slide-in drawer.
+- Q160: built right after Connections merges (both touch sidebar.tsx), shipped in the same deploy.

@@ -385,3 +385,4 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | TS9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |
 | TS10 | Copy reset link per tester in Settings → Team; Forgot password page says ask your inviter | 7 Nov Q154 | Not started |
 | TS11 | "?" menu in each section: Replay tour and Open guide | 7 Nov Q155 | Not started |
+| SB1 | Collapsible sidebar: edge toggle, icon rail with tooltips, ⌘., remembered per browser, auto-collapse under 1280 | 7 Nov Q156 to Q160 | Not started (after Connections merge) |
