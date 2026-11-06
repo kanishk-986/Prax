@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useCallback, useEffect, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -61,7 +62,7 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
         </section>
         <section>
           <div className="label">Proof points</div>
-          <List items={p.proofs.map((x, i) => <label key={i} className="flex items-start gap-2"><input type="checkbox" disabled={!ed} checked={x.cleared} onChange={(e) => setP({ ...p, proofs: p.proofs.map((y, j) => (j === i ? { ...y, cleared: e.target.checked } : y)) })} /><span>{x.text} <span className="text-meta font-semibold" style={{ color: x.cleared ? "#141414" : "#d64545" }}>{x.cleared ? "Cleared" : "Not cleared"}</span></span></label>)} onRemove={(i) => setP({ ...p, proofs: p.proofs.filter((_, j) => j !== i) })} />
+          <List items={p.proofs.map((x, i) => <SwitchRow key={i} disabled={!ed} on={x.cleared} onChange={(v) => setP({ ...p, proofs: p.proofs.map((y, j) => (j === i ? { ...y, cleared: v } : y)) })} label={<span className="font-normal">{x.text}</span>} hint={<span className="font-semibold" style={{ color: x.cleared ? "#141414" : "#9e1c1c" }}>{x.cleared ? "Cleared" : "Not cleared"}</span>} />)} onRemove={(i) => setP({ ...p, proofs: p.proofs.filter((_, j) => j !== i) })} />
           {ed && <div className="mt-2 flex gap-2"><input className="field" placeholder="For example: in business since 2011" value={add.proof} onChange={(e) => setAdd({ ...add, proof: e.target.value })} /><button className="btn" aria-label="Add proof point" onClick={() => { if (add.proof.trim()) { setP({ ...p, proofs: [...p.proofs, { text: add.proof.trim(), cleared: false }] }); setAdd({ ...add, proof: "" }); } }}><Plus size={14} /></button></div>}
         </section>
         <section>

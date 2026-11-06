@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useEffect, useMemo, useState } from "react";
 import { X, Copy, Sparkles, Repeat2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -163,7 +164,7 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
             <label className="flex flex-col gap-1"><span className="label">Type</span><select className="field" value={f.format || "Text post"} onChange={(e) => set("format", e.target.value)}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="flex flex-col gap-1"><span className="label">Pillar</span><select className="field" value={f.pillar} onChange={(e) => set("pillar", e.target.value)}><option value="">Not set</option>{pillars.map((x) => <option key={x}>{x}</option>)}</select></label>
             <label className="flex flex-col gap-1"><span className="label">Where it goes</span><select className="field" value={f.channel ?? PROFILE_CHANNEL} onChange={(e) => set("channel", e.target.value as Channel)}><option value={PROFILE_CHANNEL}>{possessive(first)} own profile</option><option value="company">{cap(company)} company page</option></select></label>
-            <label className="flex items-end gap-2 pb-2 text-body">{f.format === "Article" && settings?.newsletter.name ? <><input type="checkbox" checked={!!f.newsletter} onChange={(e) => set("newsletter", e.target.checked)} />Part of {settings.newsletter.name}</> : null}</label>
+            <div className="flex items-end pb-2">{f.format === "Article" && settings?.newsletter.name ? <SwitchRow className="w-full" on={!!f.newsletter} onChange={(v) => set("newsletter", v)} label={`Part of ${settings.newsletter.name}`} /> : null}</div>
             {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-surface-2 px-3 py-2 text-meta font-semibold text-ink">Company content, not for {possessive(first)} profile</p>}
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Campaign</span><select className="field" value={f.campaign_id ?? ""} onChange={(e) => set("campaign_id", e.target.value || null)}><option value="">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <div className="col-span-2 flex flex-col gap-1">

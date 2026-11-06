@@ -2,6 +2,7 @@
 // Pipeline on one screen: Do next (the five most urgent), then everyone grouped by stage or by company,
 // a lead panel, a pipeline switcher with templates, stages and lost reasons, and import. No drag and drop:
 // every move asks for the next action and its date, so it lands on Today. [ and ] move the focused row.
+import { SwitchRow } from "@/components/switch";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useWorkspace, useSegments, today as todayYmd } from "@/lib/workspace";
@@ -271,8 +272,6 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
           <div data-tour="tools" className="flex flex-wrap items-center gap-2 rounded-xl">
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people and companies" aria-label="Search people and companies"
               className="h-[38px] min-w-0 flex-[1_1_240px] rounded-[10px] border border-[#e3e3e3] bg-white px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d64545]" />
-            <button type="button" aria-pressed={fOverdue} onClick={() => setFOverdue(!fOverdue)} className={`pl-chip ${fOverdue ? "on" : ""}`}>Overdue</button>
-            <button type="button" aria-pressed={fHot} onClick={() => setFHot(!fHot)} className={`pl-chip ${fHot ? "on" : ""}`}>Hot</button>
             <span className="relative">
               <button type="button" aria-expanded={menu === "filters"} onClick={() => setMenu(menu === "filters" ? null : "filters")} className={`pl-chip ${nFilters ? "on" : ""}`}>{nFilters ? `More filters · ${nFilters}` : "More filters"}</button>
               {menu === "filters" && <>
@@ -286,10 +285,11 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
                 </div>
               </>}
             </span>
-            <button type="button" role="switch" aria-checked={grouped} onClick={() => setGrouped(!grouped)} className="ml-auto inline-flex h-[38px] items-center gap-2.5 whitespace-nowrap rounded-lg px-1 text-body font-semibold focus-visible:outline-2 focus-visible:outline-[#d64545]">
-              <span className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors ${grouped ? "bg-[#141414]" : "bg-[#d6d6d6]"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-[0_1px_2px_rgba(20,20,20,.25)] transition-[left] duration-200 ${grouped ? "left-4" : "left-0.5"}`} /></span>
-              Group by company
-            </button>
+            <span className="flex min-h-[38px] flex-wrap items-center gap-x-5 gap-y-2 sm:ml-auto sm:pl-2">
+              <SwitchRow inline on={fOverdue} onChange={setFOverdue} label="Overdue" />
+              <SwitchRow inline on={fHot} onChange={setFHot} label="Hot" />
+              <SwitchRow inline on={grouped} onChange={setGrouped} label="Group by company" />
+            </span>
           </div>
 
           <section data-tour="list" className="pl-rise overflow-hidden rounded-2xl border border-line bg-white">

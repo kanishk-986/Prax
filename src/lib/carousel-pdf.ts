@@ -43,6 +43,18 @@ export class Pdf {
   }
 }
 
+/** The Prax mark, "Corners" (src/components/logo.tsx), as PDF operators: the 24 by 24 tile with rx 5.5, the white
+ *  corner M4.5 4.5H15V7.5H7.5V15H4.5Z and the red corner M19.5 19.5H9V16.5H16.5V9H19.5Z, drawn size points square
+ *  with its bottom left at (x, y). On a dark page it inverts as in the sidebar: white tile, ink corner, red corner.
+ *  The same as logoOps in src/lib/pdf.ts, kept here because this file imports nothing (the logic tests check they match). */
+const LOGO_TILE = "5.5 0 m 18.5 0 l 21.538 0 24 2.462 24 5.5 c 24 18.5 l 24 21.538 21.538 24 18.5 24 c 5.5 24 l 2.462 24 0 21.538 0 18.5 c 0 5.5 l 0 2.462 2.462 0 5.5 0 c h";
+const LOGO_YOU = "4.5 4.5 m 15 4.5 l 15 7.5 l 7.5 7.5 l 7.5 15 l 4.5 15 l h";
+const LOGO_THEM = "19.5 19.5 m 9 19.5 l 9 16.5 l 16.5 16.5 l 16.5 9 l 19.5 9 l h";
+export function logoOps(x: number, y: number, size: number, onDark = false) {
+  const s = +(size / 24).toFixed(4), ink = "0.078 0.078 0.078", white = "1 1 1";
+  return `q ${s} 0 0 ${-s} ${+x.toFixed(2)} ${+(y + size).toFixed(2)} cm ${onDark ? white : ink} rg ${LOGO_TILE} f ${onDark ? ink : white} rg ${LOGO_YOU} f 0.839 0.271 0.271 rg ${LOGO_THEM} f Q`;
+}
+
 export type Slide = { title: string; body: string };
 /** The house carousel template: 4:5 pages, dark cover and closing slide, white middle slides, a red rule and a byline
  *  (the profile's name and company). */
@@ -59,7 +71,8 @@ export function carouselPdf(slides: Slide[], byline = "") {
     y -= 14;
     for (const l of wrap(s.body, 15, W - 2 * M)) { pdf.text(p, M, y, l, 15, sub); y -= 22; }
     pdf.rect(p, M, M + 40, 44, 4, "#d64545");
-    pdf.text(p, M, M + 14, byline, 11, sub, true);
+    p.push(logoOps(M, M + 10, 16, dark));
+    pdf.text(p, M + 24, M + 14, byline, 11, sub, true);
   });
   return pdf.bytes();
 }

@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useState } from "react";
 import { Plus, X, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -115,12 +116,13 @@ function Drawer({ table, fields, rec, defaults, onClose, byline }: { table: stri
         <div className="flex-1 overflow-auto px-5 py-4">
           {byline && <p className="m-0 mb-3 text-meta text-muted">{byline.name ? <>Added by <b className="font-semibold text-ink">{byline.name}</b>, {byline.at}</> : <>Added {byline.at}</>}</p>}
           <fieldset disabled={!editable} className="grid grid-cols-2 gap-3">
-            {fields.map((x) => (
-              <label key={x.key} className={`flex flex-col gap-1 ${x.wide || x.type === "textarea" ? "col-span-2" : ""} ${x.type === "checkbox" ? "flex-row items-center gap-2" : ""}`}>
-                {x.type !== "checkbox" && <span className="label">{x.label}</span>}
+            {fields.map((x) => x.type === "checkbox" ? (
+              <SwitchRow key={x.key} className={x.wide ? "col-span-2" : ""} on={!!f[x.key]} onChange={(v) => setF({ ...f, [x.key]: v })} label={x.label} />
+            ) : (
+              <label key={x.key} className={`flex flex-col gap-1 ${x.wide || x.type === "textarea" ? "col-span-2" : ""}`}>
+                <span className="label">{x.label}</span>
                 {x.type === "textarea" ? <textarea id={`f-${x.key}`} rows={x.key === "body" || x.key === "draft" || x.key === "text" ? 10 : 4} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />
                   : x.type === "select" ? <select id={`f-${x.key}`} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })}>{x.options!.map((o) => <option key={o} value={o}>{x.optionLabels?.[o] ?? o}</option>)}</select>
-                  : x.type === "checkbox" ? <><input id={`f-${x.key}`} type="checkbox" checked={!!f[x.key]} onChange={(e) => setF({ ...f, [x.key]: e.target.checked })} /><span className="text-body">{x.label}</span></>
                   : <input id={`f-${x.key}`} type={x.type ?? "text"} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />}
               </label>
             ))}

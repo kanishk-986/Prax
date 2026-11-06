@@ -96,7 +96,7 @@ export function CriteriaTab({ d, findings, save }: { d: Data; findings: Finding[
           <label className="flex items-center justify-between gap-2.5 text-body">Entities per run <b className="num">{s.batch}</b></label>
           <input type="range" min={5} max={30} step={1} disabled={dis} value={s.batch} onChange={(e) => setS({ ...s, batch: Number(e.target.value) })} onMouseUp={() => save({ batch: s.batch }, "Batch saved")} onTouchEnd={() => save({ batch: s.batch }, "Batch saved")} onKeyUp={() => save({ batch: s.batch }, "Batch saved")} aria-label="Entities per run" className="accent-[#d64545]" />
           <label className="flex items-center justify-between gap-2.5 text-body">Window
-            <span className="flex rounded-lg border border-line p-0.5">{[7, 3].map((w) => <button key={w} type="button" disabled={dis} className={`h-8 rounded-md px-3 text-body font-semibold ${s.window_days === w ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => save({ window_days: w }, `Window set to ${w === 3 ? "72 hours" : "7 days"}`)}>{w === 3 ? "72 hours" : "7 days"}</button>)}</span></label>
+            <span className="flex rounded-lg border border-line p-0.5">{[7, 3].map((w) => <button key={w} type="button" disabled={dis} aria-pressed={s.window_days === w} className={`h-8 whitespace-nowrap rounded-md px-3 text-body font-semibold ${s.window_days === w ? "bg-[#141414] text-white" : "text-muted hover:text-ink"}`} onClick={() => save({ window_days: w }, `Window set to ${w === 3 ? "72 hours" : "7 days"}`)}>{w === 3 ? "72 hours" : "7 days"}</button>)}</span></label>
         </div>
       </aside>
     </div>

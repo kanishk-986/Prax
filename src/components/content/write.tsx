@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Lightbulb, Link2, FileText, PenLine, MessageSquare, TrendingDown, Repeat2, Copy, Download, Sparkles, X, Check } from "lucide-react";
@@ -627,7 +628,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
           {step === S.plan && <div className="flex flex-col gap-3.5" data-tour="handoff">
             {angleText && <AngleBar />}
             <H t="Plan and hand off" sub={`Prax never posts. It copies the post, opens LinkedIn and reminds ${first} at the planned time.`} right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
-            {type === "Article" && settings.newsletter.name && <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-3 text-body"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} />Part of the <b>{settings.newsletter.name}</b> newsletter</label>}
+            {type === "Article" && settings.newsletter.name && <SwitchRow className="rounded-xl border border-line bg-white px-3.5 py-3" on={newsletter} onChange={setNewsletter} label={<>Part of the <b className="font-semibold">{settings.newsletter.name}</b> newsletter</>} />}
             {!!flags.length && <div className="rounded-xl border-2 border-[#d64545] bg-white p-4" data-tour="claims">
               <div className="mb-2 text-body font-semibold">Check before it goes to {first}</div>
               <ul className="m-0 flex list-none flex-col gap-2 p-0">{flags.map((f, i) => <li key={i} className="text-body"><span className="font-semibold text-[#d64545]">{f.kind === "returns" ? "Returns" : f.kind === "timeline" ? "Timeline" : f.kind === "client" ? "Client named" : f.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{f.text}&rdquo;<span className="block text-meta text-muted">{f.why}</span></li>)}</ul>

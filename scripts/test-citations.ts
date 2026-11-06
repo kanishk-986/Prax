@@ -4,7 +4,7 @@ import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionO
   peopleIn, suggestPeerExperts, liveProfiles, archivedProfiles, currentProfile, profileScope, scoped, withProfile, postProfile, inProfile, profileName, nextSort, deleteConfirmed, migrateRows, NO_PROFILE,
   type Entity, type Run, type Question, type Profile } from "../src/lib/citations.ts";
 import { readFileSync } from "node:fs";
-import { buildPdf, svgPathToPdf, pdfRgb } from "../src/lib/pdf.ts";
+import { buildPdf, svgPathToPdf, pdfRgb, logoOps } from "../src/lib/pdf.ts";
 import { MARKS } from "../src/lib/providers.ts";
 
 let fails = 0;
@@ -229,6 +229,16 @@ eq("PDF page count: cover, contents, sections", [(small.match(/\/Type \/Page /g)
 const big = pdfText(buildPdf({ ...doc, sections: [{ title: "Long", tables: [{ head: ["A", "B"], widths: [0.5, 0.5], rows: Array.from({ length: 120 }, (_, i) => [`Row ${i}`, "x"]) }] }] }));
 const pages = (big.match(/\/Type \/Page /g) ?? []).length;
 eq("long tables flow onto more pages, numbered", [pages > 3, big.includes(`Page ${pages} of ${pages}`)], [true, true]);
+// The Corners mark: on the cover and in every footer, with the same corner paths as src/components/logo.tsx.
+{
+  const logoSrc = (await import("node:fs")).readFileSync(new URL("../src/components/logo.tsx", import.meta.url), "utf8");
+  const paths = [...logoSrc.matchAll(/<path d="([^"]+)"/g)].map((m) => svgPathToPdf(m[1]));
+  const op = logoOps(0, 0, 24);
+  eq("PDF logo corners match logo.tsx", [paths.length, paths.every((x) => op.includes(x))], [2, true]);
+  eq("PDF logo: ink tile, white corner, red corner", [op.includes("0.078 0.078 0.078 rg 5.5 0 m"), op.includes("1 1 1 rg 4.5 4.5 m"), op.includes("0.839 0.271 0.271 rg 19.5 19.5 m")], [true, true, true]);
+  eq("PDF logo on the cover and on every footer", (small.match(/rg 4\.5 4\.5 m/g) ?? []).length, 1 + 2);
+  eq("PDF cover names Prax", small.includes("(Prax) Tj"), true);
+}
 eq("PDF text is escaped", pdfText(buildPdf({ ...doc, title: "A (b) c" })).includes("A \\(b\\) c"), true);
 
 // ---------- tracked profiles (db/017) ----------
@@ -301,7 +311,8 @@ eq("quadratic becomes a cubic", svgPathToPdf("M0 0Q3 3 6 0"), "0 0 m 2 2 4 2 6 0
 eq("every provider path converts to finite numbers", Object.values(MARKS).filter(Boolean).every((m) => { const o = svgPathToPdf(m!.path); return o.length > 50 && !/NaN|Infinity/.test(o); }), true);
 eq("hex colour to PDF rgb", pdfRgb("#D97757"), "0.851 0.467 0.341");
 const marked = pdfText(buildPdf({ ...doc, marks: { ChatGPT: { path: MARKS.openai!.path, color: MARKS.openai!.color }, Grok: { color: "#5f5f5f" } }, sections: [{ title: "Tools", tables: [{ head: ["AI tool", "ChatGPT"], widths: [0.5, 0.5], rows: [["ChatGPT", "1"], ["ChatGPT, Grok", "2"], ["Other", "3"]] }] }] }));
-eq("marks drawn: head in white, body in colour, dot fallback", [(marked.match(/ cm /g) ?? []).length, marked.includes("q 1 1 1 rg"), marked.includes("q 0 0 0 rg"), marked.includes("q 0.373 0.373 0.373 rg")], [3, true, true, true]);
+// (the Prax logo also uses cm, once per page, so it is taken off the count)
+eq("marks drawn: head in white, body in colour, dot fallback", [(marked.match(/ cm /g) ?? []).length - (marked.match(/rg 5\.5 0 m/g) ?? []).length, marked.includes("q 1 1 1 rg"), marked.includes("q 0 0 0 rg"), marked.includes("q 0.373 0.373 0.373 rg")], [3, true, true, true]);
 eq("names stay as text beside the marks", [marked.includes("(ChatGPT) Tj"), marked.includes("(Grok) Tj"), marked.includes("(Other) Tj")], [true, true, true]);
 
 // ---------- suggested peer experts (AC15) ----------

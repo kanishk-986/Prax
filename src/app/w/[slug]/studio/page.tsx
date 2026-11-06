@@ -1,4 +1,5 @@
 "use client";
+import { Switch, SwitchRow } from "@/components/switch";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload, Plus, X, Copy, Bookmark, Trash2, Download, ChevronDown, AudioLines, Star, PenLine } from "lucide-react";
@@ -164,14 +165,7 @@ function Seg<T extends string>({ value, options, onChange, disabled }: { value: 
 }
 
 function Toggle({ on, onChange, label, sub, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; sub?: string; disabled?: boolean }) {
-  return (
-    <label className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-0">
-      <span><span className="block text-body font-medium">{label}</span>{sub && <span className="block text-meta text-muted">{sub}</span>}</span>
-      <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-accent" : "bg-line-strong"}`}>
-        <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-      </button>
-    </label>
-  );
+  return <SwitchRow divider on={on} onChange={onChange} label={label} hint={sub} disabled={disabled} />;
 }
 
 // ---------------- Voice Lab ----------------
@@ -318,9 +312,7 @@ function Styles({ studio, save }: { studio: Studio; save: Save }) {
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1"><div className="text-body font-semibold">{s.name || "Untitled style"}{s.custom && <span className="chip ml-2">Custom</span>}</div><div className="text-meta text-muted">{s.desc}</div></div>
             {editable && <button className="btn h-7 px-2.5 text-meta" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? "Done" : "Tweak"}</button>}
-            <button type="button" role="switch" aria-checked={s.on} aria-label={`${s.name} on`} disabled={!editable} onClick={() => toggle(s.id)} className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${s.on ? "bg-accent" : "bg-line-strong"}`}>
-              <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${s.on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-            </button>
+            <Switch on={s.on} onChange={() => toggle(s.id)} disabled={!editable} label={s.name || "Untitled style"} />
           </div>
           {open === s.id ? (
             <div className="anim-rise mt-3 grid gap-2 md:grid-cols-[1fr_1fr]">

@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -404,7 +405,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
           </label>
         ))}</div>
       </Card>
-      <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-[#e8e8e8] p-3.5"><input type="checkbox" className="mt-0.5 accent-[#141414]" checked={check} disabled={!!prog} onChange={(e) => setCheck(e.target.checked)} /><span><span className="block text-[13.5px] font-semibold">Check tone and facts</span><span className={s.small}>One small call on your main AI key when a tracked name appears.</span></span></label>
+      <SwitchRow className="mt-3 rounded-xl border border-[#e8e8e8] p-3.5" on={check} disabled={!!prog} onChange={setCheck} label="Check tone and facts" hint="One small call on your main AI key when a tracked name appears." />
       <dl className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-[#fafafa] p-3.5 text-[13px]">
         <div><dt className={s.small}>Runs</dt><dd className={cx(s.tnum, "font-semibold")}>{total}</dd></div>
         <div><dt className={s.small}>Tokens, about</dt><dd className={cx(s.tnum, "font-semibold")}>{Math.round(est.inTok / 1000)}k in, {Math.round(est.outTok / 1000)}k out</dd></div>

@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useMemo } from "react";
 import { type Finding, type Band, BANDS, DIMENSIONS, hostOf } from "@/lib/discovery";
 import { Modal } from "@/components/content/shared";
@@ -32,7 +33,7 @@ export function FindingsTab({ d, filters, setFilters, open, act }: { d: Data; fi
             <select className="field h-[34px] sm:max-w-[190px]" value={String(filters[k])} onChange={(e) => setFilters({ ...filters, [k]: e.target.value })}>{o.map((x) => <option key={x}>{x}</option>)}</select>
           </label>
         ))}
-        <button type="button" aria-pressed={filters.comp} className={`btn col-span-2 h-[34px] sm:col-span-1 ${filters.comp ? "btn-dark" : ""}`} onClick={() => setFilters({ ...filters, comp: !filters.comp })}>Competitor watch</button>
+        <SwitchRow inline className="col-span-2 h-[34px] sm:col-span-1" on={filters.comp} onChange={(v) => setFilters({ ...filters, comp: v })} label="Competitor watch" />
         <span className="col-span-2 text-meta text-muted sm:ml-auto">{shown.length} of {live.length} findings</span>
       </div>
       {shown.map((f, i) => <FindingCard key={f.id} f={f} d={d} first={i === 0} open={open} act={act} />)}
