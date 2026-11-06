@@ -573,3 +573,8 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Not built: screen plus camera picture in picture. It needs a canvas composite that browsers throttle while the person is on another tab presenting, so it is not simple; say if it is wanted.
 - Tests: `node scripts/test-video.ts` (paths, accepted uploads, recorder format, camera error copy, trim maths, teleprompter, the .srt file, `db/029` matches the code).
 - **Checked** in Playwright Chromium with its fake camera and microphone, through a temporary preview route (deleted) rendering the real video card with a stand-in for Supabase Storage and REST: empty, live with prompter, countdown, recording, review, trimmed with the keyboard, cutting and saving progress, saved with toast (the saved clip was 2.1 s for a 1.0 to 3.1 trim), reload, both downloads, Remove and Undo, a wrong upload type, an upload, a denied camera, no `MediaRecorder` (Upload only), no script, a viewer; 1440 and 390, no page overflow, no console errors. Screenshots: `/private/tmp/claude-503/-Users-kanishk-raj-claude-md/5ea672f0-465e-415c-b793-7822bc9d8b7c/scratchpad/video-record/`. Not checked: Safari (no WebKit here; the trim's unmuted replay may need a fresh tap there), a real camera, real Supabase (bucket, policies, signed links, the 200 MB limit), the full Write a post page around the card.
+
+## Confirmed 7 Nov 2026 (Q126, Q127)
+
+- Q126: AI citations keeps two separate headline numbers, the person's and the company's. No combined 70/30 score. Confirmed by the user.
+- Q127: step 4 order (Inbox, weekly report, Playbook, profiles overview) confirmed.

@@ -192,7 +192,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | AC10 | Company tab (instead of a Person, Company, Both switch) | 5 Nov 20:01 "make a company tab in the end" | Live |
 | AC11 | Person, Company, Both switch | Q68 | Declined by user (replaced by AC10) |
 | AC12 | Strict name matching: full name with context, otherwise "needs review" | Q69 | Live |
-| AC13 | Headline score weighted 70% person, 30% company | Q70 | Declined by user (Q124, 7 Nov: two separate numbers) |
+| AC13 | Headline score weighted 70% person, 30% company | Q70 | Declined by user (confirmed Q126: person and company stay separate) |
 | AC14 | Facts sheet in two tabs (person and company) | Q72 | Live |
 | AC15 | Peer experts: Claude suggests 5 to 8 names from public sources, the user approves | Q73 | Built not live (suggestions from run answers, Approve or Dismiss; needs db/025) |
 | AC16 | API keys start blank and are added by the user; never shown as connected without a key | 5 Nov 20:01 | Live |
@@ -349,7 +349,7 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 | ID | Old status | Corrected status | Evidence |
 |---|---|---|---|
 | Header | "`origin/main` = local `main`… no branch holds unmerged work"; times labelled IST | Local `main` (`3b5ee6c`) is 18 commits ahead of `origin/main` (`26af0a5`). The live site still runs `daa6e68`. Times are UTC | `git log origin/main..main`; log timestamps |
-| AC13 | Declined by user (Q124, 7 Nov: two separate numbers) | Decided by Claude, not the user: two separate numbers, no 70/30 score. The user said "I'm not understanding question 124-25… I just forgot the context", and Claude decided it at 6 Nov 04:56. Confirm with the user | Log, 6 Nov 04:56 |
+| AC13 | Declined by user (Q124, 7 Nov: two separate numbers) | Decided by Claude, not the user: two separate numbers, no 70/30 score. The user said "I'm not understanding question 124-25… I just forgot the context", and Claude decided it at 6 Nov 04:56. Confirm with the user | Declined by user (confirmed Q126: person and company stay separate) |
 | Q125 | Not recorded as a decision | Decided by Claude at 6 Nov 04:56 (order: Inbox, weekly report, Playbook, overview), not answered by the user | Log, 6 Nov 04:56 |
 | I1, I2, I5, I6, I7 | In progress (agreed 7 Nov) | In progress (agreed 6 Nov 09:52 UTC). Nothing for them is on `main` yet; builders are running | Log U178; `grep` finds no SerpApi, Copilot, reply-check or camera code in `src` |
 | I3, I4 | Not started (not agreed) | Not chosen by user (offered 6 Nov 09:51; the user picked the other five) | Log, 6 Nov 09:51 and 09:52 |
