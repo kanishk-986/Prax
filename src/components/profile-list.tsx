@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { NewWorkspace, type NewProfile } from "./new-workspace";
+import { DemoTag } from "./sidebar";
 
-export type ProfileRow = { id: string; slug: string; name: string; headline: string; company?: string; role: string; archived_at?: string | null };
+export type ProfileRow = { id: string; slug: string; name: string; headline: string; company?: string; role: string; archived_at?: string | null; is_demo?: boolean };
 
 export function ProfileList({ list, onRestore, onCreate }: {
   list: ProfileRow[];
@@ -30,7 +31,7 @@ export function ProfileList({ list, onRestore, onCreate }: {
         {live.map((w) => (
           <Link key={w.id} href={`/w/${w.slug}`} className="card p-4 transition-colors hover:border-line-strong">
             <div className="flex items-center justify-between gap-3">
-              <span className="truncate font-semibold">{w.name}</span>
+              <span className="flex min-w-0 items-center gap-1.5"><span className="truncate font-semibold">{w.name}</span>{w.is_demo && <DemoTag />}</span>
               <span className="chip shrink-0 capitalize">{w.role}</span>
             </div>
             <p className="mt-1 line-clamp-2 text-[13px] text-muted">{[w.headline, w.company].filter(Boolean).join(" · ") || "LinkedIn profile"}</p>
@@ -49,7 +50,7 @@ export function ProfileList({ list, onRestore, onCreate }: {
             <ul className="anim-rise card mt-2 list-none divide-y divide-line p-0">
               {archived.map((w) => (
                 <li key={w.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <span className="min-w-0"><span className="block truncate font-semibold">{w.name}</span>
+                  <span className="min-w-0"><span className="flex min-w-0 items-center gap-1.5"><span className="truncate font-semibold">{w.name}</span>{w.is_demo && <DemoTag />}</span>
                     <span className="block text-[12.5px] text-muted">Archived {new Date(w.archived_at!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · data kept</span></span>
                   {w.role === "owner" ? <button className="btn h-9 px-3" onClick={() => restore(w.id)}><RotateCcw size={14} /> Restore</button>
                     : <span className="text-[12.5px] text-muted">An owner can restore it</span>}

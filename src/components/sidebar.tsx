@@ -24,6 +24,11 @@ export const NAV = [
   { href: "/notes", label: "Notes", icon: StickyNote },
 ];
 
+/** A quiet marker for the sample demo profile (db/019_demo_profile.sql). */
+export function DemoTag() {
+  return <span title="Sample profile with invented data" className="shrink-0 rounded border border-line px-1 text-[10.5px] font-medium leading-[16px] text-muted">Demo</span>;
+}
+
 export function Sidebar() {
   const { ws, role, email } = useWorkspace();
   const path = usePathname();
@@ -44,7 +49,7 @@ export function Sidebar() {
       <Link href="/" className="flex items-center gap-2.5 rounded-md px-1.5 py-1 hover:bg-surface-2">
         <Logo />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px] font-semibold leading-tight text-ink">{ws.name}</div>
+          <div className="flex min-w-0 items-center gap-1.5"><span className="truncate text-[13.5px] font-semibold leading-tight text-ink">{ws.name}</span>{ws.is_demo && <DemoTag />}</div>
           <div className="mt-0.5 text-[11.5px] capitalize leading-tight text-muted">{role}</div>
         </div>
         <ChevronsUpDown size={14} className="text-faint" />

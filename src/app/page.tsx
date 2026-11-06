@@ -11,7 +11,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
   await sb.rpc("claim_invites");
   // "*" so company and archived_at (db/016) come through when they exist and nothing breaks before it runs.
   const { data: ws } = await sb.from("workspaces").select("*, members(role, user_id)").order("created_at");
-  const list: ProfileRow[] = (ws ?? []).map((w) => ({ id: w.id, slug: w.slug, name: w.name, headline: w.headline ?? "", company: w.company ?? "", archived_at: w.archived_at ?? null,
+  const list: ProfileRow[] = (ws ?? []).map((w) => ({ id: w.id, slug: w.slug, name: w.name, headline: w.headline ?? "", company: w.company ?? "", archived_at: w.archived_at ?? null, is_demo: !!w.is_demo,
     role: (w.members as { role: string; user_id: string }[]).find((m) => m.user_id === user.id)?.role ?? "viewer" }));
 
   return (
