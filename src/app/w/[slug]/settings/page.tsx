@@ -39,8 +39,10 @@ export default function Settings() {
   }
   async function invite(e: React.FormEvent) {
     e.preventDefault();
-    const { error } = await supabase().from("invites").upsert({ workspace_id: ws.id, email: inv.email.trim().toLowerCase(), role: inv.role });
-    done(error, `Invite saved for ${inv.email.trim()}`);
+    // The server route checks the caller is an owner and sends the Supabase invite email (set your password).
+    const res = await fetch("/api/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace_id: ws.id, email: inv.email, role: inv.role }) });
+    const out = await res.json().catch(() => ({ error: "The invite could not be sent." }));
+    done(out.error ? { message: out.error } : null, out.existing ? `${inv.email.trim()} already has an account and gets access at next sign in` : `Invite sent to ${inv.email.trim()}`);
     setInv({ email: "", role: "editor" }); invites.reload();
   }
 
@@ -111,7 +113,7 @@ export default function Settings() {
             <input id="inv-email" type="email" required className="field min-w-0 flex-1 basis-[220px]" placeholder="colleague@company.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} />
             <select id="inv-role" className="field w-auto" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value as Role })}>{ROLES.map((x) => <option key={x.r} value={x.r}>{x.r}</option>)}</select>
             <button className="btn btn-primary">Invite</button>
-            <p className="w-full text-[12px] text-muted">They get access when they sign in to Prax with this email.</p>
+            <p className="w-full text-[12px] text-muted">They get an email to set a password, then access when they sign in.</p>
           </form>
         )}
         <dl className="mt-5 grid gap-1 text-[12px] text-muted">{ROLES.map((x) => <div key={x.r}><span className="font-medium capitalize text-ink-2">{x.r}</span>: {x.d}</div>)}</dl>

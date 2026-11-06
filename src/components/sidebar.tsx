@@ -56,7 +56,10 @@ export function Sidebar() {
       <nav className="flex flex-col gap-0.5">{NAV.map((n) => item(n.href, n.label, n.icon))}</nav>
       <div className="mt-auto flex flex-col gap-0.5">
         {item("/settings", "Settings", Settings)}
-        <div className="truncate px-2.5 pt-2 text-[11px] text-faint">{email}</div>
+        <form action="/auth/signout" method="post" className="flex items-center gap-2 pl-2.5 pt-2">
+          <span className="min-w-0 flex-1 truncate text-[11px] text-faint">{email}</span>
+          <button className="rounded px-1.5 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink">Sign out</button>
+        </form>
       </div>
     </div>
   );

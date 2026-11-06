@@ -5,7 +5,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 ## Stack and where things run
 
 - Next.js 15.5 (App Router, `src/`), TypeScript, Tailwind 4 tokens in `src/app/globals.css`, Geist fonts, lucide-react icons.
-- Supabase project "prax" (ref `kywvseeyradaxpxkhtcb`, Mumbai): magic-link auth, Postgres with RLS, Realtime.
+- Supabase project "prax" (ref `kywvseeyradaxpxkhtcb`, Mumbai): email and password auth by invitation (magic link as a fallback), Postgres with RLS, Realtime.
 - Vercel project `prax` (team antier-branding-and-marketing), production https://prax-gamma.vercel.app. Env vars come from the Supabase Vercel integration; pull with `npx vercel env pull .env.local --environment=production`. Never print their values.
 - Chrome extension (MV3) in `extension/`. `npm run ext:zip` packs it into `public/prax-extension.zip`, which the Extension page serves for download.
 
@@ -13,6 +13,7 @@ Prax is a multi-profile LinkedIn outreach and authority product. The first profi
 
 - `npm run dev` / `npm run build`. Lint and types: `npx tsc --noEmit && npx eslint src`.
 - Logic tests: `node scripts/test-studio.ts` (Comment Studio defaults, rules, Human score), `node scripts/test-citations.ts` (AI citations parsing incl. Perplexity, detection, strict person matching, audiences, keywords, weekly trend, gaps, the PDF writer, maths, repeats, tone and facts, alerts, lift, share links) and `node scripts/test-network.ts` (fake export with LinkedIn's real file layout; pass a path to also write the zip).
+- Sign-in tests: `node scripts/test-auth.ts` (email and required checks, new password rules, sign-in error copy, safe redirects, invite link tokens).
 - Shell tests: `node scripts/test-shell.ts` (entry moment and tour gating, tour step maths, sidebar active matching).
 - Text tests: `node scripts/test-text.ts` (Mac Roman mojibake repair, byte order marks, UTF-8, Windows-1252, page charsets).
 - Dashboard tests: `node scripts/test-dashboard.ts` (progress, skips, deltas, week over week, agenda groups, row action, Needs you ranking, settle order, copy).

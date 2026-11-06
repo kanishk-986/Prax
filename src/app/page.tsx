@@ -18,7 +18,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
     <main className="mx-auto max-w-[880px] px-4 py-12">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2"><Logo /><span className="text-[15px] font-semibold tracking-tight">Prax</span></div>
-        <span className="text-[13px] text-muted">{user.email}</span>
+        <form action="/auth/signout" method="post" className="flex min-w-0 items-center gap-3">
+          <span className="truncate text-[13px] text-muted">{user.email}</span>
+          <button className="btn btn-ghost">Sign out</button>
+        </form>
       </div>
       <h1 className="mt-10 text-[24px] font-semibold tracking-tight">Profiles</h1>
       <p className="mt-1 text-muted">Each profile is one LinkedIn presence with its own plan, pipeline and team.</p>
