@@ -397,7 +397,7 @@ function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip,
         <textarea id={`t-${it.id}`} rows={1} disabled={!editable} value={title} placeholder={placeholder} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))} onBlur={() => title !== it.title && !(sug && !it.title && title === sug.title) && onPatch(it.id, sug && !it.title ? { title, prospect_id: sug.prospect_id } : { title })}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }} aria-label="Who or what"
           className={`task-title min-w-0 flex-1 resize-none rounded-md bg-transparent px-1 py-0.5 text-body leading-snug outline-none [field-sizing:content] placeholder:text-faint ${it.done ? "is-done" : skipped ? "text-faint" : ""}`} />
-        {rule && <Link href={`/w/${slug}/strategy`} className="w-fit truncate rounded px-1 text-meta text-muted hover:text-ink">From strategy: {rule}</Link>}
+        {rule && <Link href={`/w/${slug}/playbook`} className="w-fit truncate rounded px-1 text-meta text-muted hover:text-ink">From strategy: {rule}</Link>}
       </span>
       {skipped && <span className="hidden sm:contents"><span className="count-badge muted shrink-0 whitespace-nowrap">Skipped</span></span>}
       <div className="hidden w-[22%] max-w-[240px] items-center gap-1.5 text-faint md:flex">

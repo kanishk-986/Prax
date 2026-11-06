@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, Compass, StickyNote, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, Inbox, type LucideIcon } from "lucide-react";
+import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, BookOpen, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, Inbox, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
@@ -15,7 +15,8 @@ export const NAV_GROUPS = [
   { key: "setup", label: "Set up" },
 ] as const;
 export type NavGroup = (typeof NAV_GROUPS)[number]["key"];
-export type NavItem = { href: string; label: string; icon: LucideIcon; group: NavGroup };
+/** words: other names Command K also finds the page by (the Playbook holds what used to be Strategy and Notes). */
+export type NavItem = { href: string; label: string; icon: LucideIcon; group: NavGroup; words?: string };
 
 /** Every page, in sidebar order. The sidebar, the phone menu and the Command K list all read this one list. */
 export const NAV: NavItem[] = [
@@ -31,8 +32,7 @@ export const NAV: NavItem[] = [
   { href: "/network", label: "Network", icon: Network, group: "grow" },
   { href: "/comments", label: "Engagement", icon: MessageSquare, group: "grow" },
   { href: "/templates", label: "Templates", icon: LayoutTemplate, group: "setup" },
-  { href: "/strategy", label: "Strategy", icon: Compass, group: "setup" },
-  { href: "/notes", label: "Notes", icon: StickyNote, group: "setup" },
+  { href: "/playbook", label: "Playbook", icon: BookOpen, group: "setup", words: "strategy notes plan canvas" },
   { href: "/extension", label: "Extension", icon: Star, group: "setup" },
   { href: "/settings", label: "Settings", icon: Settings, group: "setup" },
 ];
