@@ -71,7 +71,7 @@ export function InboxScreen({ data, api }: { data: InboxData; api: InboxApi }) {
       <KpiTiles tour="inbox-kpis" items={[
         { label: "Waiting on a reply", value: visible.length, sub: visible.length ? `Longest ${waitLabel(oldest).toLowerCase()}` : "Nobody", onClick: () => setOnly(null), selected: only === null },
         { label: "Messages", value: counts.dm, sub: "recorded or captured", onClick: () => setOnly(only === "dm" ? null : "dm"), selected: only === "dm" },
-        { label: "Comment replies", value: counts.reply, sub: "on comments you left", onClick: () => setOnly(only === "reply" ? null : "reply"), selected: only === "reply" },
+        { label: "Comment replies", value: counts.reply, sub: "on your comments and posts", onClick: () => setOnly(only === "reply" ? null : "reply"), selected: only === "reply" },
         { label: "Follow-ups due", value: counts.lead, sub: overdue ? `${overdue} overdue` : "from Pipeline", tone: overdue ? "alert" : undefined, onClick: () => setOnly(only === "lead" ? null : "lead"), selected: only === "lead" },
       ]} />
 

@@ -6,7 +6,7 @@ import { useLive } from "@/lib/live";
 import { askExtension } from "@/lib/bridge";
 import { useWorkspace, today as todayOf, addDays } from "@/lib/workspace";
 import { whoLine } from "@/lib/persona";
-import { buildInbox, replyPrompt, type InboxDm, type InboxLead, type InboxPipeline, type InboxReply, type InboxState } from "@/lib/inbox";
+import { buildInbox, inboxReplies, replyPrompt, type InboxDm, type InboxLead, type InboxPipeline, type InboxReply, type InboxState, type ReplyRow } from "@/lib/inbox";
 import { InboxScreen, type InboxApi } from "@/components/inbox/inbox-screen";
 
 const DM_RULES = "You draft short LinkedIn direct messages for a senior executive. Plain, specific and warm, never salesy. No em dashes, no contractions, no emoji.";
@@ -18,6 +18,8 @@ export default function InboxPage() {
   const pipes = useLive<InboxPipeline>("pipelines", ws.id);
   const moves = useLive<{ prospect_id: string; at: string }>("stage_moves", ws.id, { filter: (q) => q.gte("at", new Date(addDays(t, -120) + "T00:00:00").toISOString()) });
   const replies = useLive<InboxReply>("comment_log", ws.id, { filter: (q) => q.eq("reply", true).gte("day", addDays(t, -60)) });
+  // Replies read with Check replies in the extension (db/027): what each person wrote, matched to a lead.
+  const replyRows = useLive<ReplyRow>("replies", ws.id, { filter: (q) => q.gte("seen_at", new Date(addDays(t, -60) + "T00:00:00").toISOString()) });
   const dms = useLive<InboxDm>("inbox_messages", ws.id, { order: "received_at", asc: false, filter: (q) => q.limit(500) });
   const states = useLive<InboxState>("inbox_state", ws.id);
 
@@ -26,8 +28,8 @@ export default function InboxPage() {
     moves.rows.forEach((x) => { if (!m[x.prospect_id] || x.at > m[x.prospect_id]) m[x.prospect_id] = x.at; });
     return m;
   }, [moves.rows]);
-  const result = useMemo(() => buildInbox({ leads: leads.rows, pipelines: pipes.error ? [] : pipes.rows, replies: replies.rows, dms: dms.error ? [] : dms.rows, states: states.error ? [] : states.rows, lastTouch, today: t }),
-    [leads.rows, pipes.rows, pipes.error, replies.rows, dms.rows, dms.error, states.rows, states.error, lastTouch, t]);
+  const result = useMemo(() => buildInbox({ leads: leads.rows, pipelines: pipes.error ? [] : pipes.rows, replies: inboxReplies(replies.rows, replyRows.error ? [] : replyRows.rows), dms: dms.error ? [] : dms.rows, states: states.error ? [] : states.rows, lastTouch, today: t }),
+    [leads.rows, pipes.rows, pipes.error, replies.rows, replyRows.rows, replyRows.error, dms.rows, dms.error, states.rows, states.error, lastTouch, t]);
 
   const api: InboxApi = useMemo(() => ({
     async mark(keys, patch) {

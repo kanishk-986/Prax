@@ -258,5 +258,16 @@ eq("no quota, no target", weeklyCommentTarget(0), 0);
   eq("Dubai clock is UTC+4", dubaiNow(new Date("2026-11-06T22:30:00Z")), { day: "2026-11-07", hm: "02:30" });
 }
 
+// ---------- Reply back tasks and new replies (I1, db/027) ----------
+{
+  const rb = { kind: "reply", idx: 500 };
+  eq("a Reply back task is labelled and sits in Comment", [typeLabel(rb), groupOf(rb), typeLabel({ kind: "reply", idx: 1 })], ["Reply back", "comment", "Replies"]);
+  eq("Reply back opens the post it answers", primaryAction({ ...rb, link: "https://www.linkedin.com/feed/update/urn:li:activity:1/" }, "x")?.label, "Open");
+  eq("new replies rank under a post due today and approvals, above the Today plan", [urgency({ kind: "post", due: T }, T) > urgency({ kind: "replies" }, T), urgency({ kind: "approval" }, T) > urgency({ kind: "replies" }, T), urgency({ kind: "replies" }, T) > urgency({ kind: "today" }, T)], [true, true, true]);
+  eq("the Monday review sits under Today's plan", urgency({ kind: "today" }, T) > urgency({ kind: "review" }, T), true);
+  const items = [{ id: "q", kind: "reply", idx: 1, title: "", done: false, note: "" }, { id: "rb", kind: "reply", idx: 500, title: "Reply back to Priya Nair", done: false, note: "replyback:x", prospect_id: "a" }];
+  eq("prefill leaves the Reply back task as it is", Object.keys(prefillToday(items, { leads: [], posts: [{ id: "p", title: "Controls", status: "Posted", publish_date: T, url: "u" }], slug: "x", today: T })), ["q"]);
+}
+
 console.log(fails ?`\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

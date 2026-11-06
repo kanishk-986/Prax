@@ -380,8 +380,133 @@
     return { name, headline, company: companyOf(headline), url, thread_url: loc ? String(loc.href || "").split(/[?#]/)[0] : "", text: last ? last.text.slice(0, 4000) : "", received_at: last ? last.received_at : "" };
   }
 
+  // ---------- replies, comments and mentions (Check replies, I1) ----------
+  // Read only when the user presses Check replies, and only what the page already shows: nothing here opens
+  // "Load more", expands a thread, scrolls or clicks. The Prax server matches each one to a logged comment or post.
+
+  // LinkedIn's relative times ("now", "5m", "2h", "3d", "1w", "2mo", "1yr", "Edited" after) as an ISO time, or "".
+  const UNIT = { s: 1e3, m: 6e4, min: 6e4, h: 36e5, hr: 36e5, d: 864e5, w: 6048e5, wk: 6048e5, mo: 2592e6, y: 31536e6, yr: 31536e6 };
+  function relTimeIso(text, now) {
+    const t = one(text).toLowerCase();
+    const at = now == null ? Date.now() : now;
+    if (/^(just )?now\b/.test(t)) return new Date(at).toISOString();
+    const m = t.match(/(?:^|[\s•·])(\d{1,3})\s*(mo|min|yr|wk|hr|s|m|h|d|w|y)\b/) || t.match(/^(\d{1,3})\s*(mo|min|yr|wk|hr|s|m|h|d|w|y)$/);
+    return m ? new Date(at - Number(m[1]) * UNIT[m[2]]).toISOString() : "";
+  }
+  const canonPost = (href) => { const id = activityIdOf(href); return id ? `https://www.linkedin.com/feed/update/urn:li:activity:${id}/` : ""; };
+  const absUrl = (href) => { try { return new URL(href, "https://www.linkedin.com").href.split(/[?#]/)[0]; } catch { return ""; } };
+  const profileOf = (href) => { const m = absUrl(href).match(/^https:\/\/www\.linkedin\.com\/in\/[^/]+/); return m ? m[0] + "/" : ""; };
+  const normName = (s) => one(s).toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, "").replace(/\s+/g, " ").trim();
+  // The visible name without LinkedIn's extras: "Priya Nair • 2nd", "Shashi Pal Author", "(She/Her)".
+  const cleanName = (s) => one(s).split("\n")[0].replace(/\s*[•·].*$/, "").replace(/\s*\((?:he|she|they)\/\w+\)\s*/i, " ").replace(/\s+(Author|Premium|Verified|Creator)$/i, "").trim();
+  function isMe(name, me) {
+    const a = normName(cleanName(name)), b = normName(me);
+    return !!a && !!b && (a === b || a.startsWith(b + " "));
+  }
+  const unquote = (s) => one(s).replace(/^[“"']+|[”"']+$/g, "").trim();
+
+  // ---- the notifications page ----
+  const isNotificationsPath = (path) => /^\/notifications\/?/.test(String(path || ""));
+  const NOTE_CARD = "article.nt-card, [data-view-name='notification-card'], .nt-card";
+  const NOTE_HEAD = ".nt-card__headline, .nt-card__text, [data-view-name='notification-headline']";
+  const NOTE_TIME = ".nt-card__time-ago, time, [data-view-name='notification-time']";
+  // What a notification says, from its sentence. Reactions, job alerts and "also commented on someone else's post" do not count.
+  const NOTE_KINDS = [
+    [/^(.+?)\s+replied to (?:your comment|a comment you were mentioned in)\b/i, "comment_reply"],
+    [/^(.+?)\s+replied to (?:a comment )?(?:on|in) your (?:post|article|video|document|poll|repost)\b/i, "post_comment"],
+    [/^(.+?)\s+commented on your (?:post|article|video|document|poll|repost)\b/i, "post_comment"],
+    [/^(.+?)\s+mentioned you in (?:a |their |this )?(?:comment|post|reply|article)\b/i, "mention"],
+  ];
+  // "Priya Nair and 3 others commented": only the first person is named, so only they are recorded.
+  const firstPerson = (s) => cleanName(one(s).replace(/\s+and\s+\d[\d,]*\s+others?$/i, "").split(/\s*,\s*|\s+and\s+/)[0]);
+
+  function notificationCards(doc) {
+    const main = doc.querySelector("main, [role='main']") || doc.body;
+    let cards = [...main.querySelectorAll(NOTE_CARD)];
+    if (!cards.length) cards = [...main.querySelectorAll("li, article")].filter((e) => !e.closest(OURS) && NOTE_KINDS.some(([re]) => re.test(one(visible(e)))));
+    return cards.filter((c) => !cards.some((o) => o !== c && c.contains(o)) && !c.closest(OURS));
+  }
+
+  function readNotifications(doc, me, now) {
+    const out = [];
+    let seen = 0;
+    for (const card of notificationCards(doc)) {
+      seen++;
+      const head = card.querySelector(NOTE_HEAD) || card;
+      const sentence = one(visible(head));
+      const hit = NOTE_KINDS.map(([re, kind]) => [sentence.match(re), kind]).find(([m]) => m);
+      if (!hit) continue;
+      const [m, kind] = hit;
+      const name = firstPerson(m[1]);
+      if (!name || isMe(name, me)) continue;
+      const rest = sentence.slice(m[0].length);
+      const text = rest.includes(":") ? unquote(rest.slice(rest.indexOf(":") + 1)) : "";
+      const links = [...card.querySelectorAll("a[href]")];
+      const postHref = links.map((a) => a.getAttribute("href")).find((h) => activityIdOf(h)) || "";
+      const personHref = links.map((a) => a.getAttribute("href")).find((h) => /\/in\/[^/?#]+/.test(h || "")) || "";
+      const timeEl = card.querySelector(NOTE_TIME);
+      const timeText = timeEl ? (timeEl.getAttribute("datetime") || one(timeEl.textContent)) : (pieces(card).find((p) => /^\d{1,3}\s*(mo|yr|w|d|h|m)$/.test(p)) || "");
+      const at = /^\d{4}-\d{2}-\d{2}/.test(timeText) ? new Date(timeText).toISOString() : relTimeIso(timeText, now);
+      out.push({ kind, name, url: profileOf(personHref), text: text.slice(0, 4000), post_url: canonPost(postHref), at });
+    }
+    return { cards: seen, replies: dedupeReplies(out) };
+  }
+
+  // ---- a post the user has open ----
+  // Under the profile's own comments: the replies to them. On the profile's own post: everyone else's comments.
+  const C_NAME = ".comments-comment-meta__description-title, .comments-post-meta__name-text, [data-view-name='comment-actor-name'], a[href*='/in/']";
+  const C_TEXT = ".comments-comment-item__main-content, [data-view-name='comment-commentary'], [data-testid='expandable-text-box'], .update-components-text";
+  const C_TIME = "time, .comments-comment-meta__data, .comments-comment-item__timestamp, [data-view-name='comment-timestamp']";
+  // The first element for a selector list that belongs to this comment itself, not to a reply nested in it.
+  function ownOf(c, list) {
+    for (const s of list.split(/,\s*(?![^[]*\])/)) {
+      const el = [...c.querySelectorAll(s)].find((e) => e.closest(COMMENT_SEL) === c && clean(e.textContent));
+      if (el) return el;
+    }
+    return null;
+  }
+  function readComment(c, now) {
+    const n = ownOf(c, C_NAME);
+    const link = [...c.querySelectorAll("a[href*='/in/']")].find((a) => a.closest(COMMENT_SEL) === c);
+    const t = ownOf(c, C_TEXT);
+    const tm = ownOf(c, C_TIME);
+    const when = tm ? (tm.getAttribute("datetime") || one(tm.textContent)) : "";
+    return { name: n ? cleanName(visible(n)) : "", url: link ? profileOf(link.getAttribute("href")) : "", text: t ? clean(visible(t)).slice(0, 4000) : "",
+      at: /^\d{4}-\d{2}-\d{2}/.test(when) ? new Date(when).toISOString() : relTimeIso(when, now) };
+  }
+
+  function readPostReplies(doc, loc, me, now) {
+    const rows = findActionRows(doc);
+    let posts = rows.map((r) => postOf(r, rows));
+    if (!posts.length) posts = [doc.querySelector("main, [role='main']") || doc.body];
+    const out = [];
+    let mine = 0, own = 0;
+    for (const post of posts) {
+      const postMine = isMe(authorOf(post), me);
+      if (postMine) own++;
+      const url = canonPost(postUrl(post, loc)) || canonPost(loc ? loc.href : "");
+      for (const c of post.querySelectorAll(COMMENT_SEL)) {
+        if (c.closest(OURS)) continue;
+        const me1 = readComment(c, now);
+        if (!me1.name) continue;
+        if (isMe(me1.name, me)) { mine++; continue; }
+        const parentEl = c.parentElement && c.parentElement.closest(COMMENT_SEL);
+        const parent = parentEl ? readComment(parentEl, now) : null;
+        if (parent && isMe(parent.name, me)) out.push({ kind: "comment_reply", ...me1, post_url: url, mine: parent.text.slice(0, 400) });
+        else if (postMine) out.push({ kind: "post_comment", ...me1, post_url: url });
+      }
+    }
+    return { posts: posts.length, mine, own, replies: dedupeReplies(out) };
+  }
+
+  function dedupeReplies(list) {
+    const seen = new Set();
+    return list.filter((r) => { const k = [normName(r.name), r.post_url, normName(r.text).slice(0, 60)].join("|"); if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+
   const api = { OURS, COMMENT_SEL, clean, label, kindOf, findActionRows, postOf, postUrn, postUrl, authorOf, authorUrlOf, textOf, commentsOf, readPost, postKey, nearestPost, parseAnalytics, isLinkedIn,
-    isProfilePath, profileUrl, parseMutual, readProfile, companyOf, topCard, postResultsIn, activityIdOf, isPostResultsPage, isThreadPath, readThread, threadRoot };
+    isProfilePath, profileUrl, parseMutual, readProfile, companyOf, topCard, postResultsIn, activityIdOf, isPostResultsPage, isThreadPath, readThread, threadRoot,
+    relTimeIso, isMe, isNotificationsPath, notificationCards, readNotifications, readPostReplies };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   g.PraxDOM = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

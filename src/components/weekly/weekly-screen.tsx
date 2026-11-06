@@ -51,6 +51,7 @@ export function WeeklyScreen({ report, loading, name, base, prepared, onWeek, ca
           <button type="button" className="btn h-10 w-10 p-0" aria-label="Next week" disabled={!canNext} onClick={() => onWeek(1)}><ChevronRight size={16} /></button>
         </span>
       }
+      actions={<Link href={r && !r.isCurrent ? `${base}/review?week=${r.week}` : `${base}/review`} className="btn h-10 px-3.5">{r && !r.isCurrent ? "Review this week" : "Monday review"}</Link>}
       primary={<button type="button" className="btn btn-primary h-10 px-4" disabled={!r} onClick={pdf}><Download size={15} /><span className="hidden sm:inline">Download</span> PDF</button>}>
       {loading || !r ? <Skeleton /> : (
         <article className="panel mx-auto w-full max-w-[880px]">

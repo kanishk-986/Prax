@@ -289,8 +289,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 
 | ID | Item, in plain English | Source | Status |
 |---|---|---|---|
-| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | In progress (agreed 7 Nov) |
-| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | In progress (agreed 7 Nov) |
+| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | Built not live (Check replies on notifications and posts; Engagement, Today, Inbox, Needs you; needs db/027) |
+| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | Built not live (Monday review page; needs db/027) |
 | I3 | Team roles and approvals, including the owner's approval queue on a phone (mobile approval was declined as Q63) | Same list | Not started (not agreed) |
 | I4 | Results by pillar and format feeding Strategy (overlaps CS28 and S2) | Same list | Not started (not agreed) |
 | I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | Built not live (Google AI answers and Microsoft Copilot through SerpApi; needs db/028 and a SerpApi key) |

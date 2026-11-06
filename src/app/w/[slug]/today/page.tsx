@@ -14,6 +14,7 @@ import { NAV } from "@/components/sidebar";
 import { openDraft } from "../studio/draft";
 import { openLeads, FALLBACK_PIPELINE, type Pipeline } from "@/lib/pipeline";
 import { useActiveStrategy, leadFacts } from "@/components/strategy/data";
+import { replyBackId, itemKey } from "@/lib/inbox";
 import { adviceFor, commentTasks, cleanConfig, STRATEGY_IDX, strategyNote, ruleFromNote, isStrategyNote, type ActionConfig } from "@/lib/strategy";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -71,7 +72,7 @@ export default function Today() {
   // Generate the day's plan from the profile's quotas the first time it is opened.
   useEffect(() => {
     if (!editable || loading) return;
-    if (rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note))) return;
+    if (rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note) && !replyBackId(r.note))) return;
     const want: Record<string, unknown>[] = [];
     for (const k of KINDS) {
       const n = k.key === "inmail" && !isWeekday(day) ? 0 : (ws.quotas as Record<string, number>)[k.key] ?? 0;
@@ -85,7 +86,7 @@ export default function Today() {
   useEffect(() => {
     if (!editable || loading || day !== t || !strat.ready || !strat.nodes.length || leads.loading) return;
     const quota = Object.values(ws.quotas as Record<string, number>).some((n) => n > 0);
-    if (quota && !rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note))) return;
+    if (quota && !rows.some((r) => r.kind !== "custom" && !isStrategyNote(r.note) && !replyBackId(r.note))) return;
     const have = new Map<string, number>();
     for (const r of rows) if (isStrategyNote(r.note)) { const node = r.note.replace(/^skip:/, "").split(":")[1]; have.set(node, (have.get(node) ?? 0) + 1); }
     const cap = new Map(strat.nodes.filter((n) => n.type === "action").map((n) => [n.id, (cleanConfig("action", n.config) as ActionConfig).count ?? 0]));
@@ -141,8 +142,12 @@ export default function Today() {
     const keep = sug ? { title: sug.title, link: it.link || sug.href, prospect_id: sug.prospect_id } : {};
     // Ticking a skipped item clears the skip, so the note goes back to what it was.
     patch(it.id, isSkipped(it.note) ? { done: next, note: unskipNote(it.note), ...keep } : { done: next, ...keep });
-    if (next) toast(`${typeLabel(it)} done`, () => patch(it.id, { done: false, note: it.note, ...(sug ? { title: it.title, link: it.link, prospect_id: it.prospect_id } : {}) }));
-  }, [editable, patch, toast, hold, suggest]);
+    // A Reply back task (db/027) answers one reply: ticking it marks that reply done in the Inbox too, Undo reopens it.
+    const rid = replyBackId(it.note);
+    const inbox = (done: boolean) => { if (rid) supabase().from("inbox_state").upsert({ workspace_id: ws.id, key: itemKey.reply(rid), done_at: done ? new Date().toISOString() : null, updated_at: new Date().toISOString() }, { onConflict: "workspace_id,key" }).then(() => {}); };
+    inbox(next);
+    if (next) toast(`${typeLabel(it)} done`, () => { inbox(false); patch(it.id, { done: false, note: it.note, ...(sug ? { title: it.title, link: it.link, prospect_id: it.prospect_id } : {}) }); });
+  }, [editable, patch, toast, hold, suggest, ws.id]);
 
   const skip = useCallback((it: Item) => {
     if (!editable || it.done) return;

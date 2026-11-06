@@ -476,6 +476,45 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     threadBar = bar;
   }
 
+  // ---------- Check replies on the notifications page (I1) ----------
+  // One button above the notifications list, only on /notifications/. On the click it reads the notifications already
+  // shown that are replies, comments or mentions on the profile's comments and posts. It never scrolls, opens a
+  // notification, loads more or marks anything as read.
+  const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  function repliesToast(r, found) {
+    const added = r?.added ?? 0, known = r?.known ?? 0, tasks = r?.tasks ?? 0;
+    if (!added) return `Already in Prax: ${known || found} ${found === 1 ? "reply" : "replies"}. Nothing new.`;
+    return [`Saved ${added} new ${added === 1 ? "reply" : "replies"} to Prax`, known ? `${known} already there` : "", tasks ? `${tasks} Reply back ${tasks === 1 ? "task" : "tasks"} on Today` : ""].filter(Boolean).join(". ") + ".";
+  }
+  let notesBar = null;
+  function decorateNotifications() {
+    if (!D.isNotificationsPath(location.pathname)) { if (notesBar) { notesBar.remove(); notesBar = null; } return; }
+    const cards = D.notificationCards(document);
+    if (!cards.length) return;
+    const anchor = cards[0].closest("ul, section") || cards[0];
+    if (notesBar && notesBar.isConnected && notesBar.nextElementSibling === anchor) return;
+    if (notesBar) notesBar.remove();
+    const bar = document.createElement("div");
+    bar.className = "prx-bar prx-profile prx-notes";
+    bar.innerHTML = `<span class="prx-write prx-label"><span class="prx-star">✦</span> Prax</span>
+      <button type="button" class="prx-chip prx-disc" data-act="replies" title="Read the replies, comments and mentions shown in these notifications and save them to Prax">Check replies</button>`;
+    bar.addEventListener("click", async (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      if (!meName) { loadMe(); return toast("Prax is still connecting. Try again in a moment."); }
+      const r = D.readNotifications(document, meName);
+      if (!r.replies.length) return toast("No replies, comments or mentions are shown in these notifications yet.");
+      b.disabled = true;
+      try {
+        const j = await send({ type: "prax", action: "replies", body: { replies: r.replies, day: localDay() } });
+        toast(repliesToast(j, r.replies.length));
+      } catch (err) { toast(err.message); }
+      b.disabled = false;
+    });
+    anchor.insertAdjacentElement("beforebegin", bar);
+    notesBar = bar;
+  }
+
   // ---------- scanning ----------
   // What the side panel's "Prax bar status" shows for this tab.
   const VERSION = (() => { try { return chrome.runtime.getManifest().version; } catch { return "?"; } })();
@@ -494,6 +533,7 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     try { decorateNoteDialog(); } catch (e) { stats.error = "Note box error: " + e.message; }
     try { decorateProfile(); } catch (e) { stats.error = "Profile bar error: " + e.message; }
     try { decorateThread(); } catch (e) { stats.error = "Inbox button error: " + e.message; }
+    try { decorateNotifications(); } catch (e) { stats.error = "Check replies button error: " + e.message; }
     stats.seen = rowsNow.length;
     stats.attached = rowsNow.filter((r) => barOf.get(r)?.isConnected).length;
     stats.scans++; stats.lastScan = Date.now();
