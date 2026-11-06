@@ -192,15 +192,15 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | AC10 | Company tab (instead of a Person, Company, Both switch) | 5 Nov 20:01 "make a company tab in the end" | Live |
 | AC11 | Person, Company, Both switch | Q68 | Declined by user (replaced by AC10) |
 | AC12 | Strict name matching: full name with context, otherwise "needs review" | Q69 | Live |
-| AC13 | Headline score weighted 70% person, 30% company | Q70 | Not started (the user's answer, "Yes, 71, 72 and 73", did not clearly accept it; confirm) |
+| AC13 | Headline score weighted 70% person, 30% company | Q70 | Declined by user (Q124, 7 Nov: two separate numbers) |
 | AC14 | Facts sheet in two tabs (person and company) | Q72 | Live |
-| AC15 | Peer experts: Claude suggests 5 to 8 names from public sources, the user approves | Q73 | Partly done: Add peer expert by hand, and Approve or Dismiss on suggested rows; nothing proposes names |
+| AC15 | Peer experts: Claude suggests 5 to 8 names from public sources, the user approves | Q73 | Built not live (suggestions from run answers, Approve or Dismiss; needs db/025) |
 | AC16 | API keys start blank and are added by the user; never shown as connected without a key | 5 Nov 20:01 | Live |
 | AC17 | Detailed, institution-grade weekly report downloadable as a PDF | 5 Nov 20:01, 20:11 | Live |
 | AC18 | Charts show real values from runs | 5 Nov 20:11 | Live (charts appear after two weeks of runs) |
 | AC19 | Tracked profiles: Archive, Switch, New, Delete (owner, typed name) in a three-dot menu | Q107; 5 Nov 23:38 | Live |
 | AC20 | Redesign: one card style, no dashes, edit, add and remove tracked names and peers | 6 Nov 00:26 "typical AI slop... no option to edit" | Live |
-| AC21 | Provider logos in the PDF report | Handoff "the PDF uses names only" | Not started (names only) |
+| AC21 | Provider logos in the PDF report | Handoff "the PDF uses names only" | Built not live (logos in the PDF tables) |
 | AC22 | First real run with keys | Handoff "Not verified yet" | Needs user action |
 
 ## Strategy
