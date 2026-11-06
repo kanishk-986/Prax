@@ -40,7 +40,7 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
   return (
     <div className={`entry${leaving ? " leaving" : ""}`} onClick={leave} role="dialog" aria-label={`${title} opening`}>
       <div className="flex flex-col items-center gap-[18px] text-center">
-        <svg className="mark" width="64" height="64" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" fill="#141414" /><rect x="6.5" y="7.5" width="8" height="3" rx="1.5" fill="#ffffff" /><rect x="9.5" y="13.5" width="8" height="3" rx="1.5" fill="#d64545" /></svg>
+        <svg className="mark" width="64" height="64" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5.5" fill="#141414" /><path d="M4.5 4.5H15V7.5H7.5V15H4.5Z" fill="#ffffff" /><path d="M19.5 19.5H9V16.5H16.5V9H19.5Z" fill="#d64545" /></svg>
         <span className="l1 text-[34px] font-[650] tracking-[-0.03em] text-[#141414]">{title}</span>
         {status && <span className="l2 max-w-[460px] text-[15px] leading-relaxed text-[#5f5f5f]">{status}</span>}
         <span className="l3 mt-1.5 flex flex-col items-center gap-3">

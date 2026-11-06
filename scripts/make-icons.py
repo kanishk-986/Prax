@@ -2,9 +2,10 @@
 # Run: python3 scripts/make-icons.py
 import struct, zlib
 
-INK, CANVAS, ACCENT = (0x1f, 0x15, 0x15), (0xfd, 0xf8, 0xf7), (0xd6, 0x45, 0x45)
+INK, CANVAS, ACCENT = (0x14, 0x14, 0x14), (0xff, 0xff, 0xff), (0xd6, 0x45, 0x45)
 # Shapes in the logo's 24x24 viewBox: (x, y, w, h, radius, colour), drawn in order.
-SHAPES = [(2, 2, 20, 20, 6, INK), (6.5, 7.5, 8, 3, 1.5, CANVAS), (9.5, 13.5, 8, 3, 1.5, ACCENT)]
+# Corners: the tile, then each L corner as two bars.
+SHAPES = [(0, 0, 24, 24, 5.5, INK), (4.5, 4.5, 10.5, 3, 0, CANVAS), (4.5, 4.5, 3, 10.5, 0, CANVAS), (9, 16.5, 10.5, 3, 0, ACCENT), (16.5, 9, 3, 10.5, 0, ACCENT)]
 
 def inside(px, py, x, y, w, h, r):
     cx = min(max(px, x + r), x + w - r); cy = min(max(py, y + r), y + h - r)
@@ -34,3 +35,5 @@ def render(size, ss=4):
 for s in (16, 32, 48, 128):
     open(f"extension/icons/icon{s}.png", "wb").write(render(s))
     print("icon", s)
+open("src/app/icon.png", "wb").write(render(128))  # the browser tab favicon
+print("favicon")
