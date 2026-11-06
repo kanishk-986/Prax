@@ -258,7 +258,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | DZ2 | Entry moment once a day on the Dashboard only; quick fade elsewhere | 5 Nov 20:26; Q119 | Live |
 | DZ3 | Guided tours anchored to their target, "Step N of M" | 5 Nov 19:51 | Live |
 | DZ4 | Uniform tiles: same at rest, change only on hover, press, focus, selection | 5 Nov 23:45 | Live |
-| DZ5 | New logo (Corners) in the app, favicon and extension | 5 Nov 23:49; 23:59 "go with 2nd one corners" | Live |
+| DZ5 | New logo (Corners) in the app, favicon and extension | 5 Nov 23:49; 23:59 "go with 2nd one corners" | Built not live (logo everywhere) |
 | DZ6 | Real provider logos with real names everywhere keys or AI tools show | 5 Nov 23:47 | Live (xAI Grok has no mark) |
 | DZ7 | Search menu: aligned icons and labels, no red half-ring | 6 Nov 00:07, 00:22 | Live |
 | DZ8 | 19 audit fixes (sidebar highlight, contrast, encoding, tabs, layouts) | Q100 | Live |
@@ -334,9 +334,9 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 | R6 | The campaign's "warm up is on today's list" line was confusing ("why it's showing here") | 5 Nov 18:45 | Live (removed; no warm-up copy is left in Content Studio) |
 | R7 | "AI citation is not opening" from Content Studio (the preview sidebar had no link) | 5 Nov 19:42 | Live (AI citations is in the app sidebar) |
 | R8 | "Plan and library options are not opening" | 5 Nov 18:08 | Live (Plan and Library tabs work; CS10, CS12) |
-| R9 | "Unstructured toggles": only the AI citations filters were changed to segmented controls. Claude asked where else the user meant and the question was never followed up | 6 Nov 03:44 "have you fixed... the unstructured toggles" | Partly done (AI citations only; ask the user which other screens, with a screenshot) |
-| R10 | The new logo "everywhere" also means the public AI citations share view and the PDF reports (AI citations report, weekly report, carousel) | 5 Nov 23:59 "go with 2nd one corners, implement it everywhere" | Partly done (logo is in the app, favicon, sign-in page, profiles page and extension; there is no logo on `src/app/share/[token]` or in `src/lib/pdf.ts` output) |
-| R11 | No dashes as values anywhere | 6 Nov 00:26; polish pass rule | Partly done (one is left: a draft's Impact shows "–" when empty, `src/components/content/write.tsx` line 553) |
+| R9 | "Unstructured toggles": only the AI citations filters were changed to segmented controls. Claude asked where else the user meant and the question was never followed up | 6 Nov 03:44 "have you fixed... the unstructured toggles" | Built not live (one switch style across the app) |
+| R10 | The new logo "everywhere" also means the public AI citations share view and the PDF reports (AI citations report, weekly report, carousel) | 5 Nov 23:59 "go with 2nd one corners, implement it everywhere" | Built not live (logo on share page and every PDF) |
+| R11 | No dashes as values anywhere | 6 Nov 00:26; polish pass rule | Built not live (no dash for an unscored draft) |
 | R12 | Run the new database files `db/021`, `022`, `024`, `025` and `026` as one saved Supabase query that Claude opens for the user, who only clicks Run ("no pasting") | 6 Nov 04:05 "I'm not a technical guy... these small things can't you do by your end"; Claude's promise at 04:19 and 09:43 | Not started (needed before S1, S2, CS6, CS29, N11, AC15, X7 and others work live) |
 | R13 | Deploy the 18 commits on `main` that are not on `origin/main`, then push (standing rule: push after every deploy) | Q17, Q20; 6 Nov 09:43 | Not started (waits for the user's "deploy" and R12) |
 | R14 | Reinstall the extension as 0.9.3, not 0.9.2 (`extension/manifest.json` and `LATEST_EXT` are 0.9.3 on `main`) | Follows from N11, N12, DS15, CS29, X7 | Needs user action (after the deploy) |
@@ -356,7 +356,7 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 | TN3 | Live | Live today, but `main` moves Notes into Playbook, which sits **above** Extension in the sidebar (Set up: Templates, Playbook, Extension, Settings). After the deploy, the user's "place note section after [Extension]" is no longer true. Confirm with the user or reorder | `src/components/sidebar.tsx` NAV |
 | X3, O7 | Needs user action (reinstall 0.9.2) | Reinstall 0.9.3 after the next deploy (see R14) | `extension/manifest.json` |
 | O10 | Live (all SQL up to `db/020` run) | Still true, but `db/021`, `022`, `024`, `025` and `026` are not run (see R12) | `ls db` |
-| DZ5 | Live | Partly done: not on the share view or in the PDFs (see R10) | `src/app/share/[token]/page.tsx`, `src/lib/pdf.ts` |
+| DZ5 | Live | Partly done: not on the share view or in the PDFs (see R10) | Built not live (logo everywhere) |
 | DZ9, AC20 | Live ("no dashes") | Live except one dash in Content Studio (see R11) | `write.tsx:553` |
 
 **Design complaints checked again in the code (all hold, except where noted):** wrapping buttons (R1); search menu alignment and red half ring (DZ7: `#cmdk:focus-visible { outline: none }`); black or red first tiles (DZ4: no `tile.dark`, `tile.red`, `kpiDark` or `kpiRed` left); black hero cards and uppercase labels (DZ9: uppercase is only in post and carousel previews, which is intended); dashes (R11); red repeated buttons (no `btn-primary` inside a list `.map`); AI citations Company editing (AC20: `TrackedNames` edits person, company, firms and experts on Competitors; Company links there); LinkedIn MCP button (D8: `linkedin-mcp.tsx` on the Dashboard, no "Coming soon"); account menu top right (L7: `AccountMenu` is in `Section`, `PageHeader`, Content Studio and AI citations, so it shows on every section, including Inbox, Weekly report, the lead page and Playbook); sign-in required fields (L1: `aria-required` and "Required" in `auth-card.tsx`); logo everywhere (R10); provider logos (DZ6: Grok has its name only); Strategy canvas look (S1: dotted canvas, ⋮ View, Edit, Delete, if/else lanes; "From strategy" labels in Today, Pipeline and Content Studio).
