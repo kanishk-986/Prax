@@ -329,3 +329,11 @@ New: **Prax bar status** card at the top of the side panel: extension version, P
 No new automation. The background only adds Prax's own script to LinkedIn tabs; reading still happens only on a button press.
 
 Tested: `node scripts/test-extension.ts` (fixtures written by hand to match LinkedIn's old and new layouts, not saved pages), and `scripts/e2e-extension.mjs` in Playwright's Chromium with the unpacked extension and the fixtures served at linkedin.com (27 checks: all bars, late posts during constant change, re-renders, SPA navigation, Write with Prax on the first click, Send to Discovery and its error, Quiet mode, the side panel's status, Read this post, Capture, analytics, the bar coming back after its script stops, the bridge handshake). The same run against 0.8.0 misses the post with Repost off and the late post. Not tested: real LinkedIn pages, a real Chrome update of an installed extension (Playwright unloads the extension on reload), and the Prax API against Supabase.
+
+## Login, agreed (6 Nov 2026, Q113 to Q116)
+
+- A minimalist sign-in page in the Prax palette with the Corners logo: one centred card, Email and Password (both marked required), Sign in, Forgot password?, show/hide on the password, clear errors, phone-ready.
+- Q113: invite only; no public sign-up. Owners invite from Settings; the invitee sets a password from the invite email.
+- Q114: existing users set their first password through Forgot password.
+- Q115: keep a small "Email me a sign-in link instead".
+- Q116: at least 8 characters; Supabase rate limits; sessions last 30 days on the user's device.
