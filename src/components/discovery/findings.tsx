@@ -94,7 +94,7 @@ function FindingCard({ f, d, first, open, act }: { f: Finding; d: Data; first: b
 const WHY = (f: Finding, j: number) => {
   const v = f.scores[j] ?? 0;
   return [v >= 4 ? "A buyer has a decision to make now." : "Interesting, no decision yet.", v >= 4 ? `Squarely in ${f.pillar || "a pillar"}.` : "Touches a pillar at most.", f.geo || "No region named.", v >= 4 ? "Matches a top service." : "Partial service match.",
-    f.confirmed ? dateLabel(f) : "Date not confirmed on the page.", v >= 4 ? "Primary or two independent sources." : v <= 2 ? "Vendor or single source only." : "One good source.", v >= 4 ? "He can speak from running it." : "Thin operator angle."][j];
+    f.confirmed ? dateLabel(f) : "Date not confirmed on the page.", v >= 4 ? "Primary or two independent sources." : v <= 2 ? "Vendor or single source only." : "One good source.", v >= 4 ? "The profile can speak from running it." : "Thin operator angle."][j];
 };
 export function FindingPanel({ f, d, onClose }: { f: Finding; d: Data; onClose: () => void }) {
   return (
@@ -112,7 +112,7 @@ export function FindingPanel({ f, d, onClose }: { f: Finding; d: Data; onClose: 
   );
 }
 
-export const DISMISS_REASONS = ["Not relevant to his buyers", "Old news", "Weak source", "Already covered"];
+export const DISMISS_REASONS = ["Not relevant to the buyers", "Old news", "Weak source", "Already covered"];
 export function DismissModal({ onPick, onClose }: { onPick: (r: string) => void; onClose: () => void }) {
   return (
     <Modal title="Why dismiss it?" onClose={onClose}>

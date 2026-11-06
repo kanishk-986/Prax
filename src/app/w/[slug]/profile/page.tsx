@@ -4,6 +4,7 @@ import { Upload, ClipboardPaste, FileText, X, ChevronDown, Check, Circle, Rotate
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
+import { possessive } from "@/lib/persona";
 import { Section, KpiTiles, NeedsYou, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { parseProfile, auditProfile, topicReport, prosCons, roadmap, MANUAL, TOP_TIER, type Parsed, type Audit } from "@/lib/profile";
@@ -55,11 +56,11 @@ function ScoreChart({ docs, onPick }: { docs: Doc[]; onPick: (id: string) => voi
   );
 }
 const PROFILE_TOUR: TourStep[] = [
-  { target: "kpis", title: "How strong his profile is", body: "The latest score out of 100, the change since the previous review, and how far the three-month roadmap has got.", tab: "home" },
+  { target: "kpis", title: "How strong the profile is", body: "The latest score out of 100, the change since the previous review, and how far the three-month roadmap has got.", tab: "home" },
   { target: "trend", title: "Score over time", body: "Every review is kept, so each fix shows up as a step up.", tab: "home" },
   { target: "fixes", title: "Top fixes", body: "The changes worth the most points, largest first. Open the report for the full list.", tab: "home" },
-  { target: "topics", title: "Target topics", body: "What his profile should be known for. Scores are measured against these.", tab: "self" },
-  { target: "intake", title: "Run a review", body: "Save his LinkedIn profile as a PDF and drop it here, or paste the text. Prospects and personas work the same way.", tab: "self" },
+  { target: "topics", title: "Target topics", body: "What the profile should be known for. Scores are measured against these.", tab: "self" },
+  { target: "intake", title: "Run a review", body: "Save the LinkedIn profile as a PDF and drop it here, or paste the text. Prospects and personas work the same way.", tab: "self" },
   { target: "report", title: "The report", body: "Score by area, pros and cons, the keyword map, the roadmap with ticks, and every fix.", tab: "self" },
 ];
 
@@ -99,7 +100,7 @@ export default function ProfileStudio() {
   const pickView = (v: string) => { setView(v as typeof view); if (v !== "home") { setTab(v as "self" | "prospect"); setSelId(null); setFresh(false); } };
   const first = ws.name.split(" ")[0];
   return (
-    <Section id="profile" title="Profile Studio" status="How his LinkedIn profile scores for the topics he wants to rank for, and what to fix next."
+    <Section id="profile" title="Profile Studio" status={`How ${possessive(first)} LinkedIn profile scores for the topics ${first} wants to rank for, and what to fix next.`}
       entryStatus={home ? `${first}'s profile scores ${home.score} out of 100. ${home.fixes.length} fixes worth doing.` : `No review of ${first}'s profile yet.`}
       tabs={[{ id: "home", label: "Home" }, { id: "self", label: `${first}'s profile` }, { id: "prospect", label: "Prospects and personas" }]} tab={view} onTab={pickView} steps={PROFILE_TOUR}
       actions={editable && view !== "home" && mine.length > 0 && !fresh ? <button className="btn h-10" onClick={() => { setFresh(true); setSelId(null); haptic(); }}><RotateCcw size={14} /> Start a new review</button> : undefined}>
@@ -128,8 +129,8 @@ export default function ProfileStudio() {
       ) : (
         <section data-tour="kpis" className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-6">
           <h2 className="text-page font-semibold">No review yet</h2>
-          <p className="max-w-[600px] text-body text-ink-2">Save {first}&apos;s LinkedIn profile as a PDF (open the profile, More, Save to PDF) and drop it in. Prax scores it against his target topics and builds a three-month roadmap.</p>
-          <div><button className="btn btn-primary h-10 px-4" onClick={() => pickView("self")}><Upload size={14} /> Review his profile</button></div>
+          <p className="max-w-[600px] text-body text-ink-2">Save {first}&apos;s LinkedIn profile as a PDF (open the profile, More, Save to PDF) and drop it in. Prax scores it against the target topics and builds a three-month roadmap.</p>
+          <div><button className="btn btn-primary h-10 px-4" onClick={() => pickView("self")}><Upload size={14} /> Review {possessive(first)} profile</button></div>
         </section>
       ))}
 

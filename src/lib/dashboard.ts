@@ -86,7 +86,7 @@ export function pointsDelta(now: number | null | undefined, prev: number | null 
 // ---------- Today agenda ----------
 export type GroupKey = "comment" | "post" | "followup" | "connect" | "other";
 export const GROUPS: { key: GroupKey; label: string; hint: string }[] = [
-  { key: "comment", label: "Comment", hint: "Comments on other posts, and replies on his own" },
+  { key: "comment", label: "Comment", hint: "Comments on other posts, and replies on the profile's own posts" },
   { key: "post", label: "Post", hint: "Approvals and posts going out" },
   { key: "followup", label: "Follow up", hint: "Messages and notes to people already in touch" },
   { key: "connect", label: "Connect", hint: "Connection requests, after two comments on their posts" },

@@ -94,6 +94,57 @@ export function tuningRules(t: Tuning): string {
 
 export const LOCKED_RULES = "Always: no em or en dashes, no contractions, no hashtags, never criticise a regulator or government, no sales pitch or proof points in comments, use only facts present in the post or the voice profile, never invent numbers. Avoid these words: " + BANNED.join(", ") + ".";
 
+// ---------- Draft a comment in the app (the same request the extension sends from LinkedIn) ----------
+export type Draft = { text: string; angle?: string; value?: number; impact?: number };
+export type DraftAsk = { post: string; author?: string; style?: string | null; studio: Studio };
+
+/** The playbooks as one block of rules, as the extension sends them. */
+export const playbookText = (pbs: Playbook[]) => pbs.map((b) => `${b.type}: ${b.aim} Works: ${b.works.join("; ")}. Reads as filler: ${b.filler.join("; ")}.${b.examples?.length ? ` Examples: ${b.examples.join(" | ")}` : ""}`).join("\n");
+
+/** How many drafts the panel asks for: the tuning's number, kept to 2 or 3. */
+export const panelDrafts = (t: Tuning) => Math.max(2, Math.min(3, t.drafts || 3));
+
+/** A pasted LinkedIn address, if the text holds one. Prax never opens it; it is kept as the post's link. */
+export function linkIn(text: string): string {
+  const m = text.match(/https?:\/\/(?:[\w-]+\.)*linkedin\.com\/[^\s<>"')]+/i);
+  return m ? m[0].replace(/[.,;]+$/, "") : "";
+}
+/** True when the paste is only a link, with no post text to write about. */
+export const onlyLink = (text: string) => { const l = linkIn(text); return !!l && text.replace(l, "").trim().length < 20; };
+
+/** The user message for 2 or 3 comment drafts. The voice, the voice fingerprint and the locked rules are added
+ *  by the extension (kind "comment"), so this carries the post, the playbooks, the style and the tuning. */
+export function commentAsk({ post, author, style, studio }: DraftAsk): string {
+  const n = panelDrafts(studio.tuning);
+  const on = studio.styles.filter((s) => s.on);
+  const chosen = style ? studio.styles.find((s) => s.name === style) : null;
+  const pick = chosen ? `Use the style ${chosen.name}. Rules for this draft: ${chosen.rules}`
+    : `Choose the best style for this post type from: ${on.map((x) => x.name).join(", ")}. Style rules: ${JSON.stringify(Object.fromEntries(on.map((x) => [x.name, x.rules])))}.`;
+  const types = studio.playbooks.map((b) => b.type).join(", ");
+  return `POST${author?.trim() ? ` BY ${author.trim()}` : ""}:\n${post.trim().slice(0, 6000)}
+
+First classify the post as one of: ${types}. Apply the playbook for that type:
+${playbookText(studio.playbooks) || "(no playbooks)"}
+
+${pick}
+${tuningRules(studio.tuning)}
+Write ${n} different drafts, each taking a different angle, ranked strongest first. Use only facts present in the text above. Score each for value (1 to 10: does it add something the post does not already say) and impact (1 to 10: how likely the author is to reply to it).
+Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...", "angle": "five words on the angle", "value": 8, "impact": 7}]}`;
+}
+
+/** The model's reply as drafts: at most n, empty texts dropped, scores kept only when they are 1 to 10. */
+export function readDrafts(j: { post_type?: unknown; mode?: unknown; drafts?: unknown } | null, n: number): { type: string; mode: string; drafts: Draft[] } | null {
+  if (!j || !Array.isArray(j.drafts)) return null;
+  const sc = (v: unknown) => (typeof v === "number" && v >= 1 && v <= 10 ? Math.round(v) : undefined);
+  const drafts = (j.drafts as unknown[]).map((d): Draft | null => {
+    if (typeof d === "string") return d.trim() ? { text: d.trim() } : null;
+    const o = (d ?? {}) as Record<string, unknown>;
+    const text = typeof o.text === "string" ? o.text.trim() : "";
+    return text ? { text, angle: typeof o.angle === "string" ? o.angle : undefined, value: sc(o.value), impact: sc(o.impact) } : null;
+  }).filter((d): d is Draft => !!d).slice(0, n);
+  return drafts.length ? { type: typeof j.post_type === "string" ? j.post_type : "", mode: typeof j.mode === "string" ? j.mode : "", drafts } : null;
+}
+
 export function voiceText(f: Partial<Fingerprint>): string {
   if (!f.summary) return "";
   return `How this person writes: ${f.summary}${f.tone?.length ? ` Tone: ${f.tone.join(", ")}.` : ""}${f.sentences ? ` Sentences: ${f.sentences}` : ""}${f.phrases?.length ? ` Phrases they use: ${f.phrases.join("; ")}.` : ""}${f.avoid?.length ? ` They never: ${f.avoid.join("; ")}.` : ""}`;
