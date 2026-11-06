@@ -758,3 +758,8 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 6. QA new-tester walkthrough (TS8).
 
 **Rules:** free tier only (no domain or paid services); Prax branding (owner Kanishk; no Antier or person names hardcoded); no LinkedIn automation; keys stay in the extension; deploy only on the owner's word; push after every deploy; every agreed item lives in `docs/BACKLOG.md`.
+
+### Humanize QA retest: PASS at 4401bbc (7 Nov 2026). P3 follow-ups
+- The extension changed after 0.9.6 without a version bump. Connections bumps it to 0.9.7; make sure that release includes the humanize profile-id change, then rebuild the zip.
+- With no extension, the card shows "Add a Pangram key" for about 1.5 s before "Install Prax for Chrome". Show a neutral line until the status resolves.
+- `has_role_of` (db/003) can be called by anon. Add a `revoke` in Agent A's security pass, but first check whether any RLS policy calls it as the querying user; if so, revoking it from `authenticated` would break those policies.
