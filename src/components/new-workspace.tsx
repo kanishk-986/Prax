@@ -43,22 +43,22 @@ export function NewWorkspace({ onCreate }: { onCreate?: (f: NewProfile) => Promi
   return (
     <form onSubmit={create} className="card anim-rise flex flex-col gap-4 p-5 sm:col-span-2" aria-labelledby="new-profile-title">
       <div>
-        <h2 id="new-profile-title" className="text-[15px] font-semibold">New profile</h2>
-        <p className="mt-0.5 text-[13px] text-muted">One LinkedIn presence with its own plan, pipeline and team. It starts empty; you set the strategy next.</p>
+        <h2 id="new-profile-title" className="text-title font-semibold">New profile</h2>
+        <p className="mt-0.5 text-body text-muted">One LinkedIn presence with its own plan, pipeline and team. It starts empty; you set the strategy next.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1"><span className="label">Full name</span><input id="ws-name" className="field h-10" required autoFocus autoComplete="off" value={f.name} onChange={set("name")} placeholder="First and last name" /></label>
         <label className="flex flex-col gap-1"><span className="label">Role or headline</span><input id="ws-headline" className="field h-10" value={f.headline} onChange={set("headline")} placeholder="For example: Co-Founder and COO" /></label>
         <label className="flex flex-col gap-1"><span className="label">Company</span><input id="ws-company" className="field h-10" value={f.company} onChange={set("company")} placeholder="Company name" /></label>
         <label className="flex flex-col gap-1"><span className="label">LinkedIn URL</span><input id="ws-li" className="field h-10" inputMode="url" value={f.linkedin_url} onChange={set("linkedin_url")} placeholder="linkedin.com/in/their-name" aria-invalid={badLink} />
-          {badLink && <span className="text-[12px] text-bad">Use the profile link, for example linkedin.com/in/their-name</span>}</label>
+          {badLink && <span className="text-meta text-bad">Use the profile link, for example linkedin.com/in/their-name</span>}</label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary h-10 px-4" disabled={busy || !f.name.trim() || badLink}>{busy ? "Creating" : "Create profile"}</button>
         <button type="button" className="btn btn-ghost h-10" onClick={() => { setOpen(false); setErr(""); }}>Cancel</button>
-        <span className="text-[12px] text-muted">Only the name is needed now. Everything can be changed in Settings.</span>
+        <span className="text-meta text-muted">Only the name is needed now. Everything can be changed in Settings.</span>
       </div>
-      {err && <p className="text-bad text-[13px]">{err}</p>}
+      {err && <p className="text-bad text-body">{err}</p>}
     </form>
   );
 }

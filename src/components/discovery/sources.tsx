@@ -13,45 +13,45 @@ export function SourcesTab({ d, entities, batch, openUpload, removeList, openFin
     <div className="anim-rise flex flex-wrap items-stretch gap-4">
       <section className="flex min-w-0 flex-[3_1_560px] flex-col gap-4">
         <div data-tour="lists" className="overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2.5 px-[18px] py-3.5"><span className="min-w-0"><span className="font-semibold">Link lists</span><span className="mt-0.5 block text-[12.5px] text-muted">Excel or CSV files of links. Prax reads each page and the newest articles on list pages.</span></span>{d.editable && <button type="button" className="btn btn-primary h-9 shrink-0" onClick={openUpload}>Upload a list</button>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2.5 px-[18px] py-3.5"><span className="min-w-0"><span className="font-semibold">Link lists</span><span className="mt-0.5 block text-meta text-muted">Excel or CSV files of links. Prax reads each page and the newest articles on list pages.</span></span>{d.editable && <button type="button" className="btn btn-primary h-9 shrink-0" onClick={openUpload}>Upload a list</button>}</div>
           {d.lists.map((l) => {
             const ls = d.links.filter((x) => x.list_id === l.id), bad = ls.filter((x) => x.status === "gated" || x.status === "blocked").length, unread = ls.filter((x) => x.status === "new").length;
             return (
               <div key={l.id} className="flex flex-wrap items-center gap-3 border-t border-[#ececec] px-[18px] py-3 hover:bg-[#fafafa]">
-                <span className="flex min-w-0 flex-1 basis-[220px] flex-col gap-0.5"><span className="text-[13.5px] font-semibold">{l.name}</span><span className="text-[12px] text-muted">{ls.length} links · uploaded {new Date(l.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{l.file_name && l.file_name !== l.name ? ` · ${l.file_name}` : ""}</span></span>
+                <span className="flex min-w-0 flex-1 basis-[220px] flex-col gap-0.5"><span className="text-body font-semibold">{l.name}</span><span className="text-meta text-muted">{ls.length} links · uploaded {new Date(l.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{l.file_name && l.file_name !== l.name ? ` · ${l.file_name}` : ""}</span></span>
                 <LinkStatus s={unread === ls.length ? "new" : "read"} />
-                {bad > 0 && <span className="text-[12px] text-muted">{bad} gated or blocked</span>}
+                {bad > 0 && <span className="text-meta text-muted">{bad} gated or blocked</span>}
                 {d.editable && <button type="button" className="btn btn-ghost h-8 shrink-0" onClick={() => removeList(l)}>Remove</button>}
               </div>
             );
           })}
-          {!d.lists.length && <p className="m-0 border-t border-[#ececec] px-[18px] py-4 text-[13px] text-muted">None yet. The Research Resources List is one click away in Upload a list.</p>}
+          {!d.lists.length && <p className="m-0 border-t border-[#ececec] px-[18px] py-4 text-body text-muted">None yet. The Research Resources List is one click away in Upload a list.</p>}
         </div>
         <div className="flex-1 overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="px-[18px] py-3.5"><div className="font-semibold">Domains in your lists</div><div className="mt-0.5 text-[12.5px] text-muted">Each site is read on every crawl. The AI searches cover the open web, not only these.</div></div>
-          {domains.slice(0, 40).map(([h, s]) => <div key={h} className="flex items-center gap-3 border-t border-[#ececec] px-[18px] py-2.5"><span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold">{h}</span><LinkStatus s={s} /></div>)}
-          {domains.length > 40 && <p className="m-0 border-t border-[#ececec] px-[18px] py-2.5 text-[12px] text-muted">And {domains.length - 40} more on the Crawl tab.</p>}
-          {!domains.length && <p className="m-0 border-t border-[#ececec] px-[18px] py-4 text-[13px] text-muted">None.</p>}
+          <div className="px-[18px] py-3.5"><div className="font-semibold">Domains in your lists</div><div className="mt-0.5 text-meta text-muted">Each site is read on every crawl. The AI searches cover the open web, not only these.</div></div>
+          {domains.slice(0, 40).map(([h, s]) => <div key={h} className="flex items-center gap-3 border-t border-[#ececec] px-[18px] py-2.5"><span className="min-w-0 flex-1 truncate text-body font-semibold">{h}</span><LinkStatus s={s} /></div>)}
+          {domains.length > 40 && <p className="m-0 border-t border-[#ececec] px-[18px] py-2.5 text-meta text-muted">And {domains.length - 40} more on the Crawl tab.</p>}
+          {!domains.length && <p className="m-0 border-t border-[#ececec] px-[18px] py-4 text-body text-muted">None.</p>}
         </div>
       </section>
       <aside className="flex min-w-0 flex-[2_1_320px] flex-col gap-4">
         <div className="overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="px-[18px] py-3.5"><div className="font-semibold">Watched entities</div><div className="mt-0.5 text-[12.5px] text-muted">Target accounts, VIPs, competitors and the Research Resources List. {batch} are searched per run, in rotation.</div></div>
+          <div className="px-[18px] py-3.5"><div className="font-semibold">Watched entities</div><div className="mt-0.5 text-meta text-muted">Target accounts, VIPs, competitors and the Research Resources List. {batch} are searched per run, in rotation.</div></div>
           {kinds.map((k) => {
             const es = entities.filter((e) => e.kind === k);
             return (
               <div key={k} className="flex flex-col gap-1.5 border-t border-[#ececec] px-[18px] py-2.5">
-                <span className="flex items-center justify-between gap-2.5 text-[12px] font-semibold"><span>{k}</span><span className="num text-muted">{es.length}</span></span>
-                <span className="text-[13px] leading-snug text-muted">{es.slice(0, 8).map((e) => e.name).join(", ")}{es.length > 8 ? `, and ${es.length - 8} more` : ""}</span>
+                <span className="flex items-center justify-between gap-2.5 text-meta font-semibold"><span>{k}</span><span className="num text-muted">{es.length}</span></span>
+                <span className="text-body leading-snug text-muted">{es.slice(0, 8).map((e) => e.name).join(", ")}{es.length > 8 ? `, and ${es.length - 8} more` : ""}</span>
               </div>
             );
           })}
         </div>
-        <div data-tour="linkedin" className="flex flex-1 flex-col gap-2.5 rounded-2xl bg-[#141414] p-[18px] text-white">
-          <span className="font-[650]">LinkedIn inbox</span>
-          <span className="text-[13px] leading-relaxed text-[#e3e3e3]">Discovery never searches, scrolls or reads LinkedIn in the background. A post arrives here only when you press <b>Send to Discovery</b> on the Prax bar while viewing it yourself (extension 0.8.0).</span>
-          {inbox.map((f) => <button key={f.id} type="button" onClick={() => openFinding(f)} className="flex justify-between gap-2.5 border-t border-white/10 pt-2 text-left text-[13px]"><span className="min-w-0 truncate">{f.title}</span><span className="shrink-0 text-[12px] text-[#cfcfcf]">{ago(f.found_at)}</span></button>)}
-          {!inbox.length && <span className="border-t border-white/10 pt-2 text-[13px] text-[#cfcfcf]">None sent yet.</span>}
+        <div data-tour="linkedin" className="panel flex flex-1 flex-col gap-2.5 p-[18px]">
+          <h2 className="text-body font-semibold">LinkedIn inbox</h2>
+          <span className="text-body leading-relaxed text-ink-2">Discovery never searches, scrolls or reads LinkedIn in the background. A post arrives here only when you press <b>Send to Discovery</b> on the Prax bar while viewing it yourself (extension 0.8.0).</span>
+          {inbox.map((f) => <button key={f.id} type="button" onClick={() => openFinding(f)} className="flex justify-between gap-2.5 border-t border-line pt-2 text-left text-body hover:text-ink"><span className="min-w-0 truncate">{f.title}</span><span className="shrink-0 text-meta text-muted">{ago(f.found_at)}</span></button>)}
+          {!inbox.length && <span className="border-t border-line pt-2 text-body text-muted">None sent yet.</span>}
         </div>
       </aside>
     </div>

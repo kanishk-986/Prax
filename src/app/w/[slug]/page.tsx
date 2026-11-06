@@ -8,14 +8,14 @@ import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useCitationProfile } from "@/lib/citation-profile";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
-import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
-import { LinkedInMcpButton } from "@/components/linkedin-mcp";
+import { Section, KpiTiles, NeedsYou, Activity, Panel, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
+
 import { ProviderLogo } from "@/components/provider-mark";
 import { providerName } from "@/lib/providers";
 import { GetStarted, setupSteps } from "@/components/get-started";
 import { useExtension } from "@/lib/bridge";
 import { cap, firstNameOf, possessive, pillarsOf } from "@/lib/persona";
-import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
+import { deltaOf, pointsDelta, weekOverWeek, rankNeeds, commentDays, weeklyCommentTarget, whenLabel, weekSentence, relTime, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
 import { ENGINES, personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
@@ -40,7 +40,6 @@ const dashTour = (n: string): TourStep[] => [
   { target: "reach", title: "LinkedIn reach", body: `Impressions, followers, profile viewers and search appearances, captured when you open ${possessive(n)} LinkedIn analytics with the extension.` },
   { target: "activity", title: "Recent activity", body: "Ticks on Today and pipeline moves, newest first, as the team works." },
   { target: "open-today", title: "Start the day", body: "Open Today for the plan: comments, posts, follow-ups and connections, in that order." },
-  { target: "mcp", title: "LinkedIn MCP", body: "A direct LinkedIn connection is coming soon. Nothing is connected yet, and Prax will still never post or send for you." },
 ];
 
 const NOT_POSTED = ["Posted", "On hold", "Published"];
@@ -81,15 +80,15 @@ export default function Dashboard() {
       .then(({ data }: { data: RunRow[] | null }) => setRuns((data ?? []).map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) }))));
   }, [ws.id, cit0.ready, cit0.scope]);
 
-  const wkDays = Math.min(5, daysBetween(wk, t) + 1);
+  const commentTarget = weeklyCommentTarget(ws.quotas.comment);
   const week = useMemo(() => {
     const rows = items.rows;
     const tod = rows.filter((r) => r.day === t);
-    const commentDays = rows.filter((r) => r.kind === "comment" && r.done).map((r) => r.day);
-    const cw = weekOverWeek(commentDays, t);
+    // One count for the week, the same one Engagement shows: per day, ticks on Today or comments logged, whichever is more.
+    const cw = weekOverWeek(commentDays(rows.filter((r) => r.kind === "comment" && r.done).map((r) => r.day), logged.rows.map((l) => l.day)), t);
     const days = Array.from({ length: 14 }, (_, i) => addDays(t, i - 13)).map((d) => { const a = rows.filter((r) => r.day === d); return { d, done: a.filter((r) => r.done).length, total: a.length }; });
-    return { today: { done: tod.filter((r) => r.done).length, total: tod.length }, comments: cw, commentSpark: dailySeries(commentDays, t, 14), days };
-  }, [items.rows, t]);
+    return { today: { done: tod.filter((r) => r.done).length, total: tod.length }, comments: cw, days };
+  }, [items.rows, logged.rows, t]);
 
   const pipe = useMemo(() => {
     const rows = prospects.rows;
@@ -160,7 +159,7 @@ export default function Dashboard() {
 
   const hour = new Date().getHours();
   const loading = items.loading || prospects.loading;
-  const sentence = weekSentence({ comments: week.comments.now, commentTarget: ws.quotas.comment * wkDays, posted: content.posted.now, planned: content.planned, overdue: pipe.overdue, conversations: pipe.conv });
+  const sentence = weekSentence({ comments: week.comments.now, commentTarget, posted: content.posted.now, planned: content.planned, overdue: pipe.overdue, conversations: pipe.conv });
   const commentDelta = deltaOf(week.comments.now, week.comments.prev);
   const postDelta = deltaOf(content.posted.now, content.posted.prev);
   const draftDelta = deltaOf(studio.drafts.now, studio.drafts.prev);
@@ -168,11 +167,7 @@ export default function Dashboard() {
   return (
     <Section id="dashboard" title={greeting(hour, firstName(name, email))} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
       entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
-      actions={<>
-        <LinkedInMcpButton tour="mcp" />
-        {/* On phones Today is one tap away in the menu and in Needs you now, so the header keeps to two buttons. */}
-        <span className="hidden sm:contents"><Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link></span>
-      </>}
+      primary={<Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link>}
       steps={dashTour(first)}>
 
       {loading ? <Skeleton /> : (<>
@@ -183,7 +178,7 @@ export default function Dashboard() {
           { label: "Warm paths", value: warm ?? "None", href: `${base}/network`, sub: warm == null ? "Upload the LinkedIn export" : "prospects with a way in" },
           { label: "Posts this week", value: content.posted.now, of: content.planned ? `of ${content.planned} planned` : undefined, href: `${base}/studio-content?tab=plan`,
             delta: postDelta && (content.posted.now || content.posted.prev) ? { ...postDelta, label: "vs last week" } : null, sub: content.planned || content.posted.now ? undefined : "Nothing planned yet" },
-          { label: "Comments this week", value: week.comments.now, of: `of ${ws.quotas.comment * wkDays}`, href: `${base}/today`, spark: week.commentSpark,
+          { label: "Comments this week", value: week.comments.now, of: commentTarget ? `of ${commentTarget}` : undefined, href: `${base}/comments`,
             delta: commentDelta && (week.comments.now || week.comments.prev) ? { ...commentDelta, label: "vs last week" } : null, sub: week.comments.now || week.comments.prev ? undefined : "None yet this week" },
           // "<Name> named in X% of AI answers": latest answer per prompt and AI tool over 28 days, strict person matching.
           { label: `${cap(first)} in AI answers`, href: `${base}/citations`,
@@ -202,14 +197,14 @@ export default function Dashboard() {
               <Glance href={`${base}/today`} name="Today" line={week.today.total ? `${week.today.done} of ${week.today.total} done today` : "Today's plan is not opened yet"} aside={<MiniBars days={week.days} today={t} />} />
               <Glance href={`${base}/studio-content`} name="Content Studio" line={`${content.planned} planned · ${content.posted.now} out · ${content.review} in review`} />
               <Glance href={`${base}/studio`} name="Comment Studio" line={`${studio.drafts.now} drafts saved · ${studio.logged.now} comments logged`}
-                aside={draftDelta && (studio.drafts.now || studio.drafts.prev) ? <span className="num text-[11.5px] text-faint">{draftDelta.text} drafts</span> : undefined} />
+                aside={draftDelta && (studio.drafts.now || studio.drafts.prev) ? <span className="num text-meta text-faint">{draftDelta.text} drafts</span> : undefined} />
               <Glance href={`${base}/pipeline`} name="Pipeline" line={`${pipe.conv} in conversation · ${pipe.calls} ${pipe.calls === 1 ? "call" : "calls"} · ${pipe.overdue} overdue`} alert={pipe.overdue > 0} />
               <Glance href={`${base}/network`} name="Network" line={people ? `${people.toLocaleString("en-GB")} people · ${warm ?? 0} warm paths` : "No LinkedIn export uploaded yet"} />
               <Glance href={`${base}/discovery?tab=digest`} name="Discovery Studio" alert={disc.open.length > 0}
                 line={disc.ranked ? `Digest ready: ${disc.ranked} topics · ${disc.sent} sent to Content Studio${disc.rising ? ` · ${disc.rising} rising` : ""}` : "No Digest for this week yet"} />
               <Glance href={`${base}/citations`} name="AI citations" alert={cit.gaps > 0}
                 line={!cit.active ? "No prompts set up yet" : cit.share.total ? `${cap(first)} named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
-                aside={cit.last ? <span className="flex shrink-0 items-center gap-2.5"><span className="flex items-center gap-1.5" role="img" aria-label={`Answers from ${cit.engines.map((e) => providerName(e)).join(", ")}`}>{cit.engines.map((e) => <span key={e} title={providerName(e)}><ProviderLogo id={e} size={13} /></span>)}</span><span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span></span> : undefined} />
+                aside={cit.last ? <span className="flex shrink-0 items-center gap-2.5"><span className="flex items-center gap-1.5" role="img" aria-label={`Answers from ${cit.engines.map((e) => providerName(e)).join(", ")}`}>{cit.engines.map((e) => <span key={e} title={providerName(e)}><ProviderLogo id={e} size={13} /></span>)}</span><span className="num text-meta text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span></span> : undefined} />
             </Panel>
           </div>
         </div>
@@ -220,16 +215,17 @@ export default function Dashboard() {
               empty="Nothing yet. Ticks on Today and pipeline moves appear here as they happen." />
           </div>
           <div className={`${reveal(7).className} flex min-w-0 flex-col [&>section]:flex-1`} style={reveal(7).style}>
-            <Panel tour="reach" title="LinkedIn reach" meta="captured with the extension">
-              {/* One row per metric. Nothing captured yet: "None" on each row and one honest line, no empty grid. */}
-              {REACH.map((r) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
+            <Panel tour="reach" title="LinkedIn reach" meta={REACH.some((r) => reach[r.key]?.now) ? "captured with the extension" : undefined}>
+              {/* One row per captured metric. Nothing captured yet: one honest line and where to start, no rows of "None". */}
+              {!REACH.some((r) => reach[r.key]?.now) ? (
+                <p className="border-t border-line px-[18px] py-4 text-body text-muted">Not started. Reach appears after the extension reads {possessive(first)} LinkedIn analytics page once. <Link href={`${base}/extension`} className="font-medium text-ink underline decoration-line-strong underline-offset-[3px] hover:decoration-ink">How to capture it</Link></p>
+              ) : REACH.filter((r) => reach[r.key]?.now).map((r) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
                 <div key={r.key} className="flex items-center gap-3 border-t border-line px-[18px] py-2.5">
-                  <span className="flex min-w-0 flex-1 flex-col"><span className="text-[13px] font-semibold">{r.label}</span>
-                    <span className="truncate text-[12px] text-muted">{e?.now ? <>{d && d.dir !== "flat" && <span className={`num font-semibold ${d.dir === "up" ? "text-ink" : "text-dark-red"}`}>{d.text} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : r.sub}</span></span>
-                  <span className={`num shrink-0 text-right ${e?.now ? "text-[18px] font-semibold tracking-[-0.02em]" : "text-[13px] text-muted"}`}>{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
+                  <span className="flex min-w-0 flex-1 flex-col"><span className="text-body font-semibold">{r.label}</span>
+                    <span className="truncate text-meta text-muted">{e?.now ? <>{d && d.dir !== "flat" && <span className={`num font-semibold ${d.dir === "up" ? "text-ink" : "text-dark-red"}`}>{d.text} </span>}{r.sub} · {fmtDay(e.now.captured_at.slice(0, 10), { day: "numeric", month: "short" })}</> : r.sub}</span></span>
+                  <span className={`num shrink-0 text-right ${e?.now ? "text-page font-semibold tracking-[-0.02em]" : "text-body text-muted"}`}>{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
                 </div>
               ); })}
-              {!REACH.some((r) => reach[r.key]?.now) && <p className="border-t border-line px-[18px] py-3 text-[12.5px] text-muted">Nothing captured yet. Open {possessive(first)} LinkedIn analytics with the extension on to capture these.</p>}
             </Panel>
           </div>
         </div>
@@ -248,8 +244,8 @@ function Glance({ href, name, line, aside, alert }: { href: string; name: string
   return (
     <Link href={href} className="row-hit group">
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2 text-[13.5px] font-semibold">{name}{alert && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="needs attention" />}</span>
-        <span className="text-[12.5px] text-muted">{line}</span>
+        <span className="flex items-center gap-2 text-body font-semibold">{name}{alert && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="needs attention" />}</span>
+        <span className="text-meta text-muted">{line}</span>
       </span>
       {aside}
       <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" />
@@ -260,7 +256,7 @@ function Glance({ href, name, line, aside, alert }: { href: string; name: string
 /** Fourteen days of tasks done against planned, as tiny bars. */
 function MiniBars({ days, today: t }: { days: { d: string; done: number; total: number }[]; today: string }) {
   const max = Math.max(1, ...days.map((d) => d.total));
-  if (!days.some((d) => d.total)) return <Spark values={days.map((d) => d.done)} />;
+  if (!days.some((d) => d.total)) return null; // no plan yet: no empty chart
   return (
     <svg width="84" height="26" viewBox="0 0 84 26" aria-label="Tasks done per day, last 14 days" role="img" className="shrink-0">
       {days.map((d, i) => { const x = i * 6, h = Math.max(2, (d.total / max) * 24), hd = d.total ? (d.done / d.total) * h : 0; return (

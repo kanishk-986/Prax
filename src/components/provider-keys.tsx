@@ -38,17 +38,17 @@ export function DraftModel({ status, send, usage }: { status: ExtStatus | null; 
   async function remove() {
     try { await send("settings", { clearKey: true }); setOpen(false); haptic(); toast("Key removed from this browser"); } catch (e) { toast((e as Error).message); }
   }
-  const row = (label: string, v: React.ReactNode) => <div className="flex items-baseline justify-between gap-4 border-t border-line py-2.5"><dt className="text-[12.5px] text-muted">{label}</dt><dd className="m-0 min-w-0 truncate text-right text-[13px]">{v}</dd></div>;
+  const row = (label: string, v: React.ReactNode) => <div className="flex items-baseline justify-between gap-4 border-t border-line py-2.5"><dt className="text-meta text-muted">{label}</dt><dd className="m-0 min-w-0 truncate text-right text-body">{v}</dd></div>;
   return (
     <section className="card flex flex-col p-5">
-      <h2 className="flex items-center gap-2 text-[14px] font-semibold"><KeyRound size={15} /> AI model</h2>
-      <p className="mt-1 text-[12px] text-muted">Writes your drafts on LinkedIn and in the studios. Your own key, saved inside the extension in this browser and sent only to the provider. Prax never stores it.</p>
+      <h2 className="flex items-center gap-2 text-body font-semibold"><KeyRound size={15} /> AI model</h2>
+      <p className="mt-1 text-meta text-muted">Writes your drafts on LinkedIn and in the studios. Your own key, saved inside the extension in this browser and sent only to the provider. Prax never stores it.</p>
       <fieldset disabled={!installed} className="mt-3">
         <legend className="sr-only">Provider</legend>
         <div role="radiogroup" aria-label="Provider" className="grid gap-1.5 sm:grid-cols-2">
           {DRAFT_PROVIDERS.map((x) => (
             <button key={x} type="button" role="radio" aria-checked={id === x} onClick={() => { setPick(x === saved ? null : x); setOpen(x !== saved); }}
-              className={`flex h-9 min-w-0 items-center rounded-lg border px-2.5 text-left text-[13px] transition-colors ${id === x ? "border-ink bg-white shadow-[inset_0_0_0_1px_#141414]" : "border-line bg-white hover:border-stroke"}`}>
+              className={`flex h-9 min-w-0 items-center rounded-lg border px-2.5 text-left text-body transition-colors ${id === x ? "border-ink bg-white shadow-[inset_0_0_0_1px_#141414]" : "border-line bg-white hover:border-stroke"}`}>
               <ProviderMark id={x} bold={id === x} />
             </button>
           ))}
@@ -63,9 +63,9 @@ export function DraftModel({ status, send, usage }: { status: ExtStatus | null; 
       {open ? (
         <form className="anim-rise mt-1 grid gap-2.5 border-t border-line pt-3" onSubmit={(e) => { e.preventDefault(); save(); }}>
           <label className="flex flex-col gap-1"><span className="label">{p.name} key</span>
-            <input id="x-key" autoFocus type="password" autoComplete="off" spellCheck={false} className="field font-mono text-[12.5px]" placeholder={on ? `${SAVED_KEY}  Paste a new key` : `Paste a key, it starts ${p.keyHint}`} value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} /></label>
+            <input id="x-key" autoFocus type="password" autoComplete="off" spellCheck={false} className="field font-mono text-meta" placeholder={on ? `${SAVED_KEY}  Paste a new key` : `Paste a key, it starts ${p.keyHint}`} value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} /></label>
           <label className="flex flex-col gap-1"><span className="label">Model <span className="font-normal">(optional)</span></span>
-            <input id="x-model" spellCheck={false} className="field font-mono text-[12.5px]" placeholder={model} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></label>
+            <input id="x-model" spellCheck={false} className="field font-mono text-meta" placeholder={model} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></label>
           <div className="flex flex-wrap gap-2">
             <button type="submit" className="btn btn-primary" disabled={busy || (switching ? !form.apiKey.trim() : !form.apiKey.trim() && !form.model.trim())}>{busy ? "Saving" : "Save to this browser"}</button>
             <button type="button" className="btn btn-ghost" onClick={() => { setOpen(false); setPick(null); setForm({ apiKey: "", model: "" }); }}>Cancel</button>
@@ -74,7 +74,7 @@ export function DraftModel({ status, send, usage }: { status: ExtStatus | null; 
         </form>
       ) : (
         <div className="mt-auto flex border-t border-line pt-3">
-          <button type="button" className={`btn ${on ? "" : "btn-primary"}`} disabled={!installed} onClick={() => setOpen(true)}>{on ? "Replace key" : "Connect"}</button>
+          <button type="button" className="btn" disabled={!installed} onClick={() => setOpen(true)}>{on ? "Replace key" : "Connect"}</button>
         </div>
       )}
     </section>
@@ -94,8 +94,8 @@ export function SearchKeys({ status, send, usage }: { status: ExtStatus | null; 
   return (
     <section id="search-keys" className="card md:col-span-2">
       <div className="p-5 pb-3">
-        <h2 className="flex items-center gap-2 text-[14px] font-semibold"><KeyRound size={15} /> Keys for AI search</h2>
-        <p className="mt-1 text-[12px] text-muted">AI citations and Discovery Studio ask each question, with web search on, on every provider that has a key here. Your drafting key counts for its own provider. Image making in Content Studio uses the OpenAI or Google key.</p>
+        <h2 className="flex items-center gap-2 text-body font-semibold"><KeyRound size={15} /> Keys for AI search</h2>
+        <p className="mt-1 text-meta text-muted">AI citations and Discovery Studio ask each question, with web search on, on every provider that has a key here. Your drafting key counts for its own provider. Image making in Content Studio uses the OpenAI or Google key.</p>
       </div>
       <div className="@container">
         <KeyRowHead />

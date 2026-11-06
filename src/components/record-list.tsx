@@ -14,13 +14,17 @@ export type Col = { key: string; label: string; render?: (r: any) => React.React
 /** A live table of records with an add/edit/delete drawer, role-aware.
  *  groupBy is a column or a function; groups follow groupOrder (unknown ones last) and show groupLabel's name.
  *  Pass adding and onAdding to put the Add button in the section header (AddButton) instead of above the table.
- *  author adds an "Added by" column from the row's created_by and created_at (notes, db/016). */
-export function RecordList({ table, fields, cols: baseCols, order, asc = true, filter, defaults = {}, empty, groupBy, groupLabel, groupOrder, adding, onAdding, author }: {
+ *  author adds an "Added by" column from the row's created_by and created_at (notes, db/016).
+ *  hide leaves rows out of view (Strategy's team operations for viewers and commenters). */
+export function RecordList({ table, fields, cols: baseCols, order, asc = true, filter, defaults = {}, empty, groupBy, groupLabel, groupOrder, adding, onAdding, author, hide }: {
   table: string; fields: Field[]; cols: Col[]; order?: string; asc?: boolean; filter?: (q: any) => any; defaults?: Record<string, unknown>; empty: string;
   groupBy?: string | ((r: any) => string); groupLabel?: (g: string) => string; groupOrder?: string[]; adding?: boolean; onAdding?: (v: boolean) => void; author?: boolean;
+  hide?: (r: any) => boolean;
 }) {
   const { ws, can } = useWorkspace();
-  const { rows, loading } = useLive<any>(table, ws.id, { order, asc, filter });
+  const live = useLive<any>(table, ws.id, { order, asc, filter });
+  const loading = live.loading;
+  const rows = hide ? live.rows.filter((r) => !hide(r)) : live.rows;
   const authorOf = useAuthors();
   const cols: Col[] = author ? [...baseCols, { key: "created_by", label: "Added by", className: "w-[170px] whitespace-nowrap", render: (r) => <Byline {...authorOf(r)} /> }] : baseCols;
   const [sel, setSel] = useState<any | "new" | null>(null);
@@ -35,12 +39,12 @@ export function RecordList({ table, fields, cols: baseCols, order, asc = true, f
   return (
     <>
       {!controlled && <div className="mb-3 flex justify-end">{editable && <button className="btn btn-primary" onClick={() => setSel("new")}><Plus size={14} /> Add</button>}</div>}
-      {loading ? <div className="card flex flex-col gap-2 p-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-surface-2" />)}</div> : rows.length === 0 ? <div className="card p-10 text-center text-[13px] text-muted">{empty}</div> : (
+      {loading ? <div className="card flex flex-col gap-2 p-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-surface-2" />)}</div> : rows.length === 0 ? <div className="card p-10 text-center text-body text-muted">{empty}</div> : (
         <div className="flex flex-col gap-4">
           {groups.map(([g, list]) => (
             <div key={g} className="card overflow-x-auto">
-              {g && <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 text-[13.5px] font-semibold">{groupLabel ? groupLabel(g) : g}<span className="count-badge muted">{list.length}</span></div>}
-              <table className="w-full text-[13px]">
+              {g && <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 text-body font-semibold">{groupLabel ? groupLabel(g) : g}<span className="count-badge muted">{list.length}</span></div>}
+              <table className="w-full text-body">
                 <thead><tr className="border-b border-line text-left">{cols.map((c) => <th key={c.key} className="label px-4 py-2.5 font-semibold">{c.label}</th>)}</tr></thead>
                 <tbody>{list.map((r) => (
                   <tr key={r.id} onClick={() => setSel(r)} className="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-2 active:bg-surface-2">
@@ -71,7 +75,7 @@ export function useAuthors() {
 /** "kanishk.raj@company.com" gives "Kanishk Raj". */
 export const emailName = (email: string) => (email.split("@")[0] || email).split(/[._-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
 function Byline({ name, at }: { name: string; at: string }) {
-  return <span className="flex flex-col leading-tight">{name && <span className="text-[12.5px] font-medium text-ink">{name}</span>}<span className="num text-[11.5px] text-muted">{at}</span></span>;
+  return <span className="flex flex-col leading-tight">{name && <span className="text-meta font-medium text-ink">{name}</span>}<span className="num text-meta text-muted">{at}</span></span>;
 }
 
 /** The Add button for a section header, paired with RecordList's adding and onAdding. Hidden for viewers. */
@@ -105,18 +109,18 @@ function Drawer({ table, fields, rec, defaults, onClose, byline }: { table: stri
     <div className="fixed inset-0 z-50 flex justify-end bg-black/25" onMouseDown={onClose}>
       <aside className="flex h-full w-full max-w-[520px] flex-col border-l border-line bg-surface shadow-[var(--shadow-lg)]" onMouseDown={(e) => e.stopPropagation()} role="dialog">
         <header className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <span className="truncate text-[15px] font-semibold">{rec ? (rec.title || rec.name || rec.question || rec.author || "Edit") : "New"}</span>
+          <span className="truncate text-title font-semibold">{rec ? (rec.title || rec.name || rec.question || rec.author || "Edit") : "New"}</span>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </header>
         <div className="flex-1 overflow-auto px-5 py-4">
-          {byline && <p className="m-0 mb-3 text-[12.5px] text-muted">{byline.name ? <>Added by <b className="font-semibold text-ink">{byline.name}</b>, {byline.at}</> : <>Added {byline.at}</>}</p>}
+          {byline && <p className="m-0 mb-3 text-meta text-muted">{byline.name ? <>Added by <b className="font-semibold text-ink">{byline.name}</b>, {byline.at}</> : <>Added {byline.at}</>}</p>}
           <fieldset disabled={!editable} className="grid grid-cols-2 gap-3">
             {fields.map((x) => (
               <label key={x.key} className={`flex flex-col gap-1 ${x.wide || x.type === "textarea" ? "col-span-2" : ""} ${x.type === "checkbox" ? "flex-row items-center gap-2" : ""}`}>
                 {x.type !== "checkbox" && <span className="label">{x.label}</span>}
                 {x.type === "textarea" ? <textarea id={`f-${x.key}`} rows={x.key === "body" || x.key === "draft" || x.key === "text" ? 10 : 4} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />
                   : x.type === "select" ? <select id={`f-${x.key}`} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })}>{x.options!.map((o) => <option key={o} value={o}>{x.optionLabels?.[o] ?? o}</option>)}</select>
-                  : x.type === "checkbox" ? <><input id={`f-${x.key}`} type="checkbox" checked={!!f[x.key]} onChange={(e) => setF({ ...f, [x.key]: e.target.checked })} /><span className="text-[13px]">{x.label}</span></>
+                  : x.type === "checkbox" ? <><input id={`f-${x.key}`} type="checkbox" checked={!!f[x.key]} onChange={(e) => setF({ ...f, [x.key]: e.target.checked })} /><span className="text-body">{x.label}</span></>
                   : <input id={`f-${x.key}`} type={x.type ?? "text"} className="field" value={f[x.key] ?? ""} onChange={(e) => setF({ ...f, [x.key]: e.target.value })} />}
               </label>
             ))}
@@ -124,8 +128,8 @@ function Drawer({ table, fields, rec, defaults, onClose, byline }: { table: stri
           {rec && <div className="mt-6"><Threads refTable={table} refId={rec.id} /></div>}
         </div>
         <footer className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
-          {rec && editable ? (confirm ? <span className="flex items-center gap-2 text-[13px] text-bad">Delete for everyone? <button className="btn" onClick={del}>Delete</button><button className="btn btn-ghost" onClick={() => setConfirm(false)}>Keep</button></span>
-            : <button className="btn btn-ghost hover:text-bad" onClick={() => setConfirm(true)}><Trash2 size={14} /> Delete</button>) : <span className="text-[12px] text-muted">{editable ? "" : "View only"}</span>}
+          {rec && editable ? (confirm ? <span className="flex items-center gap-2 text-body text-bad">Delete for everyone? <button className="btn" onClick={del}>Delete</button><button className="btn btn-ghost" onClick={() => setConfirm(false)}>Keep</button></span>
+            : <button className="btn btn-ghost hover:text-bad" onClick={() => setConfirm(true)}><Trash2 size={14} /> Delete</button>) : <span className="text-meta text-muted">{editable ? "" : "View only"}</span>}
           {editable && <button className="btn btn-primary" onClick={save}>{rec ? "Save changes" : "Add"}</button>}
         </footer>
       </aside>

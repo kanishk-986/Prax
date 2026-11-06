@@ -1,11 +1,11 @@
 "use client";
 import { AccountMenu } from "@/components/account-menu";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, Compass, Quote } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Quote } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, fmtDay, addDays, weekStart } from "@/lib/workspace";
-import { firstNameOf, possessive } from "@/lib/persona";
+import { pillarsOf } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { FORMATS, balanceWarnings } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, ChannelFlag, statusOf, DayPopover, ActionMenu, Modal } from "@/components/content/shared";
@@ -14,7 +14,8 @@ import { CampaignsTab } from "@/components/content/campaigns";
 import { HomeTab } from "@/components/content/home";
 import { WriteFlow } from "@/components/content/write";
 import { Formatter } from "@/components/content/formatter";
-import { EntryMoment, Tour, tourPending, type TourStep } from "@/components/content/guide";
+import { Tour, tourPending, type TourStep } from "@/components/content/guide";
+import { GuideButton, MoreMenu } from "@/components/shell";
 import { useContentSettings, PovModal, type ContentSettings } from "@/components/content/settings";
 import { nextIssue, postSource, type PostSource } from "@/lib/content";
 import { SidePanel, Tag } from "@/components/discovery/shared";
@@ -43,8 +44,8 @@ export default function ContentStudio() {
   const [tour, setTour] = useState(false);
   const onTab = useCallback((t: string) => setTab(t as Tab), []);
   const clearSeed = useCallback(() => setSeed(null), []);
-  // The tour starts once per browser, after the entry moment has cleared.
-  useEffect(() => { if (!tourPending("content-studio")) return; const t = setTimeout(() => setTour(true), 2700); return () => clearTimeout(t); }, []);
+  // The tour starts once per browser, just after the page has faded in.
+  useEffect(() => { if (!tourPending("content-studio")) return; const t = setTimeout(() => setTour(true), 400); return () => clearTimeout(t); }, []);
   const [startCamp, setStartCamp] = useState<{ view: "brief"; n: number } | undefined>();
   const posts = useLive<Post>("posts", ws.id, { order: "publish_date" });
   const campaigns = useLive<Campaign>("campaigns", ws.id, { order: "created_at" });
@@ -80,20 +81,28 @@ export default function ContentStudio() {
 
   return (
     <div className="cs -mx-4 -my-6 min-h-screen bg-[var(--canvas)] px-4 py-6 md:-mx-10 md:-my-8 md:px-10 md:py-8">
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-5">
-        <header className="flex flex-col gap-4 pl-10 md:pl-0">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h1 className="m-0 text-[26px] font-semibold tracking-tight">Content Studio</h1><p className="m-0 mt-1 text-[14px] text-muted">{SUB[tab]}</p></div>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn btn-ghost h-10 px-3" data-tour="guide" onClick={() => setTour(true)}><Compass size={15} /> Guide</button>
-              <button className="btn h-10 px-4" data-tour="pov" onClick={() => setPov(true)}><Quote size={14} /> Point of view</button>
-              {editable && <button className="btn h-10 px-4" onClick={planCampaign}>Plan a campaign</button>}
+      <div className="page-fade mx-auto flex max-w-[1180px] flex-col gap-5">
+        {/* Same header as every other section: title and one line on the left, Guide and actions right, one red action. */}
+        <header className="flex flex-col gap-[18px] pl-10 md:pl-0">
+          <div className="flex flex-wrap items-center justify-between gap-3.5">
+            <div className="min-w-0 flex-[1_1_360px]"><h1 className="m-0 text-page font-semibold tracking-[-0.02em]">Content Studio</h1><p className="m-0 mt-1 text-body text-muted">{SUB[tab]}</p></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="hidden sm:contents">
+                <span data-tour="guide" className="contents"><GuideButton onClick={() => setTour(true)} /></span>
+                <button className="btn h-10 px-4" data-tour="pov" onClick={() => setPov(true)}><Quote size={14} /> Point of view</button>
+                {editable && <button className="btn h-10 px-4" onClick={planCampaign}>Plan a campaign</button>}
+              </span>
               {editable && <button className="btn btn-primary h-10 px-4" onClick={() => { setSeed(null); setTab("write"); }}>Write a post</button>}
+              <span className="sm:hidden"><MoreMenu>
+                <GuideButton onClick={() => setTour(true)} />
+                <button className="btn h-10 px-4" onClick={() => setPov(true)}><Quote size={14} /> Point of view</button>
+                {editable && <button className="btn h-10 px-4" onClick={planCampaign}>Plan a campaign</button>}
+              </MoreMenu></span>
               <AccountMenu />
             </div>
           </div>
           <div role="tablist" aria-label="Content Studio" data-tour="tabs" className="tabs-row">
-            {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{l}{k === "library" && <span className="num ml-1.5 rounded-full bg-[#ececec] px-1.5 text-[11px] text-muted">{posts.rows.length}</span>}</button>)}
+            {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{l}{k === "library" && <span className="tab-count">{posts.rows.length}</span>}</button>)}
           </div>
         </header>
 
@@ -108,14 +117,14 @@ export default function ContentStudio() {
       {view && <PostView post={fresh(view)!} campaigns={campaigns.rows} members={members} onClose={() => setView(null)} onEdit={() => { setEdit(fresh(view)); setView(null); }} />}
       {edit && <PostEditor post={fresh(edit)!} campaigns={campaigns.rows} posts={posts.rows} settings={settings} companies={companies} onClose={() => setEdit(null)} />}
       {pov && <PovModal settings={settings} save={saveSettings} onClose={() => setPov(false)} />}
-      <EntryMoment id="content-studio" title="Content Studio" line={`Posts, campaigns and the plan for ${possessive(firstNameOf(ws))} profile, in one place.`} />
+
       <Tour id="content-studio" steps={STEPS} open={tour} onClose={() => setTour(false)} onTab={onTab} />
     </div>
   );
 }
 
 function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; campaigns: Campaign[]; openPost: (p: Post) => void; settings: ContentSettings }) {
-  const { can } = useWorkspace();
+  const { ws, can } = useWorkspace();
   const toast = useToast();
   const t = today();
   const [week, setWeek] = useState(weekStart(t));
@@ -145,19 +154,19 @@ function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; camp
       <section className="flex min-w-0 flex-[3_1_560px] flex-col gap-3" data-tour="plan">
         <div className="flex items-center justify-between gap-2">
           <button className="btn h-9 w-9 p-0" aria-label="Previous week" onClick={() => setWeek(addDays(week, -7))}><ChevronLeft size={16} /></button>
-          <span className="flex flex-col items-center"><span className="text-[16px] font-semibold">Week of {fmtDay(week, { day: "numeric", month: "long" })}</span>{week !== weekStart(t) && <button className="text-[12px] font-semibold text-[#d64545]" onClick={() => { setWeek(weekStart(t)); setDay(t); }}>Back to this week</button>}</span>
+          <span className="flex flex-col items-center"><span className="text-title font-semibold">Week of {fmtDay(week, { day: "numeric", month: "long" })}</span>{week !== weekStart(t) && <button className="text-meta font-medium text-ink underline underline-offset-[3px]" onClick={() => { setWeek(weekStart(t)); setDay(t); }}>Back to this week</button>}</span>
           <button className="btn h-9 w-9 p-0" aria-label="Next week" onClick={() => setWeek(addDays(week, 7))}><ChevronRight size={16} /></button>
         </div>
         <div className="grid grid-cols-7 gap-1.5">
           {days.map((d) => {
             const has = inWeek.some((p) => p.publish_date === d), on = d === day, isToday = d === t, past = d < t;
             return (
-              <button key={d} onClick={() => setDay(d)} className="flex flex-col items-center gap-0.5 rounded-xl border py-2.5 transition-colors"
+              <button key={d} onClick={() => setDay(d)} aria-pressed={on} aria-current={isToday ? "date" : undefined} className="flex flex-col items-center gap-0.5 rounded-lg border py-2.5 transition-colors"
                 onDragOver={(e) => { if (drag && !past) e.preventDefault(); }} onDrop={(e) => { e.preventDefault(); const p = drag; setDrag(null); if (p && !past) { setDay(d); planIt(p, d, "09:30"); } }}
                 aria-label={drag && !past ? `Plan on ${fmtDay(d)}` : undefined}
-                style={{ background: on ? "#d64545" : isToday ? "#141414" : "#fff", color: on || isToday ? "#fff" : past ? "#a8a8a8" : "#141414", borderColor: drag && !past ? "#d64545" : on || isToday ? "transparent" : "#e8e8e8", borderStyle: drag && !past ? "dashed" : "solid", borderWidth: drag && !past ? 2 : 1 }}>
-                <span className="text-[11.5px] font-semibold">{fmtDay(d, { weekday: "short" })}</span><span className="num text-[17px]">{d.slice(8)}</span>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: has ? (on || isToday ? "#fff" : past ? "#a8a8a8" : "#d64545") : "transparent" }} />
+                style={{ background: on ? "#141414" : "#fff", color: on ? "#fff" : past ? "var(--faint)" : "#141414", borderColor: drag && !past ? "#141414" : on ? "#141414" : isToday ? "#141414" : "#e8e8e8", borderStyle: drag && !past ? "dashed" : "solid", borderWidth: drag && !past ? 2 : 1 }}>
+                <span className="text-meta font-medium">{isToday ? "Today" : fmtDay(d, { weekday: "short" })}</span><span className="num text-title">{d.slice(8)}</span>
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: has ? (on ? "#fff" : past ? "var(--faint)" : "#141414") : "transparent" }} />
               </button>
             );
           })}
@@ -166,35 +175,35 @@ function PlanTab({ posts, campaigns, openPost, settings }: { posts: Post[]; camp
           {inWeek.map((p, i) => {
             const past = (p.publish_date ?? "") < t, s = past && statusOf(p.status) !== "Posted" ? "Missed" : statusOf(p.status);
             return (
-              <button key={p.id} onClick={() => openPost(p)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-[#fafafa] ${i ? "border-t border-line" : ""}`} style={p.publish_date === day ? { boxShadow: "inset 3px 0 0 #d64545" } : undefined}>
-                <span className="flex w-[74px] shrink-0 flex-col"><span className="text-[12px] font-semibold" style={{ color: p.publish_date === t ? "#d64545" : past ? "var(--faint)" : "#141414" }}>{p.publish_date === t ? "Today" : fmtDay(p.publish_date!, { weekday: "short", day: "numeric" })}</span><span className="num text-[12px] text-muted">{p.planned_time}</span></span>
-                <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className={`truncate text-[14px] font-semibold ${past ? "text-muted" : ""}`}>{p.title}</span><ChannelFlag p={p} /></span><span className="text-[12px] text-muted">{p.format}{p.newsletter ? " · Newsletter" : ""} · {p.pillar || "No pillar"} · {campName(p.campaign_id)}</span></span>
+              <button key={p.id} onClick={() => openPost(p)} className={`flex w-full items-center gap-4 px-4 py-3.5 text-left hover:bg-[#fafafa] ${i ? "border-t border-line" : ""}`} style={p.publish_date === day ? { background: "var(--surface-2)" } : undefined}>
+                <span className="flex w-[74px] shrink-0 flex-col"><span className="text-meta font-semibold" style={{ color: past ? "var(--muted)" : "#141414" }}>{p.publish_date === t ? "Today" : fmtDay(p.publish_date!, { weekday: "short", day: "numeric" })}</span><span className="num text-meta text-muted">{p.planned_time}</span></span>
+                <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className={`truncate text-body font-semibold ${past ? "text-muted" : ""}`}>{p.title}</span><ChannelFlag p={p} /></span><span className="text-meta text-muted">{p.format}{p.newsletter ? " · Newsletter" : ""} · {p.pillar || "No pillar"} · {campName(p.campaign_id)}</span></span>
                 {s === "Missed" ? <span className="pill border border-[#d4d4d4] bg-white text-muted">Not posted</span> : <StatusPill s={s} />}
               </button>
             );
           })}
-          {!inWeek.length && <p className="p-7 text-center text-[13px] text-muted">Nothing planned this week.</p>}
+          {!inWeek.length && <p className="p-7 text-center text-body text-muted">Nothing planned this week.</p>}
         </div>
         {settings.newsletter.name && (() => {
           const next = nextIssue(settings.newsletter, t), has = posts.some((p) => p.newsletter && p.publish_date && p.publish_date >= t && statusOf(p.status) !== "Posted");
-          return <p className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-[13px]"><span className="mr-2 font-semibold text-[#d64545]">Newsletter</span>{settings.newsletter.name}, every {settings.newsletter.cadence === "weekly" ? "week" : settings.newsletter.cadence === "fortnightly" ? "two weeks" : "four weeks"}. Next issue {fmtDay(next, { weekday: "long", day: "numeric", month: "short" })}{has ? ", an article is planned." : ", no article planned for it yet."}</p>;
+          return <p className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-body"><span className="mr-2 font-semibold">Newsletter</span>{settings.newsletter.name}, every {settings.newsletter.cadence === "weekly" ? "week" : settings.newsletter.cadence === "fortnightly" ? "two weeks" : "four weeks"}. Next issue {fmtDay(next, { weekday: "long", day: "numeric", month: "short" })}{has ? ", an article is planned." : ", no article planned for it yet."}</p>;
         })()}
-        {warnings.map((w) => <p key={w} className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-[13px]"><span className="mr-2 font-semibold text-[#d64545]">Balance</span>{w}</p>)}
+        {warnings.map((w) => <p key={w} className="m-0 rounded-xl border border-line bg-white px-4 py-2.5 text-body"><span className="mr-2 font-semibold text-dark-red">Balance</span>{w}</p>)}
       </section>
       <aside className="flex min-w-0 flex-[2_1_300px] flex-col gap-2">
-        <div className="rounded-xl bg-[#141414] p-4 text-white">
-          <div className="text-[13px] font-semibold text-[#ff8a80]">{week === weekStart(t) ? "This week" : "That week"}</div>
-          <div className="mt-2 flex gap-6"><span><b className="num block text-[24px] font-medium">{inWeek.length}</b><span className="text-[12px] text-[#cfcfcf]">posts planned</span></span><span><b className="num block text-[24px] font-medium">{new Set(inWeek.map((p) => p.pillar).filter(Boolean)).size}/6</b><span className="text-[12px] text-[#cfcfcf]">pillars covered</span></span></div>
+        <div className="panel p-4">
+          <h2 className="text-body font-semibold">{week === weekStart(t) ? "This week" : "That week"}</h2>
+          <p className="mt-1 text-body text-muted"><span className="num font-semibold text-ink">{inWeek.length}</span> {inWeek.length === 1 ? "post" : "posts"} planned, <span className="num font-semibold text-ink">{new Set(inWeek.map((p) => p.pillar).filter(Boolean)).size}</span> of {pillarsOf(ws).length || 6} pillars covered.</p>
         </div>
-        <div className="mt-2 flex flex-col gap-0.5" data-tour="toplan"><span className="label text-ink">To plan</span><span className="text-[12px] text-muted">Drag a topic onto a day, or press Pick a date. Discovery Studio and AI citations topics come first.</span></div>
+        <div className="mt-2 flex flex-col gap-0.5" data-tour="toplan"><h2 className="text-body font-semibold">To plan</h2><span className="text-meta text-muted">Drag a topic onto a day, or press Pick a date. Discovery Studio and AI citations topics come first.</span></div>
         {unplanned.map((p) => (
           <div key={p.id} draggable={can("editor")} onDragStart={(e) => { setDrag(p); try { e.dataTransfer.setData("text/plain", p.id); e.dataTransfer.effectAllowed = "move"; } catch {} }} onDragEnd={() => setDrag(null)}
-            className={`flex items-center gap-3 rounded-xl border bg-white px-3.5 py-3 ${can("editor") ? "cursor-grab active:cursor-grabbing" : ""}`} style={{ borderColor: drag?.id === p.id ? "#d64545" : "#e8e8e8" }}>
-            <button className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left" onClick={() => openPost(p)}><span className="flex max-w-full items-center gap-2"><span className="truncate text-[13.5px] font-semibold">{p.title}</span><ChannelFlag p={p} /></span><span className="text-[12px] text-muted">{p.format} · {campName(p.campaign_id)}</span>{tagOf(p) && <span className="text-[11.5px] font-semibold text-[#d64545]">{tagOf(p)}</span>}</button>
-            {can("editor") && <button className="btn btn-primary h-8 shrink-0" onClick={(e) => setPop({ post: p, el: e.currentTarget })}>Pick a date</button>}
+            className={`group flex items-center gap-3 rounded-xl border bg-white px-3.5 py-3 ${can("editor") ? "cursor-grab active:cursor-grabbing" : ""}`} style={{ borderColor: drag?.id === p.id ? "#141414" : "#e8e8e8" }}>
+            <button className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left" onClick={() => openPost(p)}><span className="flex max-w-full items-center gap-2"><span className="truncate text-body font-semibold">{p.title}</span><ChannelFlag p={p} /></span><span className="text-meta text-muted">{p.format} · {campName(p.campaign_id)}</span>{tagOf(p) && <span className="text-meta font-medium text-ink-2">{tagOf(p)}</span>}</button>
+            {can("editor") && <button className="btn btn-quiet row-act h-8 shrink-0" onClick={(e) => setPop({ post: p, el: e.currentTarget })}>Pick a date</button>}
           </div>
         ))}
-        {!unplanned.length && <p className="m-0 rounded-xl border border-dashed border-line-strong bg-white p-4 text-center text-[13px] text-muted">Every idea has a day.</p>}
+        {!unplanned.length && <p className="m-0 rounded-xl border border-dashed border-line-strong bg-white p-4 text-center text-body text-muted">Every idea has a day.</p>}
       </aside>
       {pop && <DayPopover anchor={pop.el} initial={pop.post.publish_date} onClose={() => setPop(null)} onPick={(d, time) => planIt(pop.post, d, time)} />}
     </div>
@@ -264,13 +273,14 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
     if (error) { toast(error.message); return; }
     haptic(); toast(`${p.publish_date ? "Moved" : "Planned"} to ${fmtDay(d)}, ${time}`, async () => { await supabase().from("posts").update({ publish_date: p.publish_date, planned_time: p.planned_time }).eq("id", p.id); });
   }
-  const cols = "grid-cols-[minmax(0,2.4fr)_minmax(0,.9fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,.9fr)_minmax(0,1.1fr)_212px]";
+  // The title takes the free width (type and pillar sit under it); the action column is only as wide as its buttons.
+  const cols = "grid-cols-[minmax(0,1fr)_150px_110px_150px_84px]";
   return (
     <div className="flex flex-col gap-3" data-tour="library">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap rounded-lg border border-line bg-white p-0.5">
           {[["all", "All"], ["Idea", "Ideas"], ["Drafting", "Drafting"], ["In review", "In review"], ["Ready", "Ready"], ["Posted", "Posted"], ["On hold", "On hold"]].map(([k, l]) => (
-            <button key={k} className={`h-8 rounded-md px-3 text-[13px] font-semibold ${status === k ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => setStatus(k)}>{l} <span className="num text-[11px] opacity-75">{count(k)}</span></button>
+            <button key={k} aria-pressed={status === k} className={`h-8 rounded-md px-3 text-body font-medium ${status === k ? "bg-[#141414] text-white" : "text-muted hover:text-ink"}`} onClick={() => setStatus(k)}>{l} <span className="num text-meta opacity-75">{count(k)}</span></button>
           ))}
         </div>
         <select className="field h-9 w-auto" value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="all">All types</option>{FORMATS.map((f) => <option key={f}>{f}</option>)}</select>
@@ -281,27 +291,26 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
       </div>
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="min-w-[1040px]">
-            <div className={`grid ${cols} gap-3 bg-[#141414] px-4 py-2.5 text-[12px] font-semibold text-white`}><span>Post</span><span>Type</span><span>Pillar</span><span>Campaign</span><span>Status</span><span>Planned or posted</span><span className="text-right">Actions</span></div>
+          <div className="min-w-[720px]">
+            <div className={`grid ${cols} gap-3 border-b border-line bg-surface-2 px-4 py-2.5 text-meta font-medium text-muted`}><span>Post</span><span>Campaign</span><span>Status</span><span>Planned or posted</span><span className="sr-only">Actions</span></div>
             {rows.map((p) => {
               const s = statusOf(p.status), cn = campName(p.campaign_id);
               return (
-                <div key={p.id} className={`grid ${cols} items-center gap-3 border-t border-line px-4 py-3 text-[13px] hover:bg-[#fafafa]`}>
-                  <span className="flex min-w-0 flex-col items-start gap-1"><span className="flex max-w-full items-center gap-2"><span className="truncate font-semibold">{p.title}</span><ChannelFlag p={p} /></span>
-                    {postSource(p) === "discovery" && <button type="button" className="pill h-[22px] border border-[#d64545] bg-white px-2 text-[11.5px] text-[#d64545] hover:bg-[#fbeaea]" onClick={() => setDisc(p)}>From Discovery{p.discovery?.rank ? ` · #${p.discovery.rank}` : ""}{p.discovery?.score != null ? ` · ${p.discovery.score}` : ""}</button>}</span>
-                  <span>{p.format || "Text post"}</span>
-                  <span className="truncate text-muted">{p.pillar || p.topic || "Not set"}</span>
-                  <span className="truncate text-[12.5px] font-semibold" style={{ color: cn ? "#d64545" : "var(--faint)" }}>{cn ?? "Independent"}</span>
+                <div key={p.id} className={`group grid ${cols} items-center gap-3 border-t border-line px-4 py-3 text-body first:border-t-0 hover:bg-[#fafafa]`}>
+                  <span className="flex min-w-0 flex-col items-start gap-0.5"><span className="flex max-w-full items-center gap-2"><button type="button" className="truncate text-left font-semibold hover:underline" onClick={() => openPost(p)}>{p.title}</button><ChannelFlag p={p} /></span>
+                    <span className="max-w-full truncate text-meta text-muted">{p.format || "Text post"} · {p.pillar || p.topic || "No pillar"}</span>
+                    {postSource(p) === "discovery" && <button type="button" className="pill h-[22px] border border-line-strong bg-white px-2 text-meta text-ink-2 hover:border-ink" onClick={() => setDisc(p)}>From Discovery{p.discovery?.rank ? ` · #${p.discovery.rank}` : ""}{p.discovery?.score != null ? ` · ${p.discovery.score}` : ""}</button>}</span>
+                  <span className="truncate text-meta" style={{ color: cn ? "var(--ink)" : "var(--muted)" }}>{cn ?? "Independent"}</span>
                   <span><StatusPill s={s} /></span>
-                  <span className="num text-[12px] text-muted">{p.publish_date ? `${s === "Posted" ? "Posted" : "Planned"} ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned"}</span>
+                  <span className="num text-meta text-muted">{p.publish_date ? `${s === "Posted" ? "Posted" : "Planned"} ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned"}</span>
                   <span className="flex justify-end gap-1">
-                    <button className="btn btn-dark h-7 px-3 text-[12px]" onClick={() => openPost(p)}>Open</button>
+                    <button className="btn btn-quiet row-act h-7 px-2.5 text-meta" onClick={() => openPost(p)}>Open</button>
                     {editable && <button className="btn h-7 w-7 p-0" aria-label={`More actions for ${p.title}`} aria-haspopup="menu" title="More actions" onClick={(e) => { const el = e.currentTarget; setMenu((m) => (m?.post.id === p.id ? null : { post: p, el })); }}><MoreHorizontal size={15} /></button>}
                   </span>
                 </div>
               );
             })}
-            {!rows.length && <p className="border-t border-line p-7 text-center text-[13px] text-muted">Nothing matches. Clear the search or the filters.</p>}
+            {!rows.length && <p className="border-t border-line p-7 text-center text-body text-muted">Nothing matches. Clear the search or the filters.</p>}
           </div>
         </div>
       </div>
@@ -317,16 +326,16 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
           ];
         return <ActionMenu anchor={el} items={items} onClose={() => setMenu(null)} />;
       })()}
-      {disc && <SidePanel width={460} kicker={<span className="text-[#d64545]">From Discovery Studio{disc.discovery?.rank ? ` · #${disc.discovery.rank} this week` : ""}{disc.discovery?.score != null ? ` · score ${disc.discovery.score}` : ""}</span>} title={disc.title} onClose={() => setDisc(null)}>
-        <span className="rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Suggested angle</b> {disc.discovery?.angle || disc.angle || "None given"}</span>
-        {disc.discovery?.service && <span className="text-[12.5px]"><b>Service</b> <span className="text-muted">{disc.discovery.service}</span>{disc.discovery.campaign ? <><b className="ml-2">Campaign</b> <span className="text-muted">{disc.discovery.campaign}</span></> : null}</span>}
+      {disc && <SidePanel width={460} kicker={<span className="text-muted">From Discovery Studio{disc.discovery?.rank ? ` · #${disc.discovery.rank} this week` : ""}{disc.discovery?.score != null ? ` · score ${disc.discovery.score}` : ""}</span>} title={disc.title} onClose={() => setDisc(null)}>
+        <span className="rounded-xl bg-surface-2 px-3.5 py-2.5 text-body leading-snug text-ink"><b className="font-semibold">Suggested angle:</b> {disc.discovery?.angle || disc.angle || "None given"}</span>
+        {disc.discovery?.service && <span className="text-meta"><b>Service</b> <span className="text-muted">{disc.discovery.service}</span>{disc.discovery.campaign ? <><b className="ml-2">Campaign</b> <span className="text-muted">{disc.discovery.campaign}</span></> : null}</span>}
         <span className="label text-ink">{disc.discovery?.sources?.length ?? 0} sources</span>
-        {(disc.discovery?.sources ?? []).map((r) => <div key={r.url} className="flex min-w-0 items-center gap-2 rounded-[10px] border border-[#ececec] px-2.5 py-2 text-[12.5px]"><Tag tone={r.via === "AI" ? "dark" : r.via === "Crawl" ? "white" : "red"}>{r.via}</Tag><span className="min-w-0 flex-1 truncate"><b>{r.pub}</b> {r.url.startsWith("linkedin:") ? <span className="text-muted">sent from the Prax bar</span> : <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-ink">{r.url}</a>}</span></div>)}
-        {!disc.discovery?.sources?.length && <span className="text-[13px] text-muted">None stored with this idea.</span>}
-        <Link href={`/w/${ws.slug}/discovery?tab=digest`} className="text-[13px] font-semibold underline underline-offset-[3px]">Open the topic in Discovery Studio</Link>
+        {(disc.discovery?.sources ?? []).map((r) => <div key={r.url} className="flex min-w-0 items-center gap-2 rounded-[10px] border border-[#ececec] px-2.5 py-2 text-meta"><Tag tone={r.via === "AI" ? "dark" : r.via === "Crawl" ? "white" : "red"}>{r.via}</Tag><span className="min-w-0 flex-1 truncate"><b>{r.pub}</b> {r.url.startsWith("linkedin:") ? <span className="text-muted">sent from the Prax bar</span> : <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-ink">{r.url}</a>}</span></div>)}
+        {!disc.discovery?.sources?.length && <span className="text-body text-muted">None stored with this idea.</span>}
+        <Link href={`/w/${ws.slug}/discovery?tab=digest`} className="text-body font-semibold underline underline-offset-[3px]">Open the topic in Discovery Studio</Link>
       </SidePanel>}
       {del && <Modal title={`Delete "${del.title}"?`} onClose={() => setDel(null)} footer={<><button className="btn" onClick={() => setDel(null)}>Keep it</button><button className="btn btn-primary" onClick={() => remove(del)}>Delete</button></>}>
-        <p className="m-0 text-[13.5px] leading-relaxed">Delete &ldquo;{del.title}&rdquo;? Its comments go too.{statusOf(del.status) === "Posted" ? " This only removes the Prax record; the post stays on LinkedIn." : ""}</p>
+        <p className="m-0 text-body leading-relaxed">Delete &ldquo;{del.title}&rdquo;? Its comments go too.{statusOf(del.status) === "Posted" ? " This only removes the Prax record; the post stays on LinkedIn." : ""}</p>
       </Modal>}
     </div>
   );

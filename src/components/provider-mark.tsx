@@ -51,7 +51,7 @@ export function KeyState({ on, onDark = false, className }: { on: boolean; onDar
 
 /** A model id in mono, such as claude-opus-5-5. */
 export function ModelId({ model, className }: { model: string; className?: string }) {
-  return <code className={cx("font-mono text-[12px] tracking-[-0.01em]", className)}>{model}</code>;
+  return <code className={cx("font-mono text-meta tracking-[-0.01em]", className)}>{model}</code>;
 }
 
 /** This user's AI calls from ext_usage over the last 60 days, summed per provider. Prax only stores token counts. */
@@ -73,12 +73,12 @@ export function DraftModelRow({ href, tour }: { href: string; tour?: string }) {
   const p = PROVIDERS[id] ?? PROVIDERS.claude;
   const u = usage.of(p.id);
   const on = !!status?.hasKey;
-  const fact = (label: string, v: React.ReactNode) => <span className="flex min-w-0 items-baseline gap-1.5"><span className="text-[12px] text-muted">{label}</span><span className="num truncate text-[12.5px]">{v}</span></span>;
+  const fact = (label: string, v: React.ReactNode) => <span className="flex min-w-0 items-baseline gap-1.5"><span className="text-meta text-muted">{label}</span><span className="num truncate text-meta">{v}</span></span>;
   return (
     <section data-tour={tour} className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-[18px] py-3.5">
-      <span className="flex min-w-0 flex-col gap-0.5"><span className="text-[12px] text-muted">Drafts are written by</span><ProviderMark id={p.id} className="text-[13.5px]" /></span>
-      {status === null ? <span className="h-4 w-48 animate-pulse rounded bg-surface-2" /> : !status.installed ? <span className="text-[12.5px] text-muted">The Prax extension is not installed in this browser.</span> : <>
-        <KeyState on={on} className="text-[12.5px]" />
+      <span className="flex min-w-0 flex-col gap-0.5"><span className="text-meta text-muted">Drafts are written by</span><ProviderMark id={p.id} className="text-body" /></span>
+      {status === null ? <span className="h-4 w-48 animate-pulse rounded bg-surface-2" /> : !status.installed ? <span className="text-meta text-muted">The Prax extension is not installed in this browser.</span> : <>
+        <KeyState on={on} className="text-meta" />
         {fact("Model", <ModelId model={status.model || p.model} />)}
         {fact("Last used", lastUsedLabel(u.last))}
         {fact("This month", usageLine(u))}
@@ -105,7 +105,7 @@ export type KeyRowProps = {
 /** Column heads for KeyRow, shown only when the list is wide enough for columns. */
 export function KeyRowHead() {
   return (
-    <div className="hidden gap-4 border-b border-line px-4 pb-2 text-[12px] font-semibold text-muted @2xl:grid @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,.75fr)_minmax(0,1.45fr)_112px]">
+    <div className="hidden gap-4 border-b border-line px-4 pb-2 text-meta font-semibold text-muted @2xl:grid @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,.75fr)_minmax(0,1.45fr)_112px]">
       <span>Provider</span><span>Key</span><span>Model</span><span>Last used</span><span>This month</span><span className="sr-only">Action</span>
     </div>
   );
@@ -135,33 +135,33 @@ export function KeyRow({ id, connected, model, usage, note, removable, disabled,
   }
   // Usage lines wrap instead of being cut off; the short cells stay on one line. Wide cells take a full line when narrow.
   const cell = (label: string, v: React.ReactNode, wrap = false, wide = false) => (
-    <div className={cx("flex min-w-0 flex-col gap-0.5", wide && "col-span-2 @2xl:col-span-1")}><span className="text-[11.5px] text-muted @2xl:hidden">{label}</span><span className={cx("min-w-0 text-[13px]", wrap ? "leading-snug" : "truncate")}>{v}</span></div>
+    <div className={cx("flex min-w-0 flex-col gap-0.5", wide && "col-span-2 @2xl:col-span-1")}><span className="text-meta text-muted @2xl:hidden">{label}</span><span className={cx("min-w-0 text-body", wrap ? "leading-snug" : "truncate")}>{v}</span></div>
   );
   return (
     <div className="border-b border-line last:border-b-0">
       <div className="grid grid-cols-2 items-center gap-x-4 gap-y-2.5 px-4 py-3 @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,.75fr)_minmax(0,1.45fr)_112px]">
         <div className="col-span-1 flex min-w-0 flex-col gap-0.5">
-          <ProviderMark id={id} className="text-[13.5px]" />
-          {note && <span className="truncate pl-6 text-[12px] text-muted">{note}</span>}
+          <ProviderMark id={id} className="text-body" />
+          {note && <span className="truncate pl-6 text-meta text-muted">{note}</span>}
         </div>
         <div className="col-span-1 flex justify-end @2xl:order-last">
-          <button type="button" className={cx("btn h-8 w-[112px]", !connected && "btn-primary")} disabled={disabled || busy} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <button type="button" className={"btn h-8 w-[112px]"} disabled={disabled || busy} aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? "Cancel" : connected ? "Replace key" : "Connect"}
           </button>
         </div>
         {cell("Key", <KeyState on={connected} />, false, true)}
         {cell("Model", <ModelId model={model} />)}
-        {cell("Last used", <span className="num text-[12.5px]">{usage ? lastUsedLabel(usage.last) : "None"}</span>)}
-        {cell("This month", <span className="num text-[12.5px]">{usage ? usageLine(usage) : "None"}</span>, true, true)}
+        {cell("Last used", <span className="num text-meta">{usage ? lastUsedLabel(usage.last) : "None"}</span>)}
+        {cell("This month", <span className="num text-meta">{usage ? usageLine(usage) : "None"}</span>, true, true)}
       </div>
       {open && (
         <form className="anim-rise flex flex-wrap items-center gap-2 px-4 pb-3.5" onSubmit={(e) => { e.preventDefault(); save(); }}>
           <label htmlFor={`key-${id}`} className="sr-only">{p.name} key</label>
-          <input id={`key-${id}`} autoFocus type="password" autoComplete="off" spellCheck={false} className="field h-9 min-w-0 flex-[1_1_240px] font-mono text-[12.5px]"
+          <input id={`key-${id}`} autoFocus type="password" autoComplete="off" spellCheck={false} className="field h-9 min-w-0 flex-[1_1_240px] font-mono text-meta"
             placeholder={connected ? `${SAVED_KEY}  Paste a new key` : `Paste a key, it starts ${p.keyHint}`} value={key} onChange={(e) => setKey(e.target.value)} />
           <button type="submit" className="btn btn-primary h-9" disabled={busy || !key.trim()}>{busy ? "Saving" : "Save to this browser"}</button>
           {removable && onRemove && <button type="button" className="btn btn-ghost h-9 hover:text-bad" disabled={busy} onClick={remove}>Remove key</button>}
-          <span className="basis-full text-[12px] text-muted">Saved only inside the Prax extension in this browser and sent only to {p.name.split(" ")[0]}. Prax never sees it.</span>
+          <span className="basis-full text-meta text-muted">Saved only inside the Prax extension in this browser and sent only to {p.name.split(" ")[0]}. Prax never sees it.</span>
         </form>
       )}
     </div>

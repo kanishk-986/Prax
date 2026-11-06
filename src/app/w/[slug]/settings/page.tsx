@@ -48,33 +48,33 @@ export default function Settings() {
 
   return (
     // Same page width as every other section; profile and quotas on the left, the team on the right.
-    <div className="mx-auto max-w-[1180px]">
+    <div className="page-fade mx-auto max-w-[1180px]">
       <PageHeader title="Settings" sub="Profile, strategy, daily quotas and team access" />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <section className="card min-w-0 p-5">
-        <h2 className="text-[14px] font-semibold">Profile</h2>
+        <h2 className="text-body font-semibold">Profile</h2>
         <fieldset disabled={!owner} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1"><span className="label">Name</span><input id="s-name" className="field" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           <label className="flex flex-col gap-1"><span className="label">LinkedIn URL</span><input id="s-li" className="field" value={f.linkedin_url} onChange={(e) => setF({ ...f, linkedin_url: e.target.value })} /></label>
           <label className="flex flex-col gap-1"><span className="label">Role or headline</span><input id="s-hl" className="field" value={f.headline} onChange={(e) => setF({ ...f, headline: e.target.value })} placeholder="For example: Co-Founder and COO" /></label>
           <label className="flex flex-col gap-1"><span className="label">Company</span><input id="s-co" className="field" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="Company name" /></label>
         </fieldset>
-        <h3 className="mt-6 text-[13px] font-semibold">Strategy</h3>
-        <p className="text-[12px] text-muted">Drafts, campaigns, Discovery and AI citations use these. Separate items with commas.</p>
+        <h3 className="mt-6 text-body font-semibold">Strategy</h3>
+        <p className="text-meta text-muted">Drafts, campaigns, Discovery and AI citations use these. Separate items with commas.</p>
         <fieldset disabled={!owner} className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Content pillars</span><textarea id="s-pillars" rows={2} className="field py-2 text-[13px]" value={lists.pillars} onChange={(e) => setLists({ ...lists, pillars: e.target.value })} placeholder="Three to six themes this profile is known for" /></label>
+          <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Content pillars</span><textarea id="s-pillars" rows={2} className="field py-2 text-body" value={lists.pillars} onChange={(e) => setLists({ ...lists, pillars: e.target.value })} placeholder="Three to six themes this profile is known for" /></label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Focus regions</span><input id="s-regions" className="field" value={lists.regions} onChange={(e) => setLists({ ...lists, regions: e.target.value })} placeholder="For example: UAE, India" /></label>
         </fieldset>
         <div className="mt-3"><span className="label">Network segment names</span>
           <fieldset disabled={!owner} className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {Object.entries(SEGMENT_BASE).map(([k, v]) => (
-              <label key={k} className="flex items-center gap-2"><span className="num w-3 shrink-0 text-[12px] font-semibold text-muted">{k}</span>
+              <label key={k} className="flex items-center gap-2"><span className="num w-3 shrink-0 text-meta font-semibold text-muted">{k}</span>
                 <input id={`s-seg-${k}`} className="field" value={lists.segments[k] ?? ""} placeholder={v.label} aria-label={`Segment ${k} name`} onChange={(e) => setLists({ ...lists, segments: { ...lists.segments, [k]: e.target.value } })} /></label>
             ))}
           </fieldset>
         </div>
-        <h3 className="mt-6 text-[13px] font-semibold">Daily quota</h3>
-        <p className="text-[12px] text-muted">Each day&apos;s checklist is generated from these numbers the first time someone opens Today.</p>
+        <h3 className="mt-6 text-body font-semibold">Daily quota</h3>
+        <p className="text-meta text-muted">Each day&apos;s checklist is generated from these numbers the first time someone opens Today.</p>
         {/* Labels can wrap to two lines; each one sits at the top of its cell and every input shares the bottom line. */}
         <fieldset disabled={!owner} className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           {KINDS.map((k) => (
@@ -82,17 +82,20 @@ export default function Settings() {
               <input id={`q-${k.key}`} type="number" min={0} max={50} className="field num" value={(f.quotas as any)[k.key]} onChange={(e) => setF({ ...f, quotas: { ...f.quotas, [k.key]: Number(e.target.value) } })} /></label>
           ))}
         </fieldset>
-        <h3 className="mt-6 text-[13px] font-semibold">Comment voice</h3>
-        <p className="text-[12px] text-muted">The rules the extension gives the AI model when it drafts comments for this profile.</p>
-        <textarea id="s-voice" disabled={!owner} rows={10} className="field mt-2 py-2 text-[12px] leading-relaxed" value={f.voice} onChange={(e) => setF({ ...f, voice: e.target.value })} />
-        {owner && <div className="mt-4 flex items-center gap-3"><button className="btn btn-primary" onClick={save}>Save</button><span className="text-[13px] text-good">{saved}</span></div>}
+        {/* The raw drafting prompt is back office: editors and owners only, never viewers or commenters. */}
+        {can("editor") && <>
+          <h3 className="mt-6 text-body font-semibold">Comment voice</h3>
+          <p className="text-meta text-muted">The rules the extension gives the AI model when it drafts comments for this profile.</p>
+          <textarea id="s-voice" disabled={!owner} rows={10} className="field mt-2 py-2 text-meta leading-relaxed" value={f.voice} onChange={(e) => setF({ ...f, voice: e.target.value })} />
+        </>}
+        {owner && <div className="mt-4 flex items-center gap-3"><button className="btn btn-primary" onClick={save}>Save</button><span className="text-body text-good">{saved}</span></div>}
       </section>
 
       <section className="card min-w-0 p-5">
-        <h2 className="text-[14px] font-semibold">Team</h2>
+        <h2 className="text-body font-semibold">Team</h2>
         <ul className="mt-3 divide-y divide-line">
           {members.rows.map((m) => (
-            <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+            <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5 text-body">
               <span className="truncate">{m.email}{m.user_id === userId && <span className="text-muted"> (you)</span>}</span>
               {owner && m.user_id !== userId ? (
                 <span className="flex items-center gap-2">
@@ -105,7 +108,7 @@ export default function Settings() {
             </li>
           ))}
           {invites.rows.map((i) => (
-            <li key={i.email} className="flex items-center justify-between py-2.5 text-[13px]"><span className="text-muted">{i.email} · invited</span><span className="chip capitalize">{i.role}</span></li>
+            <li key={i.email} className="flex items-center justify-between py-2.5 text-body"><span className="text-muted">{i.email} · invited</span><span className="chip capitalize">{i.role}</span></li>
           ))}
         </ul>
         {owner && (
@@ -113,10 +116,10 @@ export default function Settings() {
             <input id="inv-email" type="email" required className="field min-w-0 flex-1 basis-[220px]" placeholder="colleague@company.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} />
             <select id="inv-role" className="field w-auto" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value as Role })}>{ROLES.map((x) => <option key={x.r} value={x.r}>{x.r}</option>)}</select>
             <button className="btn btn-primary">Invite</button>
-            <p className="w-full text-[12px] text-muted">They get an email to set a password, then access when they sign in.</p>
+            <p className="w-full text-meta text-muted">They get an email to set a password, then access when they sign in.</p>
           </form>
         )}
-        <dl className="mt-5 grid gap-1 text-[12px] text-muted">{ROLES.map((x) => <div key={x.r}><span className="font-medium capitalize text-ink-2">{x.r}</span>: {x.d}</div>)}</dl>
+        <dl className="mt-5 grid gap-1 text-meta text-muted">{ROLES.map((x) => <div key={x.r}><span className="font-medium capitalize text-ink-2">{x.r}</span>: {x.d}</div>)}</dl>
       </section>
       </div>
       {owner && <ProfileStatus />}

@@ -15,21 +15,21 @@ export function GetStarted({ name, steps }: { name: string; steps: SetupStep[] }
     <section data-tour="setup" className="panel" aria-labelledby="setup-title">
       <div className="panel-head">
         <span id="setup-title" className="flex min-w-0 items-center gap-2">Set up {name}</span>
-        <span className="num text-[12px] font-normal text-muted">{done} of {steps.length} done</span>
+        <span className="num text-meta font-normal text-muted">{done} of {steps.length} done</span>
       </div>
       <div className="h-[3px] bg-track" aria-hidden="true"><div className="bar-grow h-full bg-accent" style={{ width: `${(done / steps.length) * 100}%` }} /></div>
       <ol className="m-0 list-none p-0">
         {steps.map((s, i) => (
           <li key={s.key} className="border-t border-line first:border-0">
             <Link href={s.href} className="row-hit group" aria-label={`${s.title}${s.done ? ", done" : ""}`}>
-              <span className={`num grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold ${s.done ? "bg-ink text-white" : s.key === next ? "bg-accent text-white" : "border border-line-strong text-muted"}`}>
+              <span className={`num grid h-7 w-7 shrink-0 place-items-center rounded-full text-meta font-semibold ${s.done ? "bg-ink text-white" : s.key === next ? "bg-accent text-white" : "border border-line-strong text-muted"}`}>
                 {s.done ? <Check size={14} strokeWidth={2.5} aria-hidden="true" /> : i + 1}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className={`text-[13.5px] font-semibold ${s.done ? "text-muted" : ""}`}>{s.title}</span>
-                <span className="text-[12.5px] text-muted">{s.line}</span>
+                <span className={`text-body font-semibold ${s.done ? "text-muted" : ""}`}>{s.title}</span>
+                <span className="text-meta text-muted">{s.line}</span>
               </span>
-              {s.key === next && <span className="hidden whitespace-nowrap text-[12px] font-semibold text-accent sm:inline">Do this next</span>}
+              {s.key === next && <span className="hidden whitespace-nowrap text-meta font-semibold text-accent sm:inline">Do this next</span>}
               <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" aria-hidden="true" />
             </Link>
           </li>

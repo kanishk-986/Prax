@@ -43,8 +43,8 @@ export function ProfileStatusView({ name, archivedAt, onArchive, onRestore, onDe
     <section className="card mt-4 min-w-0 p-5" aria-labelledby="status-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-[620px]">
-          <h2 id="status-title" className="text-[14px] font-semibold">{archivedAt ? "This profile is archived" : "Archive this profile"}</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted">{archivedAt
+          <h2 id="status-title" className="text-body font-semibold">{archivedAt ? "This profile is archived" : "Archive this profile"}</h2>
+          <p className="mt-1 text-body leading-relaxed text-muted">{archivedAt
             ? <>Archived on {fmtDay(archivedAt.slice(0, 10), { day: "numeric", month: "long", year: "numeric" })}. It is hidden from the profiles page and all its data is kept. Restore it to bring it back, or delete it for good.</>
             : <>Archiving hides {name} from the profiles page and keeps every record. Owners can restore it at any time from here or from Show archived on the profiles page.</>}</p>
         </div>
@@ -56,15 +56,15 @@ export function ProfileStatusView({ name, archivedAt, onArchive, onRestore, onDe
 
       {step === "archive" && (
         <div className="anim-rise mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-strong bg-surface-2 px-4 py-3">
-          <span className="text-[13px]">Archive {name}? Nothing is deleted, and you can restore it.</span>
+          <span className="text-body">Archive {name}? Nothing is deleted, and you can restore it.</span>
           <span className="flex gap-2"><button className="btn btn-dark h-9 px-4" onClick={() => { setStep(""); onArchive(); }}>Archive</button><button className="btn btn-ghost h-9" onClick={() => setStep("")}>Keep it</button></span>
         </div>
       )}
 
       {step === "delete" && (
         <form className="anim-rise mt-4 rounded-xl border-2 border-bad px-4 py-4" onSubmit={async (e) => { e.preventDefault(); if (!match || busy) return; setBusy(true); const ok = await onDelete(); setBusy(false); if (!ok) setStep("delete"); }}>
-          <p className="m-0 text-[13.5px] font-semibold text-bad">This deletes {name} and everything in it, for everyone.</p>
-          <p className="m-0 mt-1 text-[13px] leading-relaxed text-ink-2">Pipeline, posts and campaigns, notes and strategy, the Network import, Comment Studio, AI citations, Discovery, Today and the team&apos;s access all go. It cannot be undone.</p>
+          <p className="m-0 text-body font-semibold text-bad">This deletes {name} and everything in it, for everyone.</p>
+          <p className="m-0 mt-1 text-body leading-relaxed text-ink-2">Pipeline, posts and campaigns, notes and strategy, the Network import, Comment Studio, AI citations, Discovery, Today and the team&apos;s access all go. It cannot be undone.</p>
           <label className="mt-3 flex flex-col gap-1.5"><span className="label">Type <b className="text-ink">{name}</b> to confirm</span>
             <input id="delete-name" className="field h-10 max-w-[360px]" autoFocus autoComplete="off" spellCheck={false} value={typed} onChange={(e) => setTyped(e.target.value)} /></label>
           <span className="mt-3 flex flex-wrap gap-2">

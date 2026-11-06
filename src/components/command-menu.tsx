@@ -52,18 +52,18 @@ export function CommandMenu() {
           <Search size={16} className="shrink-0 text-muted" aria-hidden="true" />
           <input ref={input} id="cmdk" value={q} onChange={(e) => { setQ(e.target.value); setI(0); }} placeholder="Jump to a page or person"
             onKeyDown={(e) => { if (e.key === "ArrowDown") { e.preventDefault(); setI((x) => Math.min(x + 1, items.length - 1)); } if (e.key === "ArrowUp") { e.preventDefault(); setI((x) => Math.max(x - 1, 0)); } if (e.key === "Enter") run(items[i]); }}
-            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted" />
+            className="h-full min-w-0 flex-1 bg-transparent text-title outline-none placeholder:text-muted" />
           <span className="kbd">esc</span>
         </div>
         <ul className="max-h-[380px] overflow-auto p-1.5">
-          {items.length === 0 && <li className="px-3 py-6 text-center text-[13px] text-muted">No matches</li>}
+          {items.length === 0 && <li className="px-3 py-6 text-center text-body text-muted">No matches</li>}
           {items.map((it, k) => (
             <li key={it.id}>
-              {(k === 0 || items[k - 1].kind !== it.kind) && <div className="px-3 pt-2 pb-1 text-[11.5px] font-medium text-muted">{it.kind === "person" ? "People" : "Pages"}</div>}
-              <button onMouseEnter={() => setI(k)} onClick={() => run(it)} className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[13.5px] ${k === i ? "bg-surface-2" : ""}`}>
+              {(k === 0 || items[k - 1].kind !== it.kind) && <div className="px-3 pt-2 pb-1 text-meta font-medium text-muted">{it.kind === "person" ? "People" : "Pages"}</div>}
+              <button onMouseEnter={() => setI(k)} onClick={() => run(it)} className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-body ${k === i ? "bg-surface-2" : ""}`}>
                 <it.Icon size={16} className="shrink-0 text-muted" aria-hidden="true" />
                 <span className="truncate font-medium">{it.label}</span>
-                {it.hint && <span className="truncate text-[12.5px] text-muted">{it.hint}</span>}
+                {it.hint && <span className="truncate text-meta text-muted">{it.hint}</span>}
                 <CornerDownLeft size={14} className={`ml-auto shrink-0 text-muted ${k === i ? "" : "invisible"}`} aria-hidden="true" />
               </button>
             </li>

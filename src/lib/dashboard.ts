@@ -145,6 +145,88 @@ export function primaryAction(it: AgendaItem & { link?: string | null }, slug: s
   return null;
 }
 
+// ---------- one weekly comment count ----------
+/** Comments are counted once, the same way on the Dashboard and on Engagement: per day, the larger of the comment
+ *  ticks on Today and the comments logged (by the extension or by hand), so a comment that was logged and ticked
+ *  counts once, and one that was only ticked or only logged still counts. Returns one date per comment. */
+export function commentDays(ticks: (string | null | undefined)[], logged: (string | null | undefined)[]): string[] {
+  const per = (xs: (string | null | undefined)[]) => xs.reduce((m, d) => { if (d) { const k = d.slice(0, 10); m.set(k, (m.get(k) ?? 0) + 1); } return m; }, new Map<string, number>());
+  const a = per(ticks), b = per(logged);
+  return [...new Set([...a.keys(), ...b.keys()])].sort().flatMap((d) => Array.from({ length: Math.max(a.get(d) ?? 0, b.get(d) ?? 0) }, () => d));
+}
+/** The weekly comment target: the daily quota for five working days. */
+export const weeklyCommentTarget = (dailyQuota: number) => Math.max(0, dailyQuota || 0) * 5;
+
+// ---------- Today prefill ----------
+export type PrefillLead = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; linkedin: string };
+export type PrefillFinding = { id: string; title: string; url: string; source_type: string; status: string; comment_target: boolean; found_at: string; found?: { linkedin?: { author?: string } } };
+export type PrefillPost = { id: string; title: string; status: string; publish_date: string | null; url: string };
+export type Suggestion = { title: string; href: string; external: boolean; prospect_id: string | null };
+
+const STAGE_KINDS: Record<string, string[]> = {
+  comment: ["Target", "Warming"],
+  request: ["Warming", "Target"],
+  dm: ["Connected", "In conversation", "Resource sent", "Call booked"],
+  inmail: ["Target", "Warming"],
+};
+const posessive = (n: string) => (n.endsWith("s") ? `${n}'` : `${n}'s`);
+const profileActivity = (url: string) => (url ? `${url.replace(/\/+$/, "")}/recent-activity/all/` : "https://www.linkedin.com/feed/");
+
+/** Real people and posts for the empty rows of a day, in Pipeline's Do next order (overdue, then today, then the
+ *  nearest dates), then Discovery's LinkedIn findings for comments. Messages go to people already connected,
+ *  comments to Target and Warming people, requests to whoever is left. Each person is used once per day, a row that
+ *  already has a title or a person keeps it, and cleared rows are left alone. Returns a suggestion per item id;
+ *  rows without one keep the "who or what" placeholder. Nothing here posts or sends. */
+export function prefillToday(
+  items: { id: string; kind: string; idx: number; title: string; done: boolean; note?: string | null; prospect_id?: string | null }[],
+  src: { leads: PrefillLead[]; findings?: PrefillFinding[]; posts?: PrefillPost[]; slug: string; today: string; closed?: string[] },
+): Record<string, Suggestion> {
+  const closed = new Set(src.closed ?? ["Won", "Parked"]);
+  const order = (a: PrefillLead, b: PrefillLead) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999") || a.name.localeCompare(b.name);
+  const open = src.leads.filter((l) => !closed.has(l.stage) && l.name.trim()).sort(order);
+  const used = new Set(items.map((i) => i.prospect_id).filter(Boolean) as string[]);
+  const usedFindings = new Set<string>();
+  const out: Record<string, Suggestion> = {};
+  const findings = (src.findings ?? []).filter((f) => f.status !== "dismissed" && f.url && (f.comment_target || f.source_type === "LinkedIn") && daysBetween(f.found_at.slice(0, 10), src.today) <= 7)
+    .sort((a, b) => Number(b.comment_target) - Number(a.comment_target) || b.found_at.localeCompare(a.found_at));
+  const replies = (src.posts ?? []).filter((p) => (p.status === "Posted" || p.status === "Published") && p.publish_date && p.publish_date <= src.today && daysBetween(p.publish_date, src.today) <= 7)
+    .sort((a, b) => (b.publish_date ?? "").localeCompare(a.publish_date ?? ""));
+  let reply = 0;
+  const pick = (kind: string) => { const l = open.find((x) => !used.has(x.id) && (STAGE_KINDS[kind] ?? []).includes(x.stage)); if (l) used.add(l.id); return l; };
+  // People in conversation are followed up first, then comments warm the next people, then requests take who is left.
+  const KIND_FILL = ["dm", "comment", "request", "inmail", "reply"];
+  const slots = items.filter((i) => KIND_FILL.includes(i.kind)).sort((a, b) => KIND_FILL.indexOf(a.kind) - KIND_FILL.indexOf(b.kind) || a.idx - b.idx);
+  for (const it of slots) {
+    if (it.done || isSkipped(it.note) || it.title.trim() || it.prospect_id) continue;
+    if (it.kind === "comment") {
+      const l = pick("comment");
+      if (l) { out[it.id] = { title: l.next_action && /comment/i.test(l.next_action) ? `${l.name}: ${l.next_action}` : `Comment on ${posessive(l.name)} latest post`, href: profileActivity(l.linkedin), external: true, prospect_id: l.id }; continue; }
+      const f = findings.find((x) => !usedFindings.has(x.id));
+      if (f) { usedFindings.add(f.id); const a = f.found?.linkedin?.author; out[it.id] = { title: a ? `Comment on ${posessive(a)} post: ${f.title}` : `Comment on: ${f.title}`, href: f.url, external: true, prospect_id: null }; }
+    } else if (it.kind === "request") {
+      const l = pick("request");
+      if (l) out[it.id] = { title: `Send ${l.name}${l.company ? `, ${l.company},` : ""} a connection request`, href: l.linkedin || `/w/${src.slug}/pipeline?p=${l.id}`, external: !!l.linkedin, prospect_id: l.id };
+    } else if (it.kind === "dm" || it.kind === "inmail") {
+      const l = pick(it.kind);
+      if (l) out[it.id] = { title: `${it.kind === "inmail" ? "InMail" : "Message"} ${l.name}${l.next_action ? `: ${l.next_action}` : ""}`, href: `/w/${src.slug}/pipeline?p=${l.id}`, external: false, prospect_id: l.id };
+    } else if (it.kind === "reply") {
+      const p = replies[reply++];
+      if (p) out[it.id] = { title: `Reply to the comments on "${p.title}"`, href: p.url || `/w/${src.slug}/studio-content?tab=library`, external: !!p.url, prospect_id: null };
+    }
+  }
+  return out;
+}
+
+/** A Prax address as the page name ("/w/x/citations" is "AI citations"); other links stay as they are. */
+export function pageName(link: string | null | undefined, slug: string, nav: { href: string; label: string }[]): string {
+  const l = (link ?? "").trim();
+  const base = `/w/${slug}`;
+  if (!l.startsWith(base)) return l;
+  const path = l.slice(base.length).split(/[?#]/)[0].replace(/\/+$/, "");
+  const hit = [...nav].sort((a, b) => b.href.length - a.href.length).find((n) => (n.href === "" ? path === "" : path === n.href || path.startsWith(n.href + "/")));
+  return hit ? hit.label : l;
+}
+
 // ---------- Needs you now ----------
 export type NeedKind = "followup" | "post" | "approval" | "today" | "discovery" | "citations" | "warming" | "network";
 export type NeedInput = { kind: NeedKind; due?: string | null; count?: number };

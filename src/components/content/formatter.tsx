@@ -32,7 +32,7 @@ export function Formatter({ initial = "" }: { initial?: string }) {
   };
   const count = Array.from(v).length;
   const T = ({ face, label, run, kbd }: { face: string; label: string; run: () => void; kbd?: string }) => (
-    <button type="button" className="inline-flex h-[34px] min-w-[34px] items-center justify-center rounded-lg px-2 text-[14px] text-ink hover:bg-[#141414] hover:text-white" title={kbd ? `${label} (${kbd})` : label} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={run}>{face}</button>
+    <button type="button" className="inline-flex h-[34px] min-w-[34px] items-center justify-center rounded-lg px-2 text-body text-ink hover:bg-[#141414] hover:text-white" title={kbd ? `${label} (${kbd})` : label} aria-label={label} onMouseDown={(e) => e.preventDefault()} onClick={run}>{face}</button>
   );
   const sep = <span className="mx-1 h-6 w-px bg-line" />;
   return (
@@ -65,16 +65,16 @@ export function Formatter({ initial = "" }: { initial?: string }) {
         </div>
         <label htmlFor="fmt" className="sr-only">Post text</label>
         <textarea id="fmt" ref={ref} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} placeholder="Paste any post here, from Prax or anywhere else. Select words and press a style."
-          className="block min-h-[360px] w-full resize-y border-0 bg-white px-5 py-4 text-[15px] leading-relaxed text-ink outline-none" />
+          className="block min-h-[360px] w-full resize-y border-0 bg-white px-5 py-4 text-title leading-relaxed text-ink outline-none" />
         <div className="flex flex-wrap items-center gap-2 border-t border-line p-3">
           <button className="btn btn-primary h-10" onClick={async () => { try { await navigator.clipboard.writeText(v); } catch {} haptic(); toast("Copied for LinkedIn"); }} disabled={!v}><Copy size={14} /> Copy for LinkedIn</button>
           <button className="btn btn-dark h-10" onClick={() => commit(markdownToLinkedIn(v))} disabled={!v}>Convert Markdown</button>
-          <span className="num ml-auto text-[12px]" style={{ color: count > 3000 ? "#d64545" : "#5f5f5f" }}>{count.toLocaleString()} / 3000</span>
+          <span className="num ml-auto text-meta" style={{ color: count > 3000 ? "#d64545" : "#5f5f5f" }}>{count.toLocaleString()} / 3000</span>
         </div>
       </section>
       <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
         <LinkedInPreview text={v} device={device} setDevice={setDevice} />
-        <p className="m-0 text-center text-[12.5px] text-muted">Styled letters are read poorly by screen readers and search, so style only a few words.</p>
+        <p className="m-0 text-center text-meta text-muted">Styled letters are read poorly by screen readers and search, so style only a few words.</p>
       </aside>
     </div>
   );

@@ -12,7 +12,7 @@ import { useToast, haptic } from "@/components/toaster";
 import type { PipelineApi, PipelineData } from "./types";
 
 const QUICK: [number, string][] = [[1, "Tomorrow"], [3, "In 3 days"], [7, "Next week"]];
-const label = "flex flex-col gap-1.5 text-[12.5px] font-semibold";
+const label = "flex flex-col gap-1.5 text-meta font-semibold";
 
 function useEscape(fn: () => void) {
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") fn(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [fn]);
@@ -29,7 +29,7 @@ function SidePanel({ title, sub, onClose, children }: { title: string; sub?: str
       <div className="fixed inset-0 z-[54] bg-[rgba(20,20,20,.22)]" onClick={onClose} />
       <aside role="dialog" aria-label={title} className="pl-slide fixed inset-y-0 right-0 z-[55] flex w-[min(480px,100vw)] flex-col gap-[22px] overflow-y-auto bg-white p-[22px] shadow-[-12px_0_30px_rgba(20,20,20,.12)] max-sm:px-4">
         <span className="flex items-start justify-between gap-2.5">
-          <span className="flex flex-col gap-[3px]"><span className="text-[18px] font-[650]">{title}</span>{sub && <span className="text-[13px] text-muted">{sub}</span>}</span>
+          <span className="flex flex-col gap-[3px]"><span className="text-page font-semibold">{title}</span>{sub && <span className="text-body text-muted">{sub}</span>}</span>
           <button type="button" className="btn h-8! w-8! shrink-0 p-0!" onClick={onClose} aria-label="Close"><X size={14} /></button>
         </span>
         {children}
@@ -64,15 +64,15 @@ export function MoveDialog({ lead, pipe, to: start, reasons, onCancel, onConfirm
     <div className="fixed inset-0 z-[58] flex items-center justify-center bg-[rgba(20,20,20,.35)] p-4" onMouseDown={onCancel}>
       <form role="dialog" aria-label="Next action" onMouseDown={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); confirm(); }}
         className="pl-rise flex w-[min(460px,100%)] flex-col gap-3.5 rounded-2xl bg-white p-[22px] shadow-[0_24px_60px_rgba(20,20,20,.25)]">
-        <span className="flex flex-col gap-[3px]"><span className="text-[17px] font-[650]">{stay ? "Done. What happens next?" : `Move ${lead.name} to ${m.to}`}</span>
-          <span className="text-[13px] text-muted">Every change needs the next action and its date, so it shows on Today.</span></span>
+        <span className="flex flex-col gap-[3px]"><span className="text-title font-semibold">{stay ? "Done. What happens next?" : `Move ${lead.name} to ${m.to}`}</span>
+          <span className="text-body text-muted">Every change needs the next action and its date, so it shows on Today.</span></span>
         <label className={label}>Stage
           <select value={m.to} onChange={(e) => setM({ ...m, to: e.target.value })} className="field h-[38px]! font-normal">
             {pipe.stages.map((s) => <option key={s} value={s}>{s === lead.stage ? `${s} (current)` : s}</option>)}
           </select></label>
         <label className={label}>Next action
           <input ref={ref} value={m.action} onChange={(e) => setM({ ...m, action: e.target.value })} placeholder="What happens next" className="field h-[38px]! font-normal" /></label>
-        {suggest && <button type="button" className="btn h-auto! min-h-[30px]! self-start px-2.5! py-1! text-left text-[12.5px] font-medium" disabled={m.action === suggest} onClick={() => setM({ ...m, action: suggest })}>Suggested: {suggest}</button>}
+        {suggest && <button type="button" className="btn h-auto! min-h-[30px]! self-start px-2.5! py-1! text-left text-meta font-medium" disabled={m.action === suggest} onClick={() => setM({ ...m, action: suggest })}>Suggested: {suggest}</button>}
         <DuePicker date={m.date} setDate={(date) => setM({ ...m, date })} />
         {gate.needsReason && <label className={label}>Why it stopped
           <select value={m.reason} onChange={(e) => setM({ ...m, reason: e.target.value })} className="field h-[38px]! font-normal">
@@ -110,36 +110,36 @@ export function PipelinesPanel({ data, api, current, leadsOf, onPick, onClose }:
   return (
     <SidePanel title="Pipelines" onClose={onClose}>
       <div className="flex flex-col gap-2">
-        <span className="text-[14px] font-semibold">Yours</span>
+        <span className="text-body font-semibold">Yours</span>
         {data.pipes.map((p) => {
           const n = leadsOf(p).length;
           return (
             <div key={p.id} className="flex flex-col gap-3 rounded-xl border border-[#ececec] px-3.5 py-3">
               <span className="flex items-center gap-3">
-                <span className="flex min-w-0 flex-1 flex-col gap-[3px]"><b className="text-[13.5px]">{p.name} <span className="num font-normal text-muted">{n}</span></b><span className="text-[12px] leading-[1.45] text-muted">{p.stages.join(" · ")}</span></span>
-                {editable && editing !== p.id && <button type="button" className="btn h-8! shrink-0 px-3! text-[12.5px] font-semibold" onClick={() => setEditing(p.id)}>Edit stages</button>}
-                <button type="button" className="btn h-8! shrink-0 px-3! text-[12.5px] font-semibold" disabled={p.id === current.id} onClick={() => onPick(p.id)}>{p.id === current.id ? "Open now" : "Switch"}</button>
+                <span className="flex min-w-0 flex-1 flex-col gap-[3px]"><b className="text-body">{p.name} <span className="num font-normal text-muted">{n}</span></b><span className="text-meta leading-[1.45] text-muted">{p.stages.join(" · ")}</span></span>
+                {editable && editing !== p.id && <button type="button" className="btn h-8! shrink-0 px-3! text-meta font-semibold" onClick={() => setEditing(p.id)}>Edit stages</button>}
+                <button type="button" className="btn h-8! shrink-0 px-3! text-meta font-semibold" disabled={p.id === current.id} onClick={() => onPick(p.id)}>{p.id === current.id ? "Open now" : "Switch"}</button>
               </span>
               {editing === p.id && <StageEditor p={p} leads={leadsOf(p)} api={api} onDone={() => setEditing(null)} canDelete={!n && data.pipes.length > 1} onDeleted={() => { setEditing(null); if (p.id === current.id) onPick(data.pipes.find((x) => x.id !== p.id)!.id); }} />}
             </div>
           );
         })}
-        {!data.ready && <span className="text-[12.5px] text-muted">More pipelines, stage edits and saved lost reasons need the database update in db/015_pipelines.sql.</span>}
-        {data.ready && <span className="text-[12.5px] text-muted">Rename, add and reorder stages from Edit stages. Every lead stays where it is.</span>}
+        {!data.ready && <span className="text-meta text-muted">More pipelines, stage edits and saved lost reasons need the database update in db/015_pipelines.sql.</span>}
+        {data.ready && <span className="text-meta text-muted">Rename, add and reorder stages from Edit stages. Every lead stays where it is.</span>}
       </div>
       {editable && <div className="flex flex-col gap-2">
-        <span className="text-[14px] font-semibold">New from a template</span>
+        <span className="text-body font-semibold">New from a template</span>
         {TEMPLATES.map((t) => (
           <span key={t.key} className="flex items-center gap-3 border-t border-[#f0f0f0] py-2.5">
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-[13.5px]">{t.name}</b><span className="text-[12px] leading-[1.45] text-muted">{t.stages.join(" · ")}</span></span>
-            <button type="button" className="btn h-8! shrink-0 px-3! text-[12.5px] font-semibold" onClick={() => create(t)}>Create</button>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-body">{t.name}</b><span className="text-meta leading-[1.45] text-muted">{t.stages.join(" · ")}</span></span>
+            <button type="button" className="btn h-8! shrink-0 px-3! text-meta font-semibold" onClick={() => create(t)}>Create</button>
           </span>
         ))}
       </div>}
       <div className="flex flex-col gap-2">
-        <span className="flex flex-col gap-0.5"><span className="text-[14px] font-semibold">Lost reasons</span><span className="text-[12.5px] text-muted">Asked whenever someone moves to Parked, Passed or Declined.</span></span>
+        <span className="flex flex-col gap-0.5"><span className="text-body font-semibold">Lost reasons</span><span className="text-meta text-muted">Asked whenever someone moves to Parked, Passed or Declined.</span></span>
         {data.reasons.map((r) => (
-          <span key={r} className="flex items-center justify-between gap-2.5 border-t border-[#f0f0f0] py-2 text-[13px]"><span>{r}</span><span className="num text-[12px] text-muted">{data.leads.filter((l) => l.lost_reason === r).length}</span></span>
+          <span key={r} className="flex items-center justify-between gap-2.5 border-t border-[#f0f0f0] py-2 text-body"><span>{r}</span><span className="num text-meta text-muted">{data.leads.filter((l) => l.lost_reason === r).length}</span></span>
         ))}
         {can("editor") && <span className="flex gap-2">
           <input value={reason} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addReason()} placeholder="Add a reason" aria-label="New lost reason" className="field h-9! min-w-0 flex-1" />
@@ -177,8 +177,8 @@ function StageEditor({ p, leads, api, onDone, canDelete, onDeleted }: { p: Pipel
         return (
           <span key={i} className="flex items-center gap-1.5">
             <input value={x.name} onChange={(e) => setItems(items.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)))} aria-label={`Stage ${i + 1}`} className="field h-8! min-w-0 flex-1" />
-            {x.orig === p.won_stage && <span className="text-[11.5px] text-muted">Won</span>}
-            {x.orig === p.lost_stage && <span className="text-[11.5px] text-muted">Lost</span>}
+            {x.orig === p.won_stage && <span className="text-meta text-muted">Won</span>}
+            {x.orig === p.lost_stage && <span className="text-meta text-muted">Lost</span>}
             <button type="button" className="btn btn-ghost h-8! w-8! p-0!" aria-label="Move up" disabled={!i} onClick={() => swap(i, i - 1)}><ArrowUp size={14} /></button>
             <button type="button" className="btn btn-ghost h-8! w-8! p-0!" aria-label="Move down" disabled={i === items.length - 1} onClick={() => swap(i, i + 1)}><ArrowDown size={14} /></button>
             <button type="button" className="btn btn-ghost h-8! w-8! p-0!" aria-label={used ? `${used} leads are in this stage` : "Remove stage"} title={used ? `${used} leads are in this stage` : "Remove stage"} disabled={!!used} onClick={() => setItems(items.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
@@ -186,11 +186,11 @@ function StageEditor({ p, leads, api, onDone, canDelete, onDeleted }: { p: Pipel
         );
       })}
       <span className="flex flex-wrap items-center gap-2">
-        <button type="button" className="btn h-8! px-3! text-[12.5px] font-semibold" onClick={() => setItems([...items, { orig: null, name: "" }])}>Add stage</button>
-        {canDelete && <button type="button" className="btn btn-ghost h-8! px-3! text-[12.5px] hover:text-[#9e1c1c]" onClick={del}>Delete pipeline</button>}
+        <button type="button" className="btn h-8! px-3! text-meta font-semibold" onClick={() => setItems([...items, { orig: null, name: "" }])}>Add stage</button>
+        {canDelete && <button type="button" className="btn btn-ghost h-8! px-3! text-meta hover:text-[#9e1c1c]" onClick={del}>Delete pipeline</button>}
         <span className="ml-auto flex gap-2">
-          <button type="button" className="btn h-8! px-3! text-[12.5px] font-semibold" onClick={onDone}>Cancel</button>
-          <button type="button" className="btn btn-primary h-8! px-3! text-[12.5px] font-semibold" disabled={bad || busy} onClick={save}>Save stages</button>
+          <button type="button" className="btn h-8! px-3! text-meta font-semibold" onClick={onDone}>Cancel</button>
+          <button type="button" className="btn btn-primary h-8! px-3! text-meta font-semibold" disabled={bad || busy} onClick={save}>Save stages</button>
         </span>
       </span>
     </div>
@@ -253,16 +253,16 @@ export function ImportPanel({ data, api, pipe, onClose }: { data: PipelineData; 
   return (
     <SidePanel title="Add leads" sub={`Into ${pipe.name}, at ${first}.`} onClose={onClose}>
       <div className="flex flex-col gap-2.5">
-        <span className="flex flex-col gap-0.5"><span className="text-[14px] font-semibold">From Network</span><span className="text-[12.5px] text-muted">People {firstNameOf(ws)} knows at target accounts who are not in a pipeline yet.</span></span>
-        {!data.network.length ? <span className="text-[13px] text-muted">No LinkedIn export yet. <Link href={`/w/${ws.slug}/network`} className="font-semibold text-ink underline">Upload it in Network</Link> to add people {firstNameOf(ws)} knows.</span>
-          : !net.length ? <span className="text-[13px] text-muted">None. Everyone {firstNameOf(ws)} knows at these companies is already in a pipeline.</span>
+        <span className="flex flex-col gap-0.5"><span className="text-body font-semibold">From Network</span><span className="text-meta text-muted">People {firstNameOf(ws)} knows at target accounts who are not in a pipeline yet.</span></span>
+        {!data.network.length ? <span className="text-body text-muted">No LinkedIn export yet. <Link href={`/w/${ws.slug}/network`} className="font-semibold text-ink underline">Upload it in Network</Link> to add people {firstNameOf(ws)} knows.</span>
+          : !net.length ? <span className="text-body text-muted">None. Everyone {firstNameOf(ws)} knows at these companies is already in a pipeline.</span>
           : net.map((x) => {
             const on = pick.includes(x.key);
             return (
               <span key={x.key} className="flex items-center gap-2.5 rounded-[10px] border border-[#ececec] px-3 py-2.5">
                 <Box on={on} label={`Select ${x.name}`} onClick={() => setPick(on ? pick.filter((k) => k !== x.key) : [...pick, x.key])} />
-                <span className="min-w-0 flex-1"><b className="text-[13px]">{x.name}</b><span className="block truncate text-[12px] text-muted">{x.position} · {x.company}</span></span>
-                <span className="whitespace-nowrap text-[12px] text-muted">{x.msg_count ? `${x.msg_count} messages` : "Connected"}</span>
+                <span className="min-w-0 flex-1"><b className="text-body">{x.name}</b><span className="block truncate text-meta text-muted">{x.position} · {x.company}</span></span>
+                <span className="whitespace-nowrap text-meta text-muted">{x.msg_count ? `${x.msg_count} messages` : "Connected"}</span>
               </span>
             );
           })}
@@ -270,14 +270,14 @@ export function ImportPanel({ data, api, pipe, onClose }: { data: PipelineData; 
       </div>
       <span className="h-px bg-[#ececec]" />
       <div className="flex flex-col gap-2.5">
-        <span className="flex flex-col gap-0.5"><span className="text-[14px] font-semibold">From a CSV file</span><span className="text-[12.5px] text-muted">Columns: name (required), role, company, linkedin, segment, region. People already in a pipeline are skipped.</span></span>
+        <span className="flex flex-col gap-0.5"><span className="text-body font-semibold">From a CSV file</span><span className="text-meta text-muted">Columns: name (required), role, company, linkedin, segment, region. People already in a pipeline are skipped.</span></span>
         <label className="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-[#d0d0d0] p-[22px] text-center focus-within:outline-2 focus-within:outline-[#d64545] hover:border-[#141414]">
           <span className="font-semibold">Choose a CSV file</span>
-          <span className="text-[12.5px] text-muted">{csvErr || (csv ? `${csv.file}: ${csv.rows.length} new, ${csv.skipped} skipped.` : "Read here in your browser. Nothing is added until you confirm.")}</span>
+          <span className="text-meta text-muted">{csvErr || (csv ? `${csv.file}: ${csv.rows.length} new, ${csv.skipped} skipped.` : "Read here in your browser. Nothing is added until you confirm.")}</span>
           <input type="file" accept=".csv,text/csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) readCsv(f); e.target.value = ""; }} className="absolute h-px w-px opacity-0" />
         </label>
         {csv && csv.rows.length > 0 && <>
-          <ul className="flex flex-col text-[13px]">{csv.rows.slice(0, 6).map((r, i) => <li key={i} className="truncate border-t border-[#f0f0f0] py-1.5"><b className="font-semibold">{r.name}</b>{r.company ? <span className="text-muted"> · {r.company}</span> : null}</li>)}
+          <ul className="flex flex-col text-body">{csv.rows.slice(0, 6).map((r, i) => <li key={i} className="truncate border-t border-[#f0f0f0] py-1.5"><b className="font-semibold">{r.name}</b>{r.company ? <span className="text-muted"> · {r.company}</span> : null}</li>)}
             {csv.rows.length > 6 && <li className="border-t border-[#f0f0f0] py-1.5 text-muted">and {csv.rows.length - 6} more</li>}</ul>
           <button type="button" className="btn btn-primary h-9! self-start px-3.5! font-semibold" onClick={() => add(csv.rows)}>Add {csv.rows.length} to {first}</button>
         </>}
@@ -314,7 +314,7 @@ export function AddLeadPanel({ data, api, pipe, onClose, onAdded }: { data: Pipe
         <label className={`${label} col-span-2`}>LinkedIn URL<input className="field h-9! font-normal" value={f.linkedin} onChange={set("linkedin")} placeholder="https://www.linkedin.com/in/" /></label>
         <label className={`${label} col-span-2`}>Stage<select className="field h-9! font-normal" value={f.stage} onChange={set("stage")}>{open.map((s) => <option key={s}>{s}</option>)}</select></label>
         <label className={`${label} col-span-2`}>Next action<input className="field h-9! font-normal" value={f.next_action} onChange={set("next_action")} placeholder="What happens next" /></label>
-        {suggest && <button type="button" className="btn col-span-2 h-auto! min-h-[30px]! justify-self-start px-2.5! py-1! text-left text-[12.5px] font-medium" disabled={f.next_action === suggest} onClick={() => setF({ ...f, next_action: suggest })}>Suggested: {suggest}</button>}
+        {suggest && <button type="button" className="btn col-span-2 h-auto! min-h-[30px]! justify-self-start px-2.5! py-1! text-left text-meta font-medium" disabled={f.next_action === suggest} onClick={() => setF({ ...f, next_action: suggest })}>Suggested: {suggest}</button>}
         <span className="col-span-2"><DuePicker date={f.next_date} setDate={(next_date) => setF({ ...f, next_date })} /></span>
         <span className="col-span-2 flex justify-end gap-2">
           <button type="button" className="btn h-[38px]! px-3.5! font-semibold" onClick={onClose}>Cancel</button>

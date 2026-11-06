@@ -4,16 +4,17 @@ import { AccountMenu } from "@/components/account-menu";
 // and the Home building blocks. Patterns match the approved Content Studio and AI citations designs.
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
-import { useWorkspace } from "@/lib/workspace";
+import { ArrowUpRight, ArrowDownRight, ChevronRight, MoreHorizontal } from "lucide-react";
+import { useWorkspace, today } from "@/lib/workspace";
 import { countAt, countBetween } from "@/lib/dashboard";
-import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, type TourState, type TourAction } from "@/lib/shell";
+import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, tourPlace, INTRO_SECTION, type TourState, type TourAction } from "@/lib/shell";
 
 const safe = (pick: () => Storage) => { try { return pick(); } catch { return null; } };
 const reducedMotion = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 
 // ---------- entry moment ----------
-/** Blurred veil with the Prax mark, the section name and a live status line. Once per section per session. */
+/** Blurred veil with the Prax mark, the section name and a live status line. Q119: once a day, on the Dashboard
+ *  only; every other section opens with the 150 ms content fade on Section instead. */
 export function EntryMoment({ section, title, status, onDone }: { section: string; title: string; status?: string; onDone?: () => void }) {
   const [show, setShow] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -28,9 +29,9 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
     // Decide once per mount; a second effect run (React strict mode in dev) only re-arms the timer and keys.
     if (!started.current) {
       started.current = true;
-      const ss = safe(() => window.sessionStorage);
-      if (!shouldPlayIntro(ss, section, reducedMotion())) { done.current = true; onDone?.(); return; }
-      markIntro(ss, section); setShow(true);
+      const ls = safe(() => window.localStorage);
+      if (!shouldPlayIntro(ls, section, reducedMotion(), today())) { done.current = true; onDone?.(); return; }
+      markIntro(ls, section, today()); setShow(true);
     } else if (done.current) return;
     const t = setTimeout(leave, 2300);
     const k = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === "Escape") leave(); };
@@ -42,12 +43,12 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
     <div className={`entry${leaving ? " leaving" : ""}`} onClick={leave} role="dialog" aria-label={`${title} opening`}>
       <div className="flex flex-col items-center gap-[18px] text-center">
         <svg className="mark" width="64" height="64" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5.5" fill="#141414" /><path d="M4.5 4.5H15V7.5H7.5V15H4.5Z" fill="#ffffff" /><path d="M19.5 19.5H9V16.5H16.5V9H19.5Z" fill="#d64545" /></svg>
-        <span className="l1 text-[34px] font-[650] tracking-[-0.03em] text-[#141414]">{title}</span>
-        {status && <span className="l2 max-w-[460px] text-[15px] leading-relaxed text-[#5f5f5f]">{status}</span>}
+        <span className="l1 text-kpi font-semibold tracking-[-0.03em] text-[#141414]">{title}</span>
+        {status && <span className="l2 max-w-[460px] text-title leading-relaxed text-[#5f5f5f]">{status}</span>}
         <span className="l3 mt-1.5 flex flex-col items-center gap-3">
-          <button type="button" className="btn btn-primary h-11 px-6 text-[14.5px]" onClick={(e) => { e.stopPropagation(); leave(); }}>Enter</button>
+          <button type="button" className="btn btn-primary h-11 px-6 text-body" onClick={(e) => { e.stopPropagation(); leave(); }}>Enter</button>
           <span className="h-[2px] w-[140px] overflow-hidden rounded-sm bg-[#e3e3e3]"><span className="bar block h-full w-full bg-[#141414]" /></span>
-          <span className="text-[12px] text-faint">or press Enter</span>
+          <span className="text-meta text-faint">or press Enter</span>
         </span>
       </div>
     </div>
@@ -57,10 +58,19 @@ export function EntryMoment({ section, title, status, onDone }: { section: strin
 // ---------- guided tour ----------
 export type TourStep = { target: string; title: string; body: string; tab?: string };
 
-/** Blurs the page, raises the element marked data-tour={target} above the blur, and scrolls it into view. */
+/** Blurs the page, raises the element marked data-tour={target} above the blur, scrolls it into view and puts the
+ *  card next to it (tourPlace in src/lib/shell.ts), following it on scroll and resize. */
 export function useTour(section: string, steps: TourStep[], onTab?: (tab: string) => void) {
   const { userId } = useWorkspace();
   const [s, setS] = useState<TourState>({ index: null, done: [] });
+  const card = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const place = useCallback(() => {
+    const c = card.current;
+    if (!c) return;
+    const r = document.querySelector("[data-tour-active]")?.getBoundingClientRect();
+    setPos(tourPlace(r ? { top: r.top, left: r.left, width: r.width, height: r.height } : null, { width: c.offsetWidth, height: c.offsetHeight }, { width: window.innerWidth, height: window.innerHeight }));
+  }, []);
   const go = useCallback((next: TourState) => {
     setS(next);
     if (next.index == null) markTourSeen(safe(() => window.localStorage), section, userId);
@@ -78,9 +88,18 @@ export function useTour(section: string, steps: TourStep[], onTab?: (tab: string
     const t = setTimeout(() => {
       const el = target ? document.querySelector(`[data-tour="${target}"]`) : null;
       if (el) { el.setAttribute("data-tour-active", ""); el.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "center" }); }
+      place();
     }, 60);
-    return () => clearTimeout(t);
-  }, [s.index, steps]);
+    // Smooth scrolling settles in about 400 ms; place the card again once it has.
+    const t2 = setTimeout(place, 480);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [s.index, steps, place]);
+  useEffect(() => {
+    if (s.index == null) return;
+    const on = () => place();
+    window.addEventListener("scroll", on, true); window.addEventListener("resize", on);
+    return () => { window.removeEventListener("scroll", on, true); window.removeEventListener("resize", on); };
+  }, [s.index, place]);
   useEffect(() => () => { document.body.classList.remove("touring"); document.querySelectorAll("[data-tour-active]").forEach((el) => el.removeAttribute("data-tour-active")); }, []);
   useEffect(() => {
     if (s.index == null) return;
@@ -92,16 +111,16 @@ export function useTour(section: string, steps: TourStep[], onTab?: (tab: string
   const node = step ? (
     <>
       <div className="tour-veil" aria-hidden="true" />
-      <div className="tour-card anim-rise" role="dialog" aria-label="Guided tour">
-        <span className="flex items-center justify-between gap-2.5"><span className="text-[12px] font-semibold text-[#ff8a80]">{tourLabel(s, steps.length)}</span>
-          <button type="button" onClick={() => act("end")} className="text-[12.5px] font-semibold text-[#cfcfcf] hover:text-white">Skip tour</button></span>
+      <div ref={card} className="tour-card" role="dialog" aria-label="Guided tour" style={pos ? { top: pos.top, left: pos.left, bottom: "auto", transition: "top .2s cubic-bezier(.16,1,.3,1), left .2s cubic-bezier(.16,1,.3,1)" } : { visibility: "hidden" }}>
+        <span className="flex items-center justify-between gap-2.5"><span className="text-meta font-medium text-[#cfcfcf]">{tourLabel(s, steps.length)}</span>
+          <button type="button" onClick={() => act("end")} className="text-meta font-semibold text-[#cfcfcf] hover:text-white">Skip tour</button></span>
         <span className="h-1 overflow-hidden rounded-full bg-white/15"><span className="block h-full bg-[#d64545] transition-[width] duration-200" style={{ width: `${tourPercent(s, steps.length)}%` }} /></span>
-        <span className="text-[16px] font-[650] leading-snug">{step.title}</span>
-        <span className="text-[13px] leading-relaxed text-[#d6d6d6]">{step.body}</span>
+        <span className="text-title font-semibold leading-snug">{step.title}</span>
+        <span className="text-body leading-relaxed text-[#d6d6d6]">{step.body}</span>
         <span className="mt-1 flex items-center gap-2">
-          <button type="button" onClick={() => act("back")} disabled={s.index === 0} className="h-[34px] rounded-[9px] border border-white/25 px-3 text-[13px] font-semibold disabled:opacity-40">Back</button>
-          <button type="button" onClick={() => act("skip")} className="h-[34px] rounded-[9px] border border-white/25 px-3 text-[13px] font-semibold">Skip step</button>
-          <button type="button" onClick={() => act("next")} className="ml-auto h-[34px] rounded-[9px] bg-[#d64545] px-4 text-[13px] font-semibold text-white">{s.index === steps.length - 1 ? "Finish" : "Next"}</button>
+          <button type="button" onClick={() => act("back")} disabled={s.index === 0} className="h-[34px] rounded-[9px] border border-white/25 px-3 text-body font-semibold disabled:opacity-40">Back</button>
+          <button type="button" onClick={() => act("skip")} className="h-[34px] rounded-[9px] border border-white/25 px-3 text-body font-semibold">Skip step</button>
+          <button type="button" onClick={() => act("next")} className="ml-auto h-[34px] rounded-[9px] bg-[#d64545] px-4 text-body font-semibold text-white">{s.index === steps.length - 1 ? "Finish" : "Next"}</button>
         </span>
       </div>
     </>
@@ -132,26 +151,31 @@ export function UnderlineTabs({ tabs, value, onChange, label }: { tabs: TabDef[]
 }
 
 /** A whole section: entry moment, header with actions and Guide, tabs, content, tour. */
-export function Section({ id, title, status, actions, before, tabs, tab, onTab, steps = [], entryStatus, children, wide }: {
+export function Section({ id, title, status, actions, primary, before, tabs, tab, onTab, steps = [], entryStatus, children, wide }: {
   id: string; title: string; status?: React.ReactNode; actions?: React.ReactNode; tabs?: TabDef[]; tab?: string; onTab?: (id: string) => void;
   steps?: TourStep[]; entryStatus?: string; children: React.ReactNode; wide?: boolean;
   /** Sits before Guide, for a control that scopes the whole section (the Pipeline switcher). */
   before?: React.ReactNode;
+  /** The one red action of the screen. On phones it stays in the header and Guide and the other actions move into a ⋯ menu. */
+  primary?: React.ReactNode;
 }) {
   const tour = useTour(id, steps, onTab);
+  const guide = steps.length > 0 ? <GuideButton onClick={tour.start} /> : null;
+  const rest = guide || actions ? <>{guide}{actions}</> : null;
   return (
-    <div className={`mx-auto flex flex-col gap-[18px] ${wide ? "max-w-[1280px]" : "max-w-[1180px]"}`}>
+    <div className={`mx-auto flex flex-col gap-[18px] ${wide ? "max-w-[1280px]" : "max-w-[1180px]"} ${id === INTRO_SECTION ? "" : "page-fade"}`}>
       <EntryMoment section={id} title={title} status={entryStatus} onDone={tour.autoStart} />
       <header data-tour="header" className="flex flex-col gap-[18px]">
         <div className="flex flex-wrap items-center justify-between gap-3.5 pl-10 md:pl-0">
           <div className="min-w-0 flex-[1_1_360px]">
-            <h1 className="text-[26px] font-[650] tracking-[-0.02em]">{title}</h1>
-            {status && <p className="mt-1 text-[14px] text-muted">{status}</p>}
+            <h1 className="text-page font-semibold tracking-[-0.02em]">{title}</h1>
+            {status && <p className="mt-1 text-body text-muted">{status}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {before}
-            {steps.length > 0 && <button type="button" className="btn h-10 px-3.5" onClick={tour.start}>Guide</button>}
-            {actions}
+            {primary ? <span className="hidden sm:contents">{rest}</span> : rest}
+            {primary}
+            {primary && rest && <span className="sm:hidden"><MoreMenu>{rest}</MoreMenu></span>}
             <AccountMenu />
           </div>
         </div>
@@ -160,6 +184,46 @@ export function Section({ id, title, status, actions, before, tabs, tab, onTab, 
       {children}
       {tour.node}
     </div>
+  );
+}
+
+/** The same Guide button on every section. */
+export function GuideButton({ onClick }: { onClick: () => void }) {
+  return <button type="button" className="btn h-10 px-3.5" onClick={onClick}>Guide</button>;
+}
+
+/** A ⋯ button that opens the header's secondary actions as a list (phones). Closes on Escape, outside clicks and a pick. */
+export function MoreMenu({ children, label = "More actions" }: { children: React.ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div ref={box} className="relative">
+      <button type="button" className="btn h-10 w-10 p-0" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}><MoreHorizontal size={16} /></button>
+      {open && (
+        <div role="menu" onClick={() => setOpen(false)} className="absolute right-0 top-12 z-50 flex w-[220px] flex-col gap-1 rounded-xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lg)] [&_.btn]:h-9 [&_.btn]:w-full [&_.btn]:justify-start [&_.btn]:border-transparent [&_.btn]:bg-transparent [&_.btn]:shadow-none [&_.btn:hover]:bg-surface-2 [&>span]:contents">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One honest not-started state for a section or panel with no data yet: what it will show, and the one action
+ *  that fills it. Used instead of zeros, dashes and empty charts. */
+export function NotStarted({ title, body, action, tour, compact }: { title: string; body: React.ReactNode; action?: React.ReactNode; tour?: string; compact?: boolean }) {
+  return (
+    <section data-tour={tour} className={`panel flex flex-col items-start gap-2 ${compact ? "p-[18px]" : "px-6 py-7"}`}>
+      <h2 className="text-title font-semibold">{title}</h2>
+      <p className="max-w-[620px] text-body text-muted">{body}</p>
+      {action && <div className="mt-2 flex flex-wrap gap-2">{action}</div>}
+    </section>
   );
 }
 
@@ -273,7 +337,7 @@ function DeltaChip({ d }: { d: KpiDelta }) {
   const good = d.good ?? d.dir === "up";
   const cls = d.dir === "flat" ? "bg-[#f0f0f0] text-[#5f5f5f]" : good ? "bg-[#f0f0f0] text-[#141414]" : "bg-[#fbeaea] text-[#9e1c1c]";
   return (
-    <span className={`num inline-flex h-5 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-semibold ${cls}`}>
+    <span className={`num inline-flex h-5 items-center gap-0.5 rounded-md px-1.5 text-meta font-semibold ${cls}`}>
       {d.dir === "up" ? <ArrowUpRight size={11} strokeWidth={2.4} /> : d.dir === "down" ? <ArrowDownRight size={11} strokeWidth={2.4} /> : null}{d.text}
     </span>
   );
@@ -289,11 +353,11 @@ export function KpiTiles({ items, tour }: { items: Kpi[]; tour?: string }) {
           <Hit key={k.label} href={k.href} onClick={k.onClick} selected={k.selected} className={`tile ${r.className}${span}${k.tone ? " " + k.tone : ""}${k.href || k.onClick ? " hit" : ""}`} style={r.style}>
             <span className="tile-label">{k.tone === "alert" && <span className="tile-dot" aria-hidden="true" />}{k.label}{k.tone === "alert" && <span className="sr-only"> (overdue)</span>}</span>
             <span className="flex w-full items-end justify-between gap-2">
-              <span className="flex min-w-0 items-baseline gap-1.5"><span className="num tile-num">{typeof k.value === "number" ? <CountUp value={k.value} /> : k.value}</span>{k.of && <span className="num truncate text-[13px] opacity-60">{k.of}</span>}</span>
+              <span className="flex min-w-0 items-baseline gap-1.5"><span className="num tile-num">{typeof k.value === "number" ? <CountUp value={k.value} /> : k.value}</span>{k.of && <span className="num truncate text-body opacity-60">{k.of}</span>}</span>
               {k.spark && <span className="hidden sm:block"><Spark values={k.spark} /></span>}
             </span>
             {(k.sub || k.delta) && (
-              <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] opacity-80">
+              <span className="flex flex-wrap items-center gap-1.5 text-meta opacity-80">
                 {k.delta && <DeltaChip d={k.delta} />}
                 {k.delta?.label && <span>{k.delta.label}</span>}
                 {k.sub && <span>{k.sub}</span>}
@@ -312,14 +376,14 @@ export function NeedsYou({ items, empty = "Nothing waiting.", title = "Needs you
   return (
     <section data-tour={tour} className="panel">
       <div className="panel-head"><span className="flex items-center gap-2">{title}{n > 0 && <span className="count-badge">{n}</span>}</span></div>
-      {items.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">{empty}</p> : items.map((x, i) => {
+      {items.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-body text-muted">{empty}</p> : items.map((x, i) => {
         const r = reveal(i);
         return (
           <Hit key={i} href={x.href} onClick={x.onClick} className={`row-hit group ${r.className}`} style={r.style}>
             <span aria-hidden="true" className={`h-[7px] w-[7px] shrink-0 self-start rounded-full mt-[6px] ${x.tone === "dark" ? "bg-ink" : x.tone === "dim" ? "border-[1.5px] border-stroke" : "bg-accent"}`} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{x.title}</span>{x.sub && <span className="line-clamp-2 text-[12px] text-muted">{x.sub}</span>}</span>
-            {x.when && <span className={`num hidden shrink-0 text-[11.5px] sm:block ${/overdue/.test(x.when) ? "font-semibold text-[#9e1c1c]" : "text-faint"}`}>{x.when}</span>}
-            {x.cta && <span className="flex shrink-0 items-center gap-0.5 text-[12.5px] font-semibold text-ink">{x.cta}<ChevronRight size={14} className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" /></span>}
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="line-clamp-2 text-body font-semibold leading-snug">{x.title}</span>{x.sub && <span className="line-clamp-2 text-meta text-muted">{x.sub}</span>}</span>
+            {x.when && <span className={`num hidden shrink-0 text-meta sm:block ${/overdue/.test(x.when) ? "font-semibold text-[#9e1c1c]" : "text-faint"}`}>{x.when}</span>}
+            {x.cta && <span className="flex shrink-0 items-center gap-0.5 text-meta font-semibold text-ink">{x.cta}<ChevronRight size={14} className="text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" /></span>}
           </Hit>
         );
       })}
@@ -336,7 +400,7 @@ export function StartCards({ items, tour, title = "Start something", className =
       {items.map((s, i) => { const r = reveal(i); return (
         <Hit key={s.title} href={s.href} onClick={s.onClick} className={`row-hit group ${r.className}`} style={r.style}>
           <s.icon size={16} strokeWidth={1.9} className={`shrink-0 ${s.primary ? "text-accent" : "text-ink"}`} aria-hidden="true" />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-[13.5px] font-semibold">{s.title}</span><span className="text-[12.5px] leading-snug text-muted">{s.sub}</span></span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-body font-semibold">{s.title}</span><span className="text-meta leading-snug text-muted">{s.sub}</span></span>
           <ChevronRight size={15} className="shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-ink" aria-hidden="true" />
         </Hit>
       ); })}
@@ -350,16 +414,16 @@ export function Activity({ items, title = "Recent activity", empty = "No activit
   return (
     <section data-tour={tour} className="panel">
       <div className="panel-head"><span>{title}</span>{action && <Link href={action.href} className="panel-link">{action.label}</Link>}</div>
-      {items.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">{empty}</p> : (
+      {items.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-body text-muted">{empty}</p> : (
         <ol className="border-t border-line py-1.5">
           {items.map((a, i) => { const r = reveal(i); return (
             <li key={i} className={r.className} style={r.style}>
               <Hit href={a.href} onClick={a.onClick} className="flex w-full items-start gap-3 px-[18px] py-2 text-left hover:bg-[#fafafa]">
                 <span className="mt-[6px] h-[7px] w-[7px] shrink-0 rounded-full border-[1.5px] border-[#141414] bg-white" />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-[13px] leading-snug text-ink-2">{a.text}{a.count && a.count > 1 ? <span className="num ml-1.5 text-[11.5px] font-semibold text-muted">×{a.count}</span> : null}</span>
-                  {a.detail && <span className="truncate text-[12px] text-muted">{a.detail}</span>}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5"><span className="text-body leading-snug text-ink-2">{a.text}{a.count && a.count > 1 ? <span className="num ml-1.5 text-meta font-semibold text-muted">×{a.count}</span> : null}</span>
+                  {a.detail && <span className="truncate text-meta text-muted">{a.detail}</span>}</span>
                 {a.tag && <span className="hidden sm:contents"><span className="count-badge muted shrink-0">{a.tag}</span></span>}
-                <span className="num w-[68px] shrink-0 pt-px text-right text-[11.5px] text-faint">{a.when}</span>
+                <span className="num w-[68px] shrink-0 pt-px text-right text-meta text-faint">{a.when}</span>
               </Hit>
             </li>
           ); })}
@@ -375,19 +439,9 @@ export function Panel({ title, meta, action, tour, children, className = "" }: {
     <section data-tour={tour} className={`panel ${className}`}>
       <div className="panel-head">
         <span className="flex min-w-0 items-center gap-2">{title}</span>
-        <span className="flex items-center gap-3">{meta && <span className="text-[12px] font-normal text-muted">{meta}</span>}
+        <span className="flex items-center gap-3">{meta && <span className="text-meta font-normal text-muted">{meta}</span>}
           {action && (action.href ? <Link href={action.href} className="panel-link">{action.label}</Link> : <button type="button" onClick={action.onClick} className="panel-link">{action.label}</button>)}</span>
       </div>
-      {children}
-    </section>
-  );
-}
-
-/** A dark summary card used on Homes for the one line that matters most. */
-export function DarkCard({ kicker, children, tour }: { kicker: string; children: React.ReactNode; tour?: string }) {
-  return (
-    <section data-tour={tour} className="flex flex-col gap-3 rounded-2xl bg-[#141414] p-[18px] text-white">
-      <span className="text-[13px] font-semibold text-[#ff8a80]">{kicker}</span>
       {children}
     </section>
   );

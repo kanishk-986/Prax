@@ -11,7 +11,7 @@ export default function SharedReport({ params }: { params: Promise<{ token: stri
   useEffect(() => {
     supabase().rpc("citation_share", { tok: token }).then(({ data }: { data: unknown }) => setR((data as ReportSnapshot & { expires_at: string; profile: string }) ?? null));
   }, [token]);
-  if (r === undefined) return <div className="grid min-h-screen place-items-center bg-white text-[13px] text-[#5f5f5f]">Loading</div>;
-  if (!r) return <div className="grid min-h-screen place-items-center bg-white p-6 text-center"><div><p className="text-[16px] font-semibold text-[#141414]">This link has expired or was turned off.</p><p className="mt-1 text-[13px] text-[#5f5f5f]">Ask the person who sent it for a new one.</p></div></div>;
+  if (r === undefined) return <div className="grid min-h-screen place-items-center bg-white text-body text-[#5f5f5f]">Loading</div>;
+  if (!r) return <div className="grid min-h-screen place-items-center bg-white p-6 text-center"><div><p className="text-title font-semibold text-[#141414]">This link has expired or was turned off.</p><p className="mt-1 text-body text-[#5f5f5f]">Ask the person who sent it for a new one.</p></div></div>;
   return <main className="min-h-screen bg-white"><ReportView r={r} expires={r.expires_at} /></main>;
 }

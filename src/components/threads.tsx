@@ -21,10 +21,10 @@ export function Threads({ refTable, refId }: { refTable: string; refId: string }
     <section>
       <div className="label mb-2">Discussion</div>
       <ul className="flex flex-col gap-2">
-        {rows.length === 0 && <li className="text-[13px] text-muted">No comments yet.</li>}
+        {rows.length === 0 && <li className="text-body text-muted">No comments yet.</li>}
         {rows.map((r) => (
-          <li key={r.id} className="rounded-lg bg-surface-2 px-3 py-2 text-[13px]">
-            <div className="text-[11px] text-muted">{r.author_email || "Someone"} · {new Date(r.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+          <li key={r.id} className="rounded-lg bg-surface-2 px-3 py-2 text-body">
+            <div className="text-meta text-muted">{r.author_email || "Someone"} · {new Date(r.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
             <div className="mt-0.5 whitespace-pre-wrap">{r.body}</div>
           </li>
         ))}

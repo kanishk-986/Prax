@@ -19,7 +19,7 @@ export function Toaster({ children }: { children: React.ReactNode }) {
       {children}
       <div className="pointer-events-none fixed right-4 bottom-[max(20px,env(safe-area-inset-bottom))] z-[60] flex flex-col items-end gap-2 md:right-6" aria-live="polite">
         {list.map((t) => (
-          <div key={t.id} className="anim-rise pointer-events-auto flex items-center gap-3 rounded-full bg-ink py-2 pl-3 pr-2 text-[13px] text-canvas shadow-[var(--shadow-lg)]">
+          <div key={t.id} className="anim-rise pointer-events-auto flex items-center gap-3 rounded-full bg-ink py-2 pl-3 pr-2 text-body text-canvas shadow-[var(--shadow-lg)]">
             {t.info ? <span className="grid h-5 w-5 place-items-center rounded-full bg-white/15 text-white"><Info size={12} strokeWidth={2.6} /></span>
               : <span className="grid h-5 w-5 place-items-center rounded-full bg-good text-white"><Check size={12} strokeWidth={3} /></span>}
             <span>{t.text}</span>
