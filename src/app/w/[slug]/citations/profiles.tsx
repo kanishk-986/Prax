@@ -106,7 +106,7 @@ export function DeleteProfile({ profile, busy, onClose, onConfirm }: { profile: 
           <input id="del-name" autoFocus autoComplete="off" spellCheck={false} className={s.field} value={typed} onChange={(e) => setTyped(e.target.value)} />
           <div className="mt-3 flex flex-wrap justify-end gap-2">
             <button type="button" className={s.btn} onClick={onClose}>Cancel</button>
-            <button type="submit" className={cx(s.btn, s.red)} disabled={!ok || busy}>{busy ? "Deleting" : "Delete for good"}</button>
+            <button type="submit" className={cx(s.btn, s.danger)} disabled={!ok || busy}>{busy ? "Deleting" : "Delete for good"}</button>
           </div>
         </form>
       </div>

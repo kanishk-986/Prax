@@ -326,7 +326,7 @@ export function judgePrompt(answer: string, facts: Partial<Facts>, name: string)
   return `FACTS ABOUT ${name.toUpperCase()} (true):\n${lines || "(none given)"}\n\nAN AI ANSWER:\n${answer.slice(0, 12000)}\n\nJudge how the answer speaks about ${name}: positive, neutral or negative. List any statement about ${name} that contradicts the facts, quoting it. Do not list things the facts do not cover. Return only JSON: {"sentiment": "neutral", "issues": [{"fact": "the true fact", "said": "the quoted wrong statement"}]}`;
 }
 
-/** Profile consistency: each fact should appear in his LinkedIn headline or About text, which AI tools read. */
+/** Profile consistency: each fact should appear in the LinkedIn headline or About text, which AI tools read. */
 export function profileConsistency(facts: Partial<Facts>, profileText: string) {
   const t = profileText.toLowerCase();
   const terms = (v?: string) => (v ?? "").split(",").map((x) => x.trim()).filter((x) => x.length > 1);
@@ -359,8 +359,8 @@ export function recommend(runs: Run[], questions: Question[], self: Entity, riva
   for (const q of active) {
     const v = verdicts(q.id);
     if (!v.length) continue;
-    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: `No engine names ${self.name} for this question. A clear, specific article gives the AI something to cite.`, question_ids: [q.id] });
-    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link an owned page in posts about ${q.topic || "this topic"}`, detail: `${self.name} is named for "${q.question}" but no answer links an owned site. A post or article that links the right page can turn mentions into links.`, question_ids: [q.id] });
+    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: `No AI tool names ${self.name} for this prompt. A clear, specific article gives the AI something to cite.`, question_ids: [q.id] });
+    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link a company page in posts about ${q.topic || "this topic"}`, detail: `${self.name} is named for "${q.question}", but no answer links an owned site. A post that links the right page can turn mentions into links.`, question_ids: [q.id] });
   }
   for (const g of citationGaps(runs, self, rivals).slice(0, 5)) {
     const qids = [...new Set(runs.filter((r) => r.sources.some((x) => x.domain === g.domain)).map((r) => r.question_id))];
@@ -381,7 +381,7 @@ export function alerts(runs: Run[], questions: Question[], self: Entity, rivals:
     const nowS = shareOfVoice(runs, questions, self, self).named, prevS = shareOfVoice(prevRuns, questions, self, self).named;
     for (const c of rivals) {
       const nowC = shareOfVoice(runs, questions, c, self).named, prevC = shareOfVoice(prevRuns, questions, c, self).named;
-      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more questions than ${self.name} (${nowC} against ${nowS})` });
+      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more prompts than ${self.name} (${nowC} against ${nowS})` });
     }
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1));
@@ -436,7 +436,7 @@ export function askContext(runs: Run[], questions: Question[], self: Entity, riv
   return `Named in ${sov.named} of ${sov.total} answers (latest batch, branded and failed excluded).\n\nLATEST PER QUESTION AND ENGINE:\n${rows.join("\n") || "(none)"}\n\nCHANGES:\n${ch.join("\n") || "(none)"}\n\nCITATION GAPS:\n${gaps.join("\n") || "(none)"}`;
 }
 // AI citations, person and company. The profile's person and its company are scored separately.
-// A person counts as named only by a full name that sits next to context (his company, his role or one of his
+// A person counts as named only by a full name that sits next to context (the company, the role or one of the
 // topics). A bare full name waits for a one-click review, and a first or last name alone never counts.
 // Pure functions, shared by the page and scripts/test-citations.ts.
 
@@ -446,7 +446,7 @@ const paragraphs = (t: string) => t.split(/\n\s*\n|\n(?=\s*(?:\d+[.)]|[-*•])\s
 const fullNames = (aliases: string[]) => aliases.filter((a) => a.trim().split(/\s+/).length >= 2);
 
 export type PersonHit = { named: boolean; review: boolean; attributed: boolean; matches: Match[] };
-/** contextTerms: his topics and keywords, lower case. A stored review ("confirmed" or "rejected") overrides the rule. */
+/** contextTerms: the topics and keywords, lower case. A stored review ("confirmed" or "rejected") overrides the rule. */
 export function detectPerson(run: Pick<Run, "answer" | "person_review">, person: Pick<Entity, "aliases">, company: Pick<Entity, "aliases"> | undefined, contextTerms: string[] = []): PersonHit {
   const names = fullNames(person.aliases);
   const matches = findMatches(run.answer, names);
@@ -501,7 +501,7 @@ export function subjectShare(runs: Run[], questions: Question[], subject: "perso
   return out;
 }
 
-/** Context words for the person rule: his company's names plus the keywords of the prompts. */
+/** Context words for the person rule: the company's names plus the keywords of the prompts. */
 export function personContext(questions: Question[], company?: Entity) {
   const t = new Set<string>(["stablecoin", "tokenisation", "tokenization", "blockchain", "digital asset"]);
   (company?.aliases ?? []).forEach((a) => t.add(a.toLowerCase()));
