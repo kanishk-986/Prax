@@ -176,7 +176,10 @@ export function midCheck(b: Brief, posts: CampPost[], targets: TargetLite[], eng
 export type ReportInput = {
   posts: CampPost[]; replies: number; conversations: number; requests: { sent: boolean }[]; stageMoves: number; targets: number; engaged: number;
   citations?: { before: number | null; after: number | null } | null;
+  /** Post results (CS29), summed by resultsSummary in src/lib/content.ts over the campaign's posts. */
+  results?: { measured: number; impressions: number; reactions: number; comments: number; reposts: number; rate: number | null; best: { title: string } | null } | null;
 };
+const fmtN = (n: number) => n.toLocaleString("en-GB");
 /** first: the profile's first name (firstNameOf in src/lib/persona.ts). */
 export function report(b: Brief, r: ReportInput, first = "the profile") {
   const planned = r.posts.length, posted = r.posts.filter((p) => p.status === "Posted").length;
@@ -189,6 +192,11 @@ export function report(b: Brief, r: ReportInput, first = "the profile") {
   if (r.citations && r.citations.before != null && r.citations.after != null)
     lines.push(`AI tools named ${first} on this topic in ${r.citations.after} percent of answers, from ${r.citations.before} percent before the campaign.`);
   else lines.push("AI citation change is not available yet for this topic.");
+  const res = r.results;
+  if (res && res.measured) {
+    lines.push(`${res.measured} of ${posted} posted ${posted === 1 ? "piece has" : "pieces have"} results: ${fmtN(res.impressions)} impressions, ${fmtN(res.reactions)} reactions, ${fmtN(res.comments)} comments and ${fmtN(res.reposts)} reposts${res.rate != null ? `, ${res.rate} interactions per 100 impressions` : ""}.`);
+    if (res.best?.title && res.measured > 1) lines.push(`The strongest post was "${res.best.title}".`);
+  } else if (posted) lines.push("No post results yet. Add them in each posted piece's view.");
   return { planned, posted, rate: planned ? Math.round((posted / planned) * 100) : 0, lines };
 }
 

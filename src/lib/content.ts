@@ -179,13 +179,57 @@ export function parseDrafts(j: unknown, hook: string): Draft[] {
     .map((d) => (hook && !d.text.startsWith(hook) ? { ...d, text: `${hook}\n\n${d.text.replace(new RegExp(`^${hook.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`), "")}` } : d)).slice(0, 3);
 }
 
+// ---------- results per post (CS29) ----------
+export type Results = { impressions: number | null; reactions: number | null; comments: number | null; reposts?: number | null };
+/** A number as people type it or LinkedIn shows it: "1,234", "2.1K", "1.2M", "980". Empty means not known (null). */
+export function parseCount(raw: string): number | null {
+  const s = String(raw ?? "").trim().replace(/[\s,]/g, "").toLowerCase();
+  if (!s) return null;
+  const m = s.match(/^(\d+(?:\.\d+)?)([km])?$/);
+  if (!m) return null;
+  const n = Number(m[1]) * (m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : 1);
+  return Number.isFinite(n) ? Math.round(n) : null;
+}
+export const hasResults = (p: Results) => [p.impressions, p.reactions, p.comments, p.reposts].some((x) => x != null);
+/** Engagement per post: comments weigh double as they start conversations, reposts triple as they carry the post further. */
+export const engagementScore = (p: Results) => (p.reactions ?? 0) + 2 * (p.comments ?? 0) + 3 * (p.reposts ?? 0);
+/** Reactions, comments and reposts per 100 impressions, to one decimal; null without impressions. */
+export function engagementRate(p: Results): number | null {
+  if (!p.impressions) return null;
+  return Math.round((((p.reactions ?? 0) + (p.comments ?? 0) + (p.reposts ?? 0)) / p.impressions) * 1000) / 10;
+}
+/** Totals over the posts that have results, for a campaign or a period. The rate uses only posts with impressions. */
+export function resultsSummary(posts: (Results & { id?: string; title?: string })[]) {
+  const done = posts.filter(hasResults);
+  const sum = (k: keyof Results) => done.reduce((t, p) => t + (p[k] ?? 0), 0);
+  const withImp = done.filter((p) => p.impressions);
+  const imp = withImp.reduce((t, p) => t + (p.impressions ?? 0), 0);
+  const inter = withImp.reduce((t, p) => t + (p.reactions ?? 0) + (p.comments ?? 0) + (p.reposts ?? 0), 0);
+  const best = done.length ? done.reduce((a, b) => (engagementScore(b) > engagementScore(a) ? b : a)) : null;
+  return {
+    measured: done.length, impressions: sum("impressions"), reactions: sum("reactions"), comments: sum("comments"), reposts: sum("reposts"),
+    avgImpressions: withImp.length ? Math.round(imp / withImp.length) : null,
+    rate: imp ? Math.round((inter / imp) * 1000) / 10 : null,
+    best: best ? { id: best.id ?? "", title: best.title ?? "", score: engagementScore(best) } : null,
+  };
+}
+export type ResultsSummary = ReturnType<typeof resultsSummary>;
+/** The LinkedIn activity id in a post link or its analytics page (urn:li:activity:<id>); db/022 matches posts the same way. */
+export function activityId(url: string): string | null {
+  return String(url ?? "").match(/activity(?::|%3A|-)(\d{6,})/i)?.[1] ?? null;
+}
+/** A posted piece at least two days old with no numbers yet: the numbers have settled and nobody has added them. */
+export function needsResults(p: Results & { status: string; publish_date: string | null }, todayYmd: string) {
+  if (!(p.status === "Posted" || p.status === "Published") || !p.publish_date || hasResults(p)) return false;
+  return Math.round((new Date(todayYmd + "T12:00:00").getTime() - new Date(p.publish_date + "T12:00:00").getTime()) / 864e5) >= 2;
+}
+
 // ---------- What works (Q67) ----------
-export type ResultPost = { format: string; pillar: string; publish_date: string | null; planned_time: string; draft: string; status: string; impressions: number | null; reactions: number | null; comments: number | null };
+export type ResultPost = Results & { format: string; pillar: string; publish_date: string | null; planned_time: string; draft: string; status: string };
 export const MIN_RESULTS = 5;
-/** Engagement per post: comments weigh double, as they start conversations. */
-const score = (p: ResultPost) => (p.reactions ?? 0) + 2 * (p.comments ?? 0);
+const score = engagementScore;
 export function whatWorks(posts: ResultPost[]) {
-  const done = posts.filter((p) => (p.status === "Posted" || p.status === "Published") && (p.impressions != null || p.reactions != null || p.comments != null));
+  const done = posts.filter((p) => (p.status === "Posted" || p.status === "Published") && hasResults(p));
   if (done.length < MIN_RESULTS) return { enough: false as const, have: done.length, need: MIN_RESULTS };
   const group = (key: (p: ResultPost) => string) => {
     const m = new Map<string, { n: number; total: number }>();
@@ -196,6 +240,74 @@ export function whatWorks(posts: ResultPost[]) {
   const slot = (p: ResultPost) => { const h = Number((p.planned_time || "").slice(0, 2)); return Number.isFinite(h) && p.planned_time ? (h < 11 ? "Morning" : h < 15 ? "Midday" : "Afternoon") : ""; };
   const hookLen = (p: ResultPost) => { const n = Array.from((p.draft || "").split("\n")[0]).length; return n ? (n <= 80 ? "Short opening, under 80 characters" : n <= 140 ? "Opening that fits the mobile fold" : "Long opening, cut on mobile") : ""; };
   return { enough: true as const, have: done.length, byFormat: group((p) => p.format), byPillar: group((p) => p.pillar), byDay: group(day), bySlot: group(slot), byHook: group(hookLen) };
+}
+
+// ---------- repurpose one piece into several (CS30) ----------
+export const REPURPOSE_KINDS = [
+  { key: "carousel", label: "Carousel", format: "Carousel", ask: "a carousel: 6 to 8 slides, one line per slide written as 'Slide N: title. body'" },
+  { key: "short", label: "Short text post", format: "Text post", ask: "a short text post of 60 to 120 words that makes one point from the piece" },
+  { key: "comment", label: "Comment angle", format: "Text post", ask: "a comment angle: the stance to bring to other people's posts on this topic, 50 to 70 words" },
+  { key: "newsletter", label: "Newsletter section", format: "Article", ask: "a newsletter section of 200 to 300 words under a short heading" },
+  { key: "poll", label: "Poll", format: "Poll", ask: "a poll: the question as the post, then 2 to 4 options on lines that start with 'Option: '" },
+  { key: "video", label: "Video script", format: "Video", ask: "a 45 second talking-head script: the first line said, three beats and a close" },
+] as const;
+export type RepurposeKey = (typeof REPURPOSE_KINDS)[number]["key"];
+export type Piece = { kind: RepurposeKey; title: string; text: string };
+function kindOf(x: unknown): RepurposeKey | null {
+  const s = String(x ?? "").trim().toLowerCase();
+  if (!s) return null;
+  const k = REPURPOSE_KINDS.find((r) => r.key === s || r.label.toLowerCase() === s);
+  if (k) return k.key;
+  return s.includes("carousel") ? "carousel" : s.includes("comment") ? "comment" : s.includes("newsletter") ? "newsletter" : s.includes("poll") ? "poll" : s.includes("video") || s.includes("script") ? "video" : s.includes("text") || s.includes("short") ? "short" : null;
+}
+/** The pieces in a model reply, at most one per kind asked for, in the order asked. A missing title comes from the first line. */
+export function parseRepurpose(j: unknown, asked: readonly RepurposeKey[]): Piece[] {
+  const o = (j ?? {}) as { pieces?: unknown };
+  const got = new Map<RepurposeKey, Piece>();
+  for (const x of asArr<Record<string, unknown>>(o.pieces)) {
+    const kind = kindOf(x?.kind);
+    const text = String(x?.text ?? "").replace(/\r/g, "").trim().slice(0, 3000);
+    if (!kind || !text || !asked.includes(kind) || got.has(kind)) continue;
+    const line = text.split("\n")[0].replace(/^(Slide\s*1\s*:\s*|#+\s*)/i, "").trim();
+    const title = (String(x?.title ?? "").replace(/\s+/g, " ").trim() || line).slice(0, 90);
+    got.set(kind, { kind, title, text });
+  }
+  return asked.map((k) => got.get(k)).filter((p): p is Piece => !!p);
+}
+export const repurposeFormat = (k: RepurposeKey) => REPURPOSE_KINDS.find((r) => r.key === k)?.format ?? "Text post";
+export const repurposeLabel = (k: string) => REPURPOSE_KINDS.find((r) => r.key === k)?.label ?? "Repurposed";
+
+// ---------- first comment and reply prep (CS31) ----------
+const LINK = /\bhttps?:\/\/[^\s)]+|\bwww\.[^\s)]+/i;
+/** Does the post send people off LinkedIn? Then the link is better placed in a first comment. */
+export const linksOut = (text: string) => LINK.test(text || "");
+export const firstLink = (text: string) => (text || "").match(LINK)?.[0].replace(/[.,;:]+$/, "") ?? "";
+export type Prep = { first: string; replies: { q: string; a: string }[]; at?: string };
+const unq = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim().replace(/^["“']+|["”']+$/g, "").trim();
+/** A first comment only when the post links out (it always carries the link), and up to three likely replies with answers. */
+export function parsePrep(j: unknown, link: string): Prep {
+  const o = (j ?? {}) as { first?: unknown; replies?: unknown };
+  let first = link ? unq(o.first) : "";
+  if (first && !first.includes(link)) first = `${first} ${link}`;
+  const replies = asArr<Record<string, unknown>>(o.replies).map((r) => ({ q: unq(r?.q ?? r?.reply ?? r?.question), a: unq(r?.a ?? r?.answer) })).filter((r) => r.q && r.a).slice(0, 3);
+  return { first, replies };
+}
+
+// ---------- generated images (CS6) ----------
+export const IMAGE_BUCKET = "post-images";
+const IMG_EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+/** Storage path for a post's image: the workspace first, so the bucket policies in db/022 can check membership. */
+export function imagePath(wsId: string, postId: string, mime: string, stamp = Date.now()) {
+  return `${wsId}/${postId}/${stamp}.${IMG_EXT[mime] ?? "png"}`;
+}
+/** A base64 image data URL as its type and bytes; null for anything else, or for a type the bucket does not take. */
+export function dataUrlBytes(url: string): { mime: string; bytes: Uint8Array } | null {
+  const m = String(url ?? "").match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!m) return null;
+  const bin = atob(m[2].replace(/\s/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { mime: m[1], bytes };
 }
 
 // ---------- the angle step (Q92) ----------

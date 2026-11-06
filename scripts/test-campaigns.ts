@@ -82,6 +82,11 @@ const rep = report(camp, { posts: [{ id: "1", status: "Posted", publish_date: "x
 eq("report numbers", [rep.planned, rep.posted, rep.rate], [2, 1, 50]);
 eq("report lines", rep.lines[3], "2 people asked for the resource; 1 have been sent it.");
 eq("report citation line", rep.lines[4].includes("25 percent"), true);
+const repR = report(camp, { posts: [{ id: "1", status: "Posted", publish_date: "x", format: "Text post" }, { id: "2", status: "Posted", publish_date: "y", format: "Carousel" }], replies: 0, conversations: 0, requests: [], stageMoves: 0, targets: 0, engaged: 0,
+  results: { measured: 2, impressions: 12400, reactions: 180, comments: 31, reposts: 6, rate: 1.7, best: { title: "Five controls" } } });
+eq("report results line", repR.lines[5], "2 of 2 posted pieces have results: 12,400 impressions, 180 reactions, 31 comments and 6 reposts, 1.7 interactions per 100 impressions.");
+eq("report strongest post", repR.lines[6], "The strongest post was \"Five controls\".");
+eq("report asks for results when posted pieces have none", report(camp, { posts: [{ id: "1", status: "Posted", publish_date: "x", format: "Text post" }], replies: 0, conversations: 0, requests: [], stageMoves: 0, targets: 0, engaged: 0 }).lines[5], "No post results yet. Add them in each posted piece's view.");
 eq("report without citation data", report(camp, { posts: [], replies: 0, conversations: 0, requests: [], stageMoves: 0, targets: 0, engaged: 0 }).lines[4], "AI citation change is not available yet for this topic.");
 
 // Fast response and events.

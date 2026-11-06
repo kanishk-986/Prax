@@ -44,6 +44,8 @@ export default function ContentStudio() {
   const [tour, setTour] = useState(false);
   const onTab = useCallback((t: string) => setTab(t as Tab), []);
   const clearSeed = useCallback(() => setSeed(null), []);
+  const [repurpose, setRepurpose] = useState<Post | null>(null);
+  const clearRepurpose = useCallback(() => setRepurpose(null), []);
   // The tour starts once per browser, just after the page has faded in.
   useEffect(() => { if (!tourPending("content-studio")) return; const t = setTimeout(() => setTour(true), 400); return () => clearTimeout(t); }, []);
   const [startCamp, setStartCamp] = useState<{ view: "brief"; n: number } | undefined>();
@@ -77,6 +79,8 @@ export default function ContentStudio() {
     haptic(); setTab("library"); setEdit(data as Post);
   }
   const writeFrom = (p: Post) => { setSeed(p); setTab("write"); };
+  // Repurpose (CS30): Write a post opens on the posted piece, ready to turn it into several new ideas.
+  const repurposeFrom = (p: Post) => { setView(null); setSeed(null); setRepurpose(p); setTab("write"); };
   const planCampaign = () => { setTab("campaigns"); setStartCamp({ view: "brief", n: Date.now() }); };
 
   return (
@@ -108,13 +112,13 @@ export default function ContentStudio() {
 
         {posts.loading || campaigns.loading ? <div className="card h-64 animate-pulse bg-surface-2" />
           : tab === "home" ? <HomeTab posts={posts.rows} campaigns={campaigns.rows} settings={settings} go={onTab} openPost={setView} writeFrom={writeFrom} planCampaign={planCampaign} />
-          : tab === "write" ? <WriteFlow posts={posts.rows} campaigns={campaigns.rows} settings={settings} seed={seed} clearSeed={clearSeed} openPost={setView} />
+          : tab === "write" ? <WriteFlow posts={posts.rows} campaigns={campaigns.rows} settings={settings} seed={seed} clearSeed={clearSeed} openPost={setView} repurpose={repurpose} clearRepurpose={clearRepurpose} />
           : tab === "formatter" ? <Formatter />
           : tab === "campaigns" ? <div data-tour="campaigns"><CampaignsTab posts={posts.rows} campaigns={campaigns.rows} targets={targets.rows} requests={requests.rows} prospects={prospects.rows} comments={comments.rows} openPost={setView} editPost={setEdit} start={startCamp} settings={settings} /></div>
           : tab === "plan" ? <PlanTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} settings={settings} />
           : <LibraryTab posts={posts.rows} campaigns={campaigns.rows} openPost={setView} status={libStatus} setStatus={setLibStatus} newPost={newPost} />}
       </div>
-      {view && <PostView post={fresh(view)!} campaigns={campaigns.rows} members={members} onClose={() => setView(null)} onEdit={() => { setEdit(fresh(view)); setView(null); }} />}
+      {view && <PostView post={fresh(view)!} campaigns={campaigns.rows} members={members} posts={posts.rows} onClose={() => setView(null)} onEdit={() => { setEdit(fresh(view)); setView(null); }} onRepurpose={repurposeFrom} />}
       {edit && <PostEditor post={fresh(edit)!} campaigns={campaigns.rows} posts={posts.rows} settings={settings} companies={companies} onClose={() => setEdit(null)} />}
       {pov && <PovModal settings={settings} save={saveSettings} onClose={() => setPov(false)} />}
 
@@ -261,7 +265,9 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
 
   async function duplicate(p: Post) {
     const { id: _id, created_at: _c, ...rest } = p; void _id; void _c;
-    const copy = { ...rest, title: `${p.title} (copy)`, status: "Idea", publish_date: null, planned_time: "", requested_by: null, requested_at: null, decided_by: null, decided_at: null, decision: "", decision_note: "", url: "", impressions: null, reactions: null, comments: null };
+    const copy = { ...rest, title: `${p.title} (copy)`, status: "Idea", publish_date: null, planned_time: "", requested_by: null, requested_at: null, decided_by: null, decided_at: null, decision: "", decision_note: "", url: "", impressions: null, reactions: null, comments: null,
+      // db/022 columns, once it has run: the copy has no results or prep, and does not share the stored image file.
+      ...("reposts" in p ? { reposts: null, results_at: null, results_source: "", prep: {}, image_path: "" } : {}) };
     const { data, error } = await supabase().from("posts").insert(copy).select().single();
     if (error) { toast(error.message); return; }
     setExtra((x) => [...x, data as Post]); haptic();

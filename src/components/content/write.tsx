@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Lightbulb, Link2, FileText, PenLine, MessageSquare, TrendingDown, Copy, Download, Sparkles, X, Check } from "lucide-react";
+import { Lightbulb, Link2, FileText, PenLine, MessageSquare, TrendingDown, Repeat2, Copy, Download, Sparkles, X, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, today, fmtDay, addDays } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
@@ -9,7 +9,9 @@ import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import { humanScore } from "@/lib/studio";
 import { cap, fullNameOf, firstNameOf, companyOf, pillarsOf, regionText, possessive, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
-import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS } from "@/lib/content";
+import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS,
+  REPURPOSE_KINDS, parseRepurpose, repurposeFormat, repurposeLabel, hasResults, type RepurposeKey, type Piece } from "@/lib/content";
+import { usePostImage, storePostImage, removePostImage, imageDownloadUrl } from "./media";
 import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
 import { inProfile } from "@/lib/citations";
 import { useCitationProfile } from "@/lib/citation-profile";
@@ -17,10 +19,11 @@ import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprov
 import { LinkedInPreview } from "./preview";
 import type { ContentSettings } from "./settings";
 
-type SourceKind = "idea" | "link" | "pdf" | "draft" | "comment" | "gap";
+type SourceKind = "idea" | "link" | "pdf" | "draft" | "comment" | "gap" | "repurpose";
 type TypeKey = "Text post" | "Image post" | "Carousel" | "Video" | "Poll" | "Article";
 type Script = { hook: string; beats: { say: string; show: string }[]; close: string; caption: string; cover: string; captions: string };
 
+// CS34: one compact list of starting points instead of a grid of icon cards.
 const SOURCES: [SourceKind, string, string, React.ElementType][] = [
   ["idea", "An idea in mind", "A few words is enough.", Lightbulb],
   ["link", "A link or article", "Prax reads the page and finds the point.", Link2],
@@ -28,7 +31,12 @@ const SOURCES: [SourceKind, string, string, React.ElementType][] = [
   ["draft", "A rough draft", "Tidied and kept in their voice.", PenLine],
   ["comment", "One of their comments", "A strong comment, grown into a post.", MessageSquare],
   ["gap", "A topic gap", "From AI citations, or a pillar not covered lately.", TrendingDown],
+  ["repurpose", "A posted piece", "Turned into several new drafts, each saved as an idea.", Repeat2],
 ];
+const DEFAULT_PIECES: RepurposeKey[] = ["carousel", "short", "comment", "newsletter"];
+/** "Slide 2: Title. Body" lines from a repurposed carousel become editable slides. */
+const slidesFrom = (text: string): Slide[] => text.split("\n").map((l) => l.match(/^Slide\s*\d+\s*:\s*(.+)$/i)?.[1]?.trim()).filter((x): x is string => !!x)
+  .map((l) => { const i = l.indexOf(". "); return i > 0 ? { title: l.slice(0, i), body: l.slice(i + 2) } : { title: l, body: "" }; }).slice(0, 9);
 const TYPES: [TypeKey, string, string][] = [
   ["Text post", "An opinion or lesson.", "600 to 1,300 characters"], ["Image post", "One visual, short text.", "300 to 900 characters"],
   ["Carousel", "One point per slide.", "6 to 9 slides"], ["Video", "A short talking-head or explainer clip.", "30 to 90 seconds"],
@@ -46,8 +54,9 @@ const STEP_NAMES = (video: boolean) => ["Start", "Type", "Idea", "Angle", "Hook"
 const S = { start: 0, type: 1, idea: 2, angle: 3, hook: 4, draft: 5, visual: 6, plan: 7 } as const;
 const emptyScript = (): Script => ({ hook: "", beats: [{ say: "", show: "" }, { say: "", show: "" }, { say: "", show: "" }], close: "", caption: "", cover: "dark", captions: "bold" });
 
-export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPost }: {
+export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPost, repurpose, clearRepurpose }: {
   posts: Post[]; campaigns: Campaign[]; settings: ContentSettings; seed: Post | null; clearSeed: () => void; openPost: (p: Post) => void;
+  repurpose?: Post | null; clearRepurpose?: () => void;
 }) {
   const { ws, can, userId } = useWorkspace();
   const { scope: citScope } = useCitationProfile();
@@ -84,6 +93,14 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const [layout, setLayout] = useState("statement");
   const [imgPrompt, setImgPrompt] = useState("");
   const [image, setImage] = useState<string | null>(null);
+  // CS6: a generated image is stored with the post (db/022); after a reload it comes back through a signed link.
+  const [imgPath, setImgPath] = useState("");
+  const storedImg = usePostImage(imgPath);
+  const shownImg = image ?? storedImg;
+  // CS30: the posted piece to repurpose, the kinds asked for, and the pieces that came back.
+  const [rpId, setRpId] = useState("");
+  const [rpKinds, setRpKinds] = useState<RepurposeKey[]>(DEFAULT_PIECES);
+  const [pieces, setPieces] = useState<(Piece & { keep: boolean; saved?: Post })[]>([]);
   const [pollOpts, setPollOpts] = useState<string[]>(["", ""]);
   const [channel, setChannel] = useState<Channel>(PROFILE_CHANNEL);
   const [newsletter, setNewsletter] = useState(false);
@@ -108,9 +125,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   useEffect(() => {
     if (!seed) return;
     setPostId(seed.id); setCampaignId(seed.campaign_id); setType(((TYPES.find((t) => t[0] === seed.format) ?? TYPES[0])[0]));
-    setSrc((seed.source_kind as SourceKind) || "idea"); setSrcText(seed.resource || seed.title); setIdea({ title: seed.title, why: "", pillar: seed.pillar, score: 0 });
+    setSrc(seed.source_kind && seed.source_kind !== "repurpose" ? (seed.source_kind as SourceKind) : "idea"); setSrcText(seed.resource || seed.title); setIdea({ title: seed.title, why: "", pillar: seed.pillar, score: 0 });
     setPillar(seed.pillar || ""); setChannel(seed.channel === "company" ? "company" : PROFILE_CHANNEL); setNewsletter(!!seed.newsletter);
     setText(seed.draft || ""); setHook(seed.hook || ""); if (seed.script && seed.script.beats) setScript({ ...emptyScript(), ...seed.script } as Script);
+    setImage(null); setImgPath(seed.image_path || ""); if (seed.visual?.layout) setLayout(seed.visual.layout); if (seed.visual?.slides?.length) setSlides(seed.visual.slides);
     // A Discovery or AI citations topic skips the starting point; Discovery's suggested angle comes preselected.
     const fromDisc = seed.source_kind === "discovery", fromCit = seed.topic === "AI citations" || seed.source_kind === "gap";
     const base = suggestAngles(seed.title, region);
@@ -123,6 +141,12 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
       : fromCit ? { tag: seed.channel === "company" ? "From AI citations · company content" : "From AI citations", title: seed.title, line: "The gap prompt and its rivals are loaded", sources: [] } : null);
     setStep(seed.draft ? S.draft : S.angle); clearSeed();
   }, [seed, clearSeed, region]);
+
+  // Repurpose from a post's view opens here on that piece (CS30).
+  useEffect(() => {
+    if (!repurpose) return;
+    setStep(0); setSrc("repurpose"); setRpId(repurpose.id); setPieces([]); setErr(""); clearRepurpose?.();
+  }, [repurpose, clearRepurpose]);
 
   useEffect(() => {
     Promise.all([
@@ -235,9 +259,65 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     const brief = layout === "statement" ? `A clean statement card: the line "${hook}" set large in dark type on white, a thin red rule, generous margins.` : layout === "diagram" ? `A simple diagram of three to five outlined boxes joined by thin red arrows, explaining: ${idea?.title}. Dark lines on white.` : `An editorial photograph for a LinkedIn post about: ${idea?.title}. Calm, professional, no text.`;
     try {
       const r = await askExtension<{ url: string }>("image", { provider, prompt: `${brief} ${imgPrompt} Style: mature B2B, only dark, red and white, no gradients, no logos.` }, 120000);
-      setImage(r.url); haptic(); toast("Image made with your key");
+      setImage(r.url); haptic();
+      // Keep it with the post: save the post first if it is new, then upload the image to Storage.
+      if (!editable) { toast("Image made with your key"); return; }
+      const p = postId ? { id: postId } : await save(postId ? {} : { status: "Drafting" });
+      if (!p) return;
+      const out = await storePostImage(ws.id, p.id, r.url, imgPath);
+      if ("error" in out) setErr(`${out.error} Download it so it is not lost.`);
+      else { setImgPath(out.path); toast("Image made and saved with the post"); }
     } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(""); }
+  }
+  async function dropImage() {
+    const path = imgPath, data = image;
+    setImage(null); setImgPath("");
+    if (!postId || !path) return;
+    const out = await removePostImage(postId, path);
+    if ("error" in out) { toast(out.error); setImgPath(path); setImage(data); return; }
+    toast("Image removed", async () => { await out.undo(); setImgPath(path); setImage(data); });
+  }
+  async function downloadImage() {
+    if (image) { const a = document.createElement("a"); a.href = image; a.download = "post-visual.png"; a.click(); return; }
+    const u = imgPath ? await imageDownloadUrl(imgPath) : null;
+    if (u) window.location.assign(u); else toast("The image could not be fetched. Try again.");
+  }
+
+  // ---------- repurpose (CS30) ----------
+  const posted = useMemo(() => posts.filter((p) => statusOf(p.status) === "Posted" && p.draft.trim()).sort((a, b) => (b.publish_date ?? "").localeCompare(a.publish_date ?? "")), [posts]);
+  const rpSrc = posted.find((p) => p.id === rpId) ?? null;
+  async function makePieces() {
+    if (!rpSrc || !rpKinds.length) return;
+    const kinds = REPURPOSE_KINDS.filter((k) => rpKinds.includes(k.key));
+    const res = hasResults(rpSrc) ? `It reached ${rpSrc.impressions ?? "an unknown number of"} impressions with ${rpSrc.reactions ?? 0} reactions and ${rpSrc.comments ?? 0} comments.` : "";
+    const j = await ai<unknown>("repurpose", `${povText(settings.pov, first)}\n\nPOSTED PIECE (${rpSrc.format || "Text post"}${rpSrc.publish_date ? `, ${rpSrc.publish_date}` : ""}): ${rpSrc.title}\n${rpSrc.draft.slice(0, 7000)}\n${res}\n\nRepurpose it into these new pieces for ${possessive(first)} LinkedIn, each standing on its own with a fresh opening line, not repeating the original one:\n${kinds.map((k) => `- ${k.key}: ${k.ask}`).join("\n")}\nUse only facts in the piece. No dashes, no contractions, no hashtags. Give each a working title under 10 words.\nReturn only JSON: {"pieces": [{"kind": "${kinds[0].key}", "title": "...", "text": "..."}]}`);
+    if (!j) return;
+    const list = parseRepurpose(j, rpKinds);
+    if (!list.length) { setErr("No pieces came back. Try again, or ask for fewer kinds."); return; }
+    setPieces(list.map((p) => ({ ...p, keep: true })));
+  }
+  async function savePieces() {
+    if (!rpSrc) return;
+    const keep = pieces.filter((p) => p.keep && !p.saved && p.text.trim());
+    if (!keep.length) return;
+    const rows = keep.map((p) => {
+      const format = repurposeFormat(p.kind), s = format === "Carousel" ? slidesFrom(p.text) : [];
+      return { workspace_id: ws.id, title: p.title || repurposeLabel(p.kind), format, status: "Idea", draft: p.text, pillar: rpSrc.pillar, channel: rpSrc.channel ?? PROFILE_CHANNEL,
+        newsletter: p.kind === "newsletter" && !!settings.newsletter.name, source_kind: "repurpose", source_ref: p.kind, repurposed_from: rpSrc.id,
+        visual: s.length ? { mode: "carousel", slides: s } : p.kind === "poll" ? { poll: p.text.split("\n").filter((l) => l.startsWith("Option: ")).map((l) => l.slice(8)).slice(0, 4) } : {} };
+    });
+    setBusy("rpsave");
+    const { data, error } = await supabase().from("posts").insert(rows).select();
     setBusy("");
+    if (error) { toast(error.message); return; }
+    const made = (data ?? []) as Post[];
+    setPieces((cur) => cur.map((p) => { const i = keep.indexOf(p); return i >= 0 ? { ...p, saved: made[i] } : p; }));
+    logActivity(ws.id, "repurpose", `Repurposed into ${made.length} ideas: ${rpSrc.title}`, rpSrc.id); haptic();
+    toast(`${made.length} ${made.length === 1 ? "idea" : "ideas"} saved to Library`, async () => {
+      await supabase().from("posts").delete().in("id", made.map((m) => m.id));
+      setPieces((cur) => cur.map((p) => (p.saved && made.some((m) => m.id === p.saved!.id) ? { ...p, saved: undefined } : p)));
+    });
   }
 
   const body = video ? [script.caption].filter(Boolean).join("\n\n") : type === "Poll" ? text.split("\n").filter((l) => !l.startsWith("Option: ")).join("\n").trim() : text;
@@ -249,8 +329,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   async function save(extra: Partial<Post> = {}): Promise<Post | null> {
     const row = {
       workspace_id: ws.id, title: idea?.title || hook || "Untitled post", format: type, pillar, draft: video ? [script.hook || hook, ...script.beats.map((b) => b.say), script.close].join("\n\n") : text,
-      channel, newsletter: type === "Article" && newsletter, source_kind: live?.source_kind === "discovery" ? "discovery" : src, source_ref: src === "link" ? url : src === "pdf" ? pdf?.name ?? "" : live?.source_ref ?? "", hook, campaign_id: campaignId,
-      script: video ? { ...script, hook: script.hook || hook } : {}, visual: { mode: type === "Carousel" ? "carousel" : image ? "image" : "", layout, prompt: imgPrompt, slides: type === "Carousel" ? slides : undefined, poll: type === "Poll" ? pollOpts.filter(Boolean) : undefined },
+      channel, newsletter: type === "Article" && newsletter, source_kind: live?.source_kind === "discovery" || live?.source_kind === "repurpose" ? live.source_kind : src, source_ref: live?.source_kind === "repurpose" ? live.source_ref ?? "" : src === "link" ? url : src === "pdf" ? pdf?.name ?? "" : live?.source_ref ?? "", hook, campaign_id: campaignId,
+      script: video ? { ...script, hook: script.hook || hook } : {}, visual: { mode: type === "Carousel" ? "carousel" : image || imgPath ? "image" : "", layout, prompt: imgPrompt, slides: type === "Carousel" ? slides : undefined, poll: type === "Poll" ? pollOpts.filter(Boolean) : undefined },
       claims_ack: ack, angle: angleText, ...extra,
     };
     const q = postId ? supabase().from("posts").update(row).eq("id", postId).select().single() : supabase().from("posts").insert({ ...row, status: "Drafting" }).select().single();
@@ -293,10 +373,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     window.open("https://www.linkedin.com/feed/", "_blank", "noopener");
     toast("Copied. LinkedIn is open in a new tab: paste, then press Post there.");
   }
-  const reset = () => { setAngles([]); setAngle(0); setOwnAngle(""); setTopic(null); setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
+  const reset = () => { setAngles([]); setAngle(0); setOwnAngle(""); setTopic(null); setStep(0); setSrcText(""); setUrl(""); setPage(null); setPdf(null); setIdeas([]); setIdea(null); setHooks([]); setHook(""); setDrafts([]); setText(""); setScript(emptyScript()); setSlides([]); setImage(null); setImgPath(""); setPieces([]); setPostId(null); setCampaignId(null); setAck(false); setErr(""); };
 
   const canNext = [
-    src === "link" ? !!page : src === "pdf" ? !!pdf : src === "comment" ? !!commentPick : src === "gap" ? !!gapPick : srcText.trim().length > 3,
+    src === "repurpose" ? false : src === "link" ? !!page : src === "pdf" ? !!pdf : src === "comment" ? !!commentPick : src === "gap" ? !!gapPick : srcText.trim().length > 3,
     true, !!idea?.title, !!angleText, !!hook.trim(), video ? !!(script.caption || script.beats.some((b) => b.say)) : !!text.trim(), true, true,
   ][step];
   const names = STEP_NAMES(video);
@@ -322,12 +402,22 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           {step === 0 && <div className="flex flex-col gap-3.5" data-tour="sources">
             <H t="What are you starting from?" sub="Pick one. Prax asks only what that source needs." />
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {SOURCES.map(([k, t, sub, Icon]) => <button key={k} aria-pressed={src === k} className={pick(src === k)} style={{ minHeight: 118 }} onClick={() => { setSrc(k); setErr(""); }}>
-                <span className="grid h-9 w-9 place-items-center rounded-xl text-white" style={{ background: src === k ? "#d64545" : "#141414" }}><Icon size={17} /></span>
-                <span className="text-body font-semibold">{t}</span><span className="text-meta leading-snug text-muted">{sub}</span></button>)}
+            <div className="grid items-start gap-3 md:grid-cols-[minmax(220px,250px)_minmax(0,1fr)]">
+            <div role="radiogroup" aria-label="Starting point" className="panel" onKeyDown={(e) => {
+              if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(e.key)) return;
+              e.preventDefault();
+              const i = SOURCES.findIndex(([k]) => k === src), n = SOURCES[(i + (e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : SOURCES.length - 1)) % SOURCES.length][0];
+              setSrc(n); setErr(""); (e.currentTarget.querySelector(`[data-src="${n}"]`) as HTMLElement | null)?.focus();
+            }}>
+              {SOURCES.map(([k, t, sub, Icon], i) => { const on = src === k; return (
+                <button key={k} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1} data-src={k} onClick={() => { setSrc(k); setErr(""); }}
+                  className={`src-row flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors ${i ? "border-t border-line" : ""} ${on ? "bg-surface-2" : "hover:bg-[#fafafa]"}`}>
+                  <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: on ? "#d64545" : "#6b6b6b" }} />
+                  <span className="min-w-0 flex-1"><span className={`block text-body leading-snug ${on ? "font-semibold text-ink" : "font-medium text-ink"}`}>{t}</span><span className={`${on ? "block" : "hidden md:block"} text-meta leading-snug text-muted`}>{sub}</span></span>
+                  <span aria-hidden="true" className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full bg-white" style={{ border: on ? "4px solid #d64545" : "1.5px solid #c4c4c4" }} />
+                </button>); })}
             </div>
-            <div className="card flex flex-col gap-3 p-4">
+            <div className="card flex min-w-0 flex-col gap-3 p-4">
               {(src === "idea" || src === "draft") && <label className="flex flex-col gap-2"><span className="label">{src === "idea" ? `What does ${first} want to say?` : "Paste the rough draft"}</span><textarea className="field min-h-[110px] text-body" value={srcText} onChange={(e) => setSrcText(e.target.value)} placeholder={src === "idea" ? "A sentence or two is enough." : "Their own words, however rough."} /></label>}
               {src === "link" && <>
                 <label htmlFor="src-url" className="label">Paste a link</label>
@@ -356,7 +446,53 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               {src === "gap" && <>
                 <span className="label">Pick a topic gap</span>
                 {gaps.map((g) => <button key={g.id} aria-pressed={gapPick === g.id} className={pick(gapPick === g.id) + " !flex-row !items-center"} onClick={() => { setGapPick(g.id); if (g.pillar) setPillar(g.pillar); }}><span className="min-w-0 flex-1"><span className="block text-body font-semibold">{g.label}</span><span className="text-meta text-muted">{g.sub}</span></span></button>)}
+                {!gaps.length && <p className="m-0 text-body text-muted">No topic gaps right now. Every pillar has a post in the last 30 days, and AI citations has sent no topics.</p>}
               </>}
+              {src === "repurpose" && <>
+                {!posted.length ? <p className="m-0 text-body text-muted">Nothing has been posted yet. Once a post is marked as posted, it can be turned into new pieces here.</p> : <>
+                  <label className="flex flex-col gap-1.5"><span className="label">The posted piece</span>
+                    <select className="field h-10" value={rpId} onChange={(e) => { setRpId(e.target.value); setPieces([]); }}>
+                      <option value="">Choose a posted piece</option>
+                      {posted.map((p) => <option key={p.id} value={p.id}>{p.title}{p.publish_date ? ` · ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}` : ""}</option>)}
+                    </select>
+                  </label>
+                  {rpSrc && <div className="-mt-1.5">
+                    <span className="block text-meta text-muted">{rpSrc.format || "Text post"}{rpSrc.pillar ? ` · ${rpSrc.pillar}` : ""}{hasResults(rpSrc) ? ` · ${(rpSrc.impressions ?? 0).toLocaleString("en-GB")} impressions, ${rpSrc.reactions ?? 0} reactions, ${rpSrc.comments ?? 0} comments` : ""}</span>                  </div>}
+                  <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+                    <legend className="label mb-2">Make these</legend>
+                    <div className="flex flex-wrap gap-1.5">
+                      {REPURPOSE_KINDS.map((k) => { const on = rpKinds.includes(k.key); return (
+                        <button key={k.key} type="button" aria-pressed={on} className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-meta font-medium transition-colors"
+                          style={on ? { background: "#141414", color: "#fff", borderColor: "#141414" } : { background: "#fff", color: "#141414", borderColor: "#d4d4d4" }}
+                          onClick={() => setRpKinds((cur) => (on ? cur.filter((x) => x !== k.key) : REPURPOSE_KINDS.map((r) => r.key).filter((x) => x === k.key || cur.includes(x))))}>
+                          {on && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}{k.label}</button>); })}
+                    </div>
+                  </fieldset>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {editable && <button className={`btn h-10 px-4 ${pieces.length ? "" : "btn-primary"}`} disabled={!rpSrc || !rpKinds.length || !!busy} onClick={makePieces}><Sparkles size={14} /> {busy === "repurpose" ? "Writing the drafts" : pieces.length ? "Write them again" : `Write ${rpKinds.length} ${rpKinds.length === 1 ? "draft" : "drafts"}`}</button>}
+                    {editable && pieces.some((p) => p.keep && !p.saved) && <button className="btn btn-primary h-10 px-4" disabled={busy === "rpsave"} onClick={savePieces}>{busy === "rpsave" ? "Saving" : `Save ${pieces.filter((p) => p.keep && !p.saved).length} as ideas`}</button>}
+                    <span className="text-meta text-muted">Each draft lands in Library as an idea, linked to this piece.</span>
+                  </div>
+                  {busy === "repurpose" && <div className="flex flex-col gap-2" aria-label="Writing the drafts">{rpKinds.map((k) => <div key={k} className="h-24 animate-pulse rounded-xl bg-surface-2" />)}</div>}
+                  {!!pieces.length && busy !== "repurpose" && <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                    {pieces.map((p, i) => (
+                      <li key={p.kind} className="rounded-xl border border-line bg-white p-3.5">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-meta font-semibold text-ink">{repurposeLabel(p.kind)}</span>
+                          <span className="text-meta text-muted">· {repurposeFormat(p.kind)}</span>
+                          <span className="ml-auto">{p.saved ? <button className="btn btn-quiet h-7 text-meta" onClick={() => openPost(p.saved!)}>Saved · Open</button>
+                            : <label className="flex items-center gap-1.5 text-meta text-muted"><input type="checkbox" checked={p.keep} onChange={(e) => setPieces(pieces.map((x, j) => (j === i ? { ...x, keep: e.target.checked } : x)))} />Keep</label>}</span>
+                        </div>
+                        <label className="sr-only" htmlFor={`rp-t-${p.kind}`}>Title</label>
+                        <input id={`rp-t-${p.kind}`} className="field mb-2 font-semibold" value={p.title} disabled={!!p.saved} onChange={(e) => setPieces(pieces.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} />
+                        <label className="sr-only" htmlFor={`rp-x-${p.kind}`}>Draft</label>
+                        <textarea id={`rp-x-${p.kind}`} className="field min-h-[110px] text-body leading-relaxed" value={p.text} disabled={!!p.saved} onChange={(e) => setPieces(pieces.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
+                      </li>
+                    ))}
+                  </ul>}
+                </>}
+              </>}
+            </div>
             </div>
           </div>}
 
@@ -472,7 +608,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                   <span className="text-body font-semibold">{t}</span><span className="text-meta text-muted">{sub}</span></button>))}</div>
               <label className="flex flex-col gap-1.5"><span className="label">Anything to add to the image brief</span><input className="field" value={imgPrompt} onChange={(e) => setImgPrompt(e.target.value)} placeholder="For example: a settlement line meeting a ledger" /></label>
               {ext?.searchKeys?.openai || ext?.searchKeys?.gemini ? (
-                <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-meta text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-meta" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : image ? "Make another" : "Make the image"}</button>{image && <a className="btn" href={image} download="post-visual.png"><Download size={14} /> Download</a>}{image && <button className="btn btn-ghost" onClick={() => setImage(null)}>Remove</button>}</div>
+                <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-meta text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-meta" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : shownImg || imgPath ? "Make another" : "Make the image"}</button>{(image || imgPath) && <button className="btn" onClick={downloadImage}><Download size={14} /> Download</button>}{(image || imgPath) && <button className="btn btn-ghost" onClick={dropImage}>Remove</button>}{imgPath && <span className="basis-full text-meta text-muted">Saved with the post. It stays here after a reload.</span>}</div>
               ) : (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><KeyState on={false} className="text-meta" /><span className="text-meta text-muted">Images use the OpenAI or Google Gemini (Nano Banana) key. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect</Link></div>
               )}
@@ -512,15 +648,15 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             </div>
           </div>}
 
-          <div className="flex items-center justify-between gap-2.5 pt-0.5">
+          {!(step === 0 && src === "repurpose") && <div className="flex items-center justify-between gap-2.5 pt-0.5">
             <button className="btn h-10 px-4" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
             <span className="num text-meta text-faint">Step {step + 1} of {names.length}</span>
             <button className="btn btn-primary h-10 px-5" disabled={step === S.plan || !canNext} onClick={() => { const n = step + 1; setStep(n); if (n === S.idea && !ideas.length && editable) getIdeas(); if (n === S.hook && !hooks.length && editable && idea) getHooks(); if (n === S.draft && !video && !drafts.length && !text && editable && hook) getDrafts(); }}>{step === S.plan ? "Done" : "Continue"}</button>
-          </div>
+          </div>}
         </section>
 
         <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
-          <LinkedInPreview text={body || hook} image={image} company={channel === "company"} device={device} setDevice={setDevice}
+          <LinkedInPreview text={step === 0 && src === "repurpose" ? rpSrc?.draft ?? "" : body || hook} image={step === 0 && src === "repurpose" ? null : shownImg} company={step === 0 && src === "repurpose" ? rpSrc?.channel === "company" : channel === "company"} device={device} setDevice={setDevice}
             video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-meta font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-title font-semibold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-body font-semibold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
             footer={!video && <> · Human {human.score}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />
           {channel === "company" && <p className="m-0 text-center text-meta font-semibold">Company content, not for {possessive(first)} profile</p>}

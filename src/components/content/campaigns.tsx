@@ -13,7 +13,7 @@ import {
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
 } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, statusOf, logActivity, upsertToday, Modal } from "./shared";
-import { povText } from "@/lib/content";
+import { povText, resultsSummary, hasResults, engagementRate } from "@/lib/content";
 import { cap, firstNameOf, pillarsOf, possessive, regionText } from "@/lib/persona";
 import type { ContentSettings } from "./settings";
 
@@ -416,6 +416,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
     });
   }
   const counts = ["Idea", "Drafting", "In review", "Ready", "Posted"].map((s) => [s, posts.filter((p) => statusOf(p.status) === s).length] as const);
+  const res = resultsSummary(posts.filter((p) => statusOf(p.status) === "Posted"));
   const engagedIds = new Set(targets.filter((x) => x.engaged_at).map((x) => x.id));
   const mid = midCheck(b, posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format, phase: p.phase })), targets, engagedIds, t);
   const cpw = commentsPerWeek(b, targets.length);
@@ -458,7 +459,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
 
       {paused && <p className="m-0 rounded-xl bg-surface-2 px-4 py-3 text-body text-ink">Paused since {fmtDay((c.paused_at ?? "").slice(0, 10) || t, { day: "numeric", month: "short" })}. Today gets no tasks from it, and its ideas are hidden from Plan. Resume moves them forward by the days paused.</p>}
       <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-white sm:grid-cols-4">
-        {[["Write each post", "Open an idea; the brief and voice are already in."], [`${cap(firstNameOf(ws))} approves`, "All the week's drafts arrive in one approval session on Today."], ["Post on the day", "Prax sends a reminder. The post is copied, LinkedIn opens, and it is posted by hand."], ["See results", "Numbers come in when the post analytics are opened."]].map(([h, s], i) => (
+        {[["Write each post", "Open an idea; the brief and voice are already in."], [`${cap(firstNameOf(ws))} approves`, "All the week's drafts arrive in one approval session on Today."], ["Post on the day", "Prax sends a reminder. The post is copied, LinkedIn opens, and it is posted by hand."], ["See results", "Add each post's numbers in its view after posting. The report sums them."]].map(([h, s], i) => (
           <div key={h} className={`flex flex-col gap-1.5 p-4 ${i ? "border-l border-line" : ""}`}><span className="grid h-6 w-6 place-items-center rounded-full text-meta font-semibold text-white" style={{ background: i === 0 ? "#d64545" : "#141414" }}>{i + 1}</span><span className="text-body font-semibold">{h}</span><span className="text-meta leading-snug text-muted">{s}</span></div>
         ))}
       </div>
@@ -476,6 +477,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
       <div className="grid gap-3 sm:grid-cols-5">
         {counts.map(([s, n]) => <div key={s} className="rounded-xl border border-line bg-white p-3"><div className="label">{s}</div><div className="num mt-1 text-page">{n}</div></div>)}
       </div>
+      {res.measured > 0 && <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-body"><span className="font-semibold">Results so far</span><span className="num text-muted">{res.impressions.toLocaleString("en-GB")} impressions · {res.reactions.toLocaleString("en-GB")} reactions · {res.comments.toLocaleString("en-GB")} comments · {res.reposts.toLocaleString("en-GB")} reposts{res.rate != null ? ` · ${res.rate} per 100 impressions` : ""}</span><span className="text-meta text-muted">{res.measured} of {counts[4][1]} posted pieces measured</span></p>}
 
       <div className="card overflow-hidden">
         {posts.map((p, i) => {
@@ -483,7 +485,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
           return (
             <div key={p.id} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${i ? "border-t border-line" : ""}`}>
               <span className="flex w-[84px] shrink-0 flex-col"><span className="text-meta font-semibold">{p.publish_date ? fmtDay(p.publish_date) : "No date"}</span><span className="text-meta font-semibold text-[#d64545]">{p.phase}</span></span>
-              <button className="min-w-0 flex-1 text-left" onClick={() => openPost(p)}><span className="block text-body font-semibold leading-snug hover:underline">{p.title}</span><span className="text-meta text-muted">{p.format} · {p.pillar}</span></button>
+              <button className="min-w-0 flex-1 text-left" onClick={() => openPost(p)}><span className="block text-body font-semibold leading-snug hover:underline">{p.title}</span><span className="text-meta text-muted">{p.format} · {p.pillar}{hasResults(p) ? <span className="num"> · {(p.impressions ?? 0).toLocaleString("en-GB")} impressions{engagementRate(p) != null ? `, ${engagementRate(p)} per 100` : ""}</span> : ""}</span></button>
               <StatusPill s={p.status} />
               <button className="btn h-8 min-w-[100px]" disabled={s === "In review" && !can("owner")} onClick={() => (s === "Ready" || s === "Posted" ? openPost(p) : editPost(p))}>{s === "In review" && can("owner") ? "Review" : NEXT[s]}</button>
             </div>
@@ -676,15 +678,16 @@ function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Ca
       setExtra({ conversations, moves, citations });
     })();
   }, [cit.ready, cit.scope]); // eslint-disable-line react-hooks/exhaustive-deps
+  const res = resultsSummary(posts.filter((p) => statusOf(p.status) === "Posted"));
   const replies = comments.filter((x) => x.reply && x.prospect_id && ids.includes(x.prospect_id) && x.day >= c.brief.start && x.day <= end).length;
-  const r = report(c.brief, { posts: posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format })), replies, conversations: extra?.conversations ?? 0, requests, stageMoves: extra?.moves ?? 0, targets: targets.length, engaged: targets.filter((x) => x.engaged_at).length, citations: extra?.citations }, firstNameOf(ws));
+  const r = report(c.brief, { posts: posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format })), replies, conversations: extra?.conversations ?? 0, requests, stageMoves: extra?.moves ?? 0, targets: targets.length, engaged: targets.filter((x) => x.engaged_at).length, citations: extra?.citations, results: res }, firstNameOf(ws));
   return (
     <Modal title={`${c.name}: report`} onClose={onClose} wide footer={<><button className="btn" onClick={() => window.print()}><Printer size={14} /> Print</button><button className="btn btn-primary" onClick={onClose}>Close</button></>}>
       <div className="print-area">
         <h3 className="m-0 text-page font-semibold">{c.name}</h3>
         <p className="m-0 mt-1 text-body text-muted">{objective(c.brief.objective).label} · {c.brief.topic} · {fmtDay(c.brief.start, { day: "numeric", month: "short" })} to {fmtDay(end, { day: "numeric", month: "short", year: "numeric" })} · judged by {c.brief.measure.toLowerCase()}</p>
-        <div className="my-4 grid grid-cols-3 gap-3">
-          {[["Posts out", `${r.posted} of ${r.planned}`], ["Engaged accounts", `${targets.filter((x) => x.engaged_at).length} of ${targets.length}`], ["Resource requests", String(requests.length)]].map(([k, v]) => <div key={k} className="rounded-xl border border-line p-3"><div className="label">{k}</div><div className="num mt-1 text-page">{v}</div></div>)}
+        <div className="my-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[["Posts out", `${r.posted} of ${r.planned}`], ["Impressions", res.measured ? res.impressions.toLocaleString("en-GB") : "Not added"], ["Engaged accounts", `${targets.filter((x) => x.engaged_at).length} of ${targets.length}`], ["Resource requests", String(requests.length)]].map(([k, v]) => <div key={k} className="rounded-xl border border-line p-3"><div className="label">{k}</div><div className="num mt-1 text-page">{v}</div></div>)}
         </div>
         {!extra ? <p className="text-body text-muted">Reading the activity.</p> : <ul className="m-0 flex flex-col gap-2 pl-5 text-body leading-relaxed">{r.lines.map((l) => <li key={l}>{l}</li>)}</ul>}
       </div>
