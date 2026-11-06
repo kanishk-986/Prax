@@ -3,7 +3,8 @@
 // collapsible sections. Full view widens it with every section open. Nothing here sends anything on LinkedIn.
 import { useCallback, useEffect, useState } from "react";
 import { X, ExternalLink, Check } from "lucide-react";
-import { useWorkspace, SEGMENTS, today as todayYmd } from "@/lib/workspace";
+import { useWorkspace, useSegments, today as todayYmd } from "@/lib/workspace";
+import { companyOf, whoLine } from "@/lib/persona";
 import { normName } from "@/lib/network";
 import { daysPerStage, daysIn, dueLong, dueTone, fmtShort, isClosed, planFor, stepStage, stepKey, messagePrompt, templateMessage, daysBetween, type Pipeline, type Prospect } from "@/lib/pipeline";
 import { useToast, haptic } from "@/components/toaster";
@@ -22,7 +23,8 @@ type Sec = (typeof SECS)[number];
 export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialogOpen, logged }: {
   lead: Prospect; pipe: Pipeline; info?: LeadInfo; data: PipelineData; api: PipelineApi; onMove: (to: string) => void; onClose: () => void; dialogOpen: boolean; logged: number;
 }) {
-  const { can } = useWorkspace();
+  const segs = useSegments();
+  const { ws, can } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
   const t = todayYmd();
@@ -89,7 +91,7 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
     heat: heat ? `${heat.band}, ${heat.score} of 100` : "Cold",
     notes: lead.notes ? "Has notes" : "None",
     msg: draft ? "Drafted" : "Not drafted",
-    details: [lead.region, SEGMENTS[lead.segment]?.label.replace("&", "and")].filter(Boolean).join(" · ") || "None",
+    details: [lead.region, segs[lead.segment]?.label.replace("&", "and")].filter(Boolean).join(" · ") || "None",
   };
   const LABEL: Record<Sec, string> = { timeline: "Timeline", warm: "Warm path", plan: "Touch plan", heat: "Heat", notes: "Notes", msg: "Message for this stage", details: "Details" };
 
@@ -103,8 +105,8 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
   }
   async function makeDraft() {
     setDrafting(true);
-    try { setDraft((await api.draft(messagePrompt(lead, lead.stage, pipe.name))).trim()); }
-    catch (e) { setDraft(templateMessage(lead, lead.stage)); toast(`${(e as Error).message} A plain template is in the box instead.`, undefined, { info: true }); }
+    try { setDraft((await api.draft(messagePrompt(lead, lead.stage, pipe.name, whoLine(ws)))).trim()); }
+    catch (e) { setDraft(templateMessage(lead, lead.stage, companyOf(ws, ""))); toast(`${(e as Error).message} A plain template is in the box instead.`, undefined, { info: true }); }
     setDrafting(false);
   }
   async function saveNotes() {
@@ -228,6 +230,7 @@ function F({ label, children, wide }: { label: string; children: React.ReactNode
 }
 
 function Details({ lead, data, api, onClose }: { lead: Prospect; data: PipelineData; api: PipelineApi; onClose: () => void }) {
+  const segs = useSegments();
   const { can } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
@@ -252,7 +255,7 @@ function Details({ lead, data, api, onClose }: { lead: Prospect; data: PipelineD
       <F label="Name" wide><input className="field font-normal" value={f.name} onChange={set("name")} /></F>
       <F label="Role"><input className="field font-normal" value={f.role} onChange={set("role")} /></F>
       <F label="Company"><input className="field font-normal" value={f.company} onChange={set("company")} /></F>
-      <F label="Segment"><select className="field font-normal" value={f.segment} onChange={set("segment")}><option value="">None</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></F>
+      <F label="Segment"><select className="field font-normal" value={f.segment} onChange={set("segment")}><option value="">None</option>{Object.entries(segs).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></F>
       <F label="Region"><input className="field font-normal" value={f.region} onChange={set("region")} /></F>
       {data.ready && <F label="Owner" wide><select className="field font-normal" value={f.owner} onChange={set("owner")}><option value="">No owner</option>{data.members.map((m) => <option key={m.user_id} value={m.user_id}>{ownerName(m.email)}</option>)}</select></F>}
       <F label="LinkedIn URL" wide><input className="field font-normal" value={f.linkedin} onChange={set("linkedin")} placeholder="https://www.linkedin.com/in/" /></F>

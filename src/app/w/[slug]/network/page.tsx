@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileArchive, ExternalLink, Check, X, ChevronDown, Trash2, UserPlus, ArrowRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
-import { useWorkspace, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
+import { useWorkspace, useSegments, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
+import { firstNameOf, pillarsOf, possessive } from "@/lib/persona";
 import { Section, KpiTiles, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { decodeText } from "@/lib/text";
 import {
   readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normUrl,
-  DEFAULT_SEGMENTS, DEFAULT_TOPICS, SENIORITY, type ParsedExport, type Person, type ProspectLite, type CommentLite, type SegRule, type TopicRule, type Warm,
+  DEFAULT_SEGMENTS, defaultTopics, SENIORITY, type ParsedExport, type Person, type ProspectLite, type CommentLite, type SegRule, type TopicRule, type Warm,
 } from "@/lib/network";
 
 type Post = { kind: "post" | "comment"; key: string; day: string | null; url: string; text: string };
@@ -33,12 +34,12 @@ async function loadAll<T>(table: string, wsId: string, cols = "*"): Promise<T[]>
   return out;
 }
 
-const NET_TOUR: TourStep[] = [
-  { target: "known", title: "Who Shashi already knows at each target account", body: "Network exists for one reason: a warm way in before anyone sends a cold request. Every open prospect is ranked by the warmest route: already connected, talked before, then a colleague at their company.", tab: "Home" },
-  { target: "kpis", title: "How warm the pipeline is", body: "How many prospects are already connections, have talked before, or work where someone he knows works.", tab: "Home" },
-  { target: "row", title: "One action per person", body: "Message them when he is connected, ask a colleague for an intro, or comment on their posts first. Prax opens LinkedIn; Shashi writes and sends.", tab: "Home" },
+const netTour = (n: string): TourStep[] => [
+  { target: "known", title: `Who ${n} already knows at each target account`, body: "Network exists for one reason: a warm way in before anyone sends a cold request. Every open prospect is ranked by the warmest route: already connected, talked before, then a colleague at their company.", tab: "Home" },
+  { target: "kpis", title: "How warm the pipeline is", body: `How many prospects are already connections, have talked before, or work where someone ${n} knows works.`, tab: "Home" },
+  { target: "row", title: "One action per person", body: `Message them when ${n} is connected, ask a colleague for an intro, or comment on their posts first. Prax opens LinkedIn; ${n} writes and sends.`, tab: "Home" },
   { target: "freshness", title: "Keep the export fresh", body: "Connections change. Import the LinkedIn export again every month or two; Prax reminds you after 60 days.", tab: "Home" },
-  { target: "header", title: "The detail behind it", body: "Segments sorts every connection into A to E, Warm paths shows each route in full, and Topics shows what he has posted about.", tab: "Home" },
+  { target: "header", title: "The detail behind it", body: `Segments sorts every connection into A to E, Warm paths shows each route in full, and Topics shows what ${n} has posted about.`, tab: "Home" },
   { target: "import", title: "Import", body: "The LinkedIn export zip is read in this browser. Message text and emails are never saved.", tab: "Import" },
 ];
 
@@ -48,7 +49,10 @@ export default function NetworkPage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [imports, setImports] = useState<Import[]>([]);
-  const [settings, setSettings] = useState<Settings>({ segments: DEFAULT_SEGMENTS, topics: DEFAULT_TOPICS });
+  const first = firstNameOf(ws);
+  // Topic rules start as the profile's pillars until the team saves its own (empty-words rules, see src/lib/network.ts).
+  const startTopics = useMemo(() => defaultTopics(pillarsOf(ws)), [ws]);
+  const [settings, setSettings] = useState<Settings>({ segments: DEFAULT_SEGMENTS, topics: startTopics });
   const [loading, setLoading] = useState(true);
   const prospects = useLive<ProspectLite>("prospects", ws.id, { order: "name" });
   const comments = useLive<CommentLite>("comment_log", ws.id);
@@ -62,9 +66,9 @@ export default function NetworkPage() {
     ]);
     setPeople(pp); setPosts(po); setImports((im.data as Import[]) ?? []);
     const s = st.data as Settings | null;
-    setSettings({ segments: s?.segments?.length ? s.segments : DEFAULT_SEGMENTS, topics: s?.topics?.length ? s.topics : DEFAULT_TOPICS });
+    setSettings({ segments: s?.segments?.length ? s.segments : DEFAULT_SEGMENTS, topics: s?.topics?.length ? s.topics : startTopics });
     setLoading(false);
-  }, [ws.id]);
+  }, [ws.id, startTopics]);
   useEffect(() => { reload(); }, [reload]);
 
   // Prospect companies act as company rules for their segment.
@@ -74,9 +78,9 @@ export default function NetworkPage() {
 
   const conns = people.filter((p) => p.is_connection).length;
   return (
-    <Section id="network" title="Network" status="Who Shashi already knows at each target account, so every approach starts warm."
-      entryStatus={conns ? `${conns.toLocaleString()} connections imported. The warmest routes to your prospects are on Home.` : "Import his LinkedIn connections to find warm routes to every prospect."}
-      tabs={TABS.map((t) => ({ id: t, label: t }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={NET_TOUR}
+    <Section id="network" title="Network" status={`Who ${first} already knows at each target account, so every approach starts warm.`}
+      entryStatus={conns ? `${conns.toLocaleString()} connections imported. The warmest routes to your prospects are on Home.` : `Import ${possessive(first)} LinkedIn connections to find warm routes to every prospect.`}
+      tabs={TABS.map((t) => ({ id: t, label: t }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={netTour(first)}
       actions={<button className="btn btn-primary h-10 px-4" onClick={() => setTab("Import")}><Upload size={14} /> Import connections</button>}>
       {loading ? <div className="card h-64 animate-pulse bg-surface-2" />
         : tab === "Home" ? <NetworkHome people={people} idx={idx} prospects={prospects.rows} comments={comments.rows} imports={imports} onImport={() => setTab("Import")} />
@@ -111,7 +115,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
 
   if (!people.length) return (
     <section data-tour="known" className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-6">
-      <h2 className="text-[19px] font-semibold">Who Shashi already knows at each target account</h2>
+      <h2 className="text-[19px] font-semibold">Who {firstNameOf(ws)} already knows at each target account</h2>
       <p className="max-w-[640px] text-[14px] leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people he does not know yet. Import his connections once and Prax shows, for every prospect, whether he is connected, has talked before, or knows someone there.</p>
       <ol className="ml-4 list-decimal space-y-1 text-[13px] text-ink-2">
         <li>On LinkedIn: Me, Settings &amp; Privacy, Data privacy, Get a copy of your data.</li>
@@ -148,7 +152,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
         {ageDays != null && ageDays >= 60 && <button className="btn btn-primary h-8" onClick={onImport}>Import again</button>}
       </div>
       <section data-tour="known" className="overflow-hidden rounded-2xl border border-line bg-surface">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5"><span className="text-[15px] font-semibold">Who Shashi already knows at each target account</span><span className="text-[12px] text-muted">warmest route first</span></div>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5"><span className="text-[15px] font-semibold">Who {firstNameOf(ws)} already knows at each target account</span><span className="text-[12px] text-muted">warmest route first</span></div>
         {rows.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-[13px] text-muted">No open prospects yet. Add people in Pipeline, or from Segments.</p> : rows.map(({ p, w }, i) => {
           const r = route(w, p);
           return (
@@ -167,7 +171,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
             </div>
           );
         })}
-        <p className="border-t border-line px-[18px] py-2.5 text-[11.5px] text-faint">Prax only opens LinkedIn. Shashi writes and sends every message himself.</p>
+        <p className="border-t border-line px-[18px] py-2.5 text-[11.5px] text-faint">Prax only opens LinkedIn. {firstNameOf(ws)} writes and sends every message by hand.</p>
       </section>
     </div>
   );
@@ -323,6 +327,7 @@ function UploadTab({ imports, people, prospects, onDone }: { imports: Import[]; 
 
 // ---------------- Segments ----------------
 function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange }: { people: Person[]; segOf: (x: Person) => string; settings: Settings; setSettings: (s: Settings) => void; prospects: ProspectLite[]; onChange: (p: Person[]) => void }) {
+  const segs = useSegments();
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const editable = can("editor");
@@ -356,7 +361,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
           <div className="label mb-3">Connections by segment <span className="num ml-1 normal-case tracking-normal text-faint">{conns.length}</span></div>
           {keys.map((k) => (
             <button key={k || "none"} onClick={() => { setSeg(seg === k ? "all" : k); setShown(50); }} className={`mb-1.5 block w-full rounded-md px-1.5 py-1 text-left ${seg === k ? "bg-surface-2" : "hover:bg-surface-2/60"}`}>
-              <div className="flex justify-between text-[12px]"><span>{k ? `${k} · ${SEGMENTS[k].label}` : "Unsegmented"}</span><span className="num text-muted">{counts[k]}</span></div>
+              <div className="flex justify-between text-[12px]"><span>{k ? `${k} · ${segs[k].label}` : "Unsegmented"}</span><span className="num text-muted">{counts[k]}</span></div>
               <div className="mt-1 h-1.5 rounded-full bg-surface-2"><div className="h-full rounded-full" style={{ width: `${(counts[k] / max) * 100}%`, background: k ? SEGMENTS[k].color : "var(--faint)" }} /></div>
             </button>
           ))}
@@ -376,7 +381,7 @@ function SegmentsTab({ people, segOf, settings, setSettings, prospects, onChange
 
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-          <span className="text-[13px] font-semibold">{seg === "all" ? "All connections" : seg ? `${seg} · ${SEGMENTS[seg].label}` : "Unsegmented"}{lvl >= 0 && ` · ${SENIORITY[lvl]}`}</span>
+          <span className="text-[13px] font-semibold">{seg === "all" ? "All connections" : seg ? `${seg} · ${segs[seg].label}` : "Unsegmented"}{lvl >= 0 && ` · ${SENIORITY[lvl]}`}</span>
           <span className="num text-[12px] text-muted">{rows.length}</span>
           <input className="field ml-auto h-8 w-full sm:w-64" placeholder="Search name, company, position" value={q} onChange={(e) => { setQ(e.target.value); setShown(50); }} />
         </div>
@@ -431,6 +436,7 @@ function AddToPipeline({ p, seg, people, onChange }: { p: Person; seg: string; p
 }
 
 function SegmentRules({ settings, setSettings }: { settings: Settings; setSettings: (s: Settings) => void }) {
+  const segs = useSegments();
   const { ws } = useWorkspace();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -454,7 +460,7 @@ function SegmentRules({ settings, setSettings }: { settings: Settings; setSettin
           <p className="mb-3 text-[12px] text-muted">Checked top to bottom, first match wins. Companies of prospects already in the pipeline count first, under the prospect&apos;s segment. Separate words with commas. A segment set by hand on a person always wins.</p>
           {draft.map((r, i) => (
             <div key={r.seg} className="mb-3 grid gap-2 md:grid-cols-[120px_1fr_1fr]">
-              <div className="pt-1.5 text-[13px] font-medium" style={{ color: SEGMENTS[r.seg]?.color }}>{r.seg} · {SEGMENTS[r.seg]?.label}</div>
+              <div className="pt-1.5 text-[13px] font-medium" style={{ color: segs[r.seg]?.color }}>{r.seg} · {segs[r.seg]?.label}</div>
               <label className="flex flex-col gap-1"><span className="label">Company contains</span><textarea rows={2} className="field h-auto py-1.5 text-[12px]" value={r.companies} onChange={(e) => set(i, "companies", e.target.value)} /></label>
               <label className="flex flex-col gap-1"><span className="label">Position contains</span><textarea rows={2} className="field h-auto py-1.5 text-[12px]" value={r.roles} onChange={(e) => set(i, "roles", e.target.value)} /></label>
             </div>
@@ -637,7 +643,7 @@ function TopicsTab({ posts, settings, setSettings, onUpload }: { posts: Post[]; 
               <div className="flex flex-wrap gap-2">
                 <button className="btn" onClick={() => setDraft([...draft, { id: Date.now(), name: "New topic", words: "" }])}>Add topic</button>
                 <button className="btn btn-primary" onClick={() => save(fromDraft())}>Save topics</button>
-                <button className="btn btn-ghost" onClick={() => save(DEFAULT_TOPICS)}>Reset to the six pillars</button>
+                <button className="btn btn-ghost" onClick={() => save(defaultTopics(pillarsOf(ws)))}>Start again from the pillars</button>
               </div>
             </div>
           )}

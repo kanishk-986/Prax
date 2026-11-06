@@ -2,7 +2,25 @@
 // Run: node scripts/test-network.ts [path/to/write/fake-export.zip]
 import { zipSync, strToU8 } from "fflate";
 import { writeFileSync } from "node:fs";
-import { readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normName, toDay, DEFAULT_SEGMENTS, DEFAULT_TOPICS, type Person } from "../src/lib/network.ts";
+import { readExport, segmentFor, seniority, topicsFor, warmPaths, indexPeople, normCompany, normName, toDay, DEFAULT_SEGMENTS, defaultTopics, type Person, type SegRule, type TopicRule } from "../src/lib/network.ts";
+
+// Fixtures: the first profile's own segment rules and pillar topics (db/016 writes them into its network_settings).
+const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+const SEGS: SegRule[] = [
+  { seg: "D", roles: [], companies: list("africa, african, nigeria, nigerian, lagos, abuja, kenya, kenyan, nairobi, ghana, accra, south africa, johannesburg, cape town, egypt, egyptian, cairo, morocco, casablanca, rwanda, kigali, uganda, kampala, tanzania, ethiopia, senegal, ivory coast, zambia, mpesa, m pesa, flutterwave, paystack, chipper, onafriq, yellow card, nomba, moniepoint, opay, palmpay, mfs africa") },
+  { seg: "B", roles: [], companies: list("emirates, emirati, uae, dubai, abu dhabi, sharjah, ajman, ras al khaimah, rak, saudi, ksa, riyadh, riyad, jeddah, qatar, qatari, doha, bahrain, manama, kuwait, kuwaiti, oman, muscat, gulf, gcc, mena, adgm, difc, india, indian, mumbai, bengaluru, bangalore, delhi, hyderabad, chennai, pune, gurugram, gurgaon, noida, rakbank, mashreq, adcb, adib, fab, first abu dhabi, enbd, emirates nbd, dib, cbd, wio, al rajhi, alinma, snb, sab, anb, bsf, qnb, nbk, kfh, hdfc, icici, axis bank, kotak, sbi, yes bank, indusind, paytm, razorpay, phonepe") },
+  ...DEFAULT_SEGMENTS.filter((r) => r.seg === "C"),
+  { seg: "A", roles: list("payments, treasury"), companies: list("pay, payments, payment, stablecoin, stablecoins, remittance, remit, fintech, fx, money, wallet, card, cards, card issuing, cross border, banking as a service, baas, circle, ripple, stripe, wise, checkout, adyen, airwallex, rapyd, nium, thunes, conduit, rain, bvnk, paxos, zepz, toku") },
+  ...DEFAULT_SEGMENTS.filter((r) => r.seg === "E"),
+];
+const TOPICS: TopicRule[] = [
+  { name: "Money That Moves Itself", words: list("stablecoin, stablecoins, payment, payments, remittance, remittances, cross border, treasury, tokenised deposit, tokenized deposit, tokenised deposits, tokenized deposits, deposit token, deposit tokens, settlement, rails, usdc, usdt, cbdc, liquidity, fx, correspondent banking") },
+  { name: "The Liquid Balance Sheet", words: list("tokenisation, tokenization, tokenised, tokenized, rwa, rwas, real world asset, real world assets, fund, funds, private credit, real estate, bond, bonds, treasuries, asset management, asset manager, asset managers, securities") },
+  { name: "Regulation-to-Architecture", words: list("regulation, regulations, regulator, regulators, regulatory, compliance, genius act, mica, vara, mas, rbi, cbuae, sama, sec, occ, fca, licence, license, licensing, aml, kyc, travel rule, policy, rulebook, sandbox") },
+  { name: "Production-Grade or Nothing", words: list("security, custody, custodian, custodians, key management, mpc, audit, auditor, resilience, hack, hacked, breach, exploit, incident, soc 2, iso 27001, post quantum, quantum, cryptographic, infrastructure, production") },
+  { name: "Agentic Finance", words: list("ai agent, ai agents, agentic, agent, agents, autonomous, know your intent, kyi, abstraxn, machine payments, agent payments, llm, ai") },
+  { name: "Build, Buy or Partner", words: list("tco, total cost, build vs buy, build or buy, vendor, vendors, procurement, time to value, cost, costs, roi, business case, outsourcing") },
+];
 
 const connections = `Notes:
 "When exporting your connection data, you may notice that some of the email addresses are missing. You will only see email addresses for connections who have allowed their connections to see or download their email address using this setting https://www.linkedin.com/psettings/privacy/email. You can learn more about this here: https://www.linkedin.com/help/linkedin/answer/261"
@@ -65,10 +83,14 @@ eq("company norm", [normCompany("Moniepoint Inc."), normCompany("Jeel (Riyad Ban
 eq("name norm", [normName("Kenneth O’Friel"), normName("Dr. Kenneth O'Friel, CFA")], ["kenneth ofriel", "kenneth ofriel"]);
 
 const pc = new Map([[normCompany("Toku"), "A"]]);
-const seg = (c: string, r: string) => segmentFor(c, r, DEFAULT_SEGMENTS, pc);
+const seg = (c: string, r: string) => segmentFor(c, r, SEGS, pc);
 eq("segments", [seg("Toku", "CEO"), seg("RAKBANK", "Head of Digital Assets"), seg("Moniepoint Inc.", "VP Payments"), seg("BNB Chain", "Head of Partnerships"), seg("Acme Payments Ltd", "Engineer"), seg("Fintech Business Weekly", "Editor"), seg("Some Logistics", "Driver")], ["A", "B", "D", "C", "A", "A", ""]);
 eq("seniority", ["CEO and Founder", "Head of Digital Assets", "Relationship Manager", "Software Engineer", "Head of Partnerships"].map(seniority), [0, 1, 2, 3, 1]);
-eq("topics", [topicsFor(x.posts[0].text, DEFAULT_TOPICS), topicsFor(x.posts[2].text, DEFAULT_TOPICS)], [["Money That Moves Itself"], ["Regulation-to-Architecture", "Production-Grade or Nothing"]]);
+eq("topics", [topicsFor(x.posts[0].text, TOPICS), topicsFor(x.posts[2].text, TOPICS)], [["Money That Moves Itself"], ["Regulation-to-Architecture", "Production-Grade or Nothing"]]);
+// A new profile starts clean: only the generic role rules segment anyone, and its pillars have no words yet.
+const fresh = (c: string, r: string) => segmentFor(c, r, DEFAULT_SEGMENTS, new Map());
+eq("new profile: no region or buyer guesses", [fresh("RAKBANK", "Head of Digital Assets"), fresh("Acme Payments Ltd", "Engineer"), fresh("BNB Chain", "Head of Partnerships"), fresh("Fintech Business Weekly", "Editor")], ["", "", "C", "E"]);
+eq("new profile: pillars become empty topic rules", [defaultTopics(["Ops", "Hiring"]), topicsFor(x.posts[0].text, defaultTopics(["Ops"]))], [[{ name: "Ops", words: [] }, { name: "Hiring", words: [] }], []]);
 
 const people: Person[] = x.people.map((p) => ({ ...p, segment_manual: "", prospect_id: null, not_prospects: [], first_export: x.exportDate, last_export: x.exportDate }));
 const idx = indexPeople(people);

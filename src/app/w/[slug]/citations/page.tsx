@@ -8,7 +8,8 @@ import { KeysModal, Home, Gaps, Company, Report, KeywordsPanel, Tour, TOUR, type
 import { EntryMoment, useTour, type TourStep } from "@/components/shell";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
-import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
+import { useWorkspace, useWho, fmtDay, ymd } from "@/lib/workspace";
+import { cap, companyOf, firstNameOf, fullNameOf, possessive } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, useExtension } from "@/lib/bridge";
 import {
@@ -30,13 +31,14 @@ const list = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 const when = (t: string) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 // First run, before anything is tracked: the shell's guided tour over the setup page (the full tour needs tracking set up).
 const SETUP_TOUR: TourStep[] = [
-  { target: "header", title: "What AI citations does", body: "It asks AI tools the questions buyers ask, then checks whether the answers name and link Shashi and Antier." },
-  { target: "setup", title: "Who should the AI name", body: "Confirm his full name, his LinkedIn profile, the company and the names and domains that count. All of it can be changed later." },
+  { target: "header", title: "What AI citations does", body: "It asks AI tools the questions buyers ask, then checks whether the answers name and link the person and the company." },
+  { target: "setup", title: "Who should the AI name", body: "Confirm the full name, the LinkedIn profile, the company and the names and domains that count. All of it can be changed later." },
   { target: "next", title: "What happens next", body: "Pick the prompts, connect an AI key in your browser, then run. Every number comes from your own runs." },
 ];
 
 export default function Citations() {
   const { ws, can, userId } = useWorkspace();
+  const who = useWho();
   const editable = can("editor");
   const toast = useToast();
   const params = useSearchParams();
@@ -74,13 +76,13 @@ export default function Citations() {
   useEffect(() => { loadRuns(); }, [loadRuns]);
 
   const runs: Run[] = useMemo(() => runRows.map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) })), [runRows]);
-  // Shashi (person) and Antier (company) are separate self rows since db/011. Older views that score "us" as one
+  // The person and the company are separate self rows since db/011. Older views that score "us" as one
   // name use selfAll, the two combined; the headline numbers use strict person matching.
   const selves = ents.rows.filter((e) => e.kind === "self");
   const person = selves.find((e) => e.subject === "person");
   const company = selves.find((e) => e.subject !== "person");
   const self = useMemo<Entity | undefined>(() => (!person || !company ? company ?? person
-    : { ...company, name: "Shashi Pal and Antier", aliases: [...new Set([...person.aliases, ...company.aliases])], domains: [...new Set([...person.domains, ...company.domains])] }), [person, company]);
+    : { ...company, name: `${person.name} and ${company.name}`, aliases: [...new Set([...person.aliases, ...company.aliases])], domains: [...new Set([...person.domains, ...company.domains])] }), [person, company]);
   const rivals = useMemo(() => ents.rows.filter((e) => e.kind === "competitor" && e.status !== "suggested"), [ents.rows]);
   const active = qs.rows.filter((q) => q.status === "active");
   const qById = useMemo(() => new Map(qs.rows.map((q) => [q.id, q])), [qs.rows]);
@@ -111,11 +113,11 @@ export default function Citations() {
   const setupTour = useTour("citations-setup", SETUP_TOUR);
   return (
     <div className={cx("mx-auto max-w-[1180px]", s.root)}>
-      <EntryMoment section="citations" title="AI citations" status="Whether AI tools name Shashi and Antier when buyers ask, and what to publish next." onDone={firstRun ? setupTour.autoStart : undefined} />
+      <EntryMoment section="citations" title="AI citations" status={`Whether AI tools name ${who.first} and ${who.company} when buyers ask, and what to publish next.`} onDone={firstRun ? setupTour.autoStart : undefined} />
       <header data-tour="header" className="flex flex-wrap items-center justify-between gap-3 pl-10 md:pl-0">
         <div className="min-w-0 flex-[1_1_360px]">
           <h1 className="text-[26px] font-semibold tracking-tight">AI citations</h1>
-          <p className={s.sub}>Whether AI tools name and link Shashi and Antier when buyers ask. Every result is the tool&apos;s API with web search on: close to, not the same as, what someone sees in the app.</p>
+          <p className={s.sub}>Whether AI tools name and link {who.first} and {who.company} when buyers ask. Every result is the tool&apos;s API with web search on: close to, not the same as, what someone sees in the app.</p>
         </div>
         {firstRun && <div className="flex flex-wrap items-center gap-2"><button className={s.btn} onClick={setupTour.start}>Guide</button></div>}
         {self && (
@@ -176,7 +178,9 @@ function Setup({ editable }: { editable: boolean }) {
   const { ws } = useWorkspace();
   const toast = useToast();
   const li = ws.linkedin_url ? ws.linkedin_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "") : "";
-  const [f, setF] = useState({ name: "Antier", aliases: "Antier, Antier Solutions, antiersolutions.com", domains: "antiersolutions.com", person: "Shashi Pal", li });
+  // Starts from the profile's own name and company (Settings); everything stays editable before tracking starts.
+  const company = companyOf(ws, "");
+  const [f, setF] = useState({ name: company, aliases: company, domains: "", person: fullNameOf(ws, ""), li });
   async function save() {
     const { error } = await supabase().from("citation_entities").insert([
       { workspace_id: ws.id, kind: "self", subject: "person", name: f.person.trim(), aliases: [f.person.trim()], domains: list(f.li), sort: 0 },
@@ -188,10 +192,10 @@ function Setup({ editable }: { editable: boolean }) {
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
     <div data-tour="setup" className={cx(s.box, "min-w-0 p-5")}>
       <h2 className="text-[18px] font-semibold">Who should the AI name?</h2>
-      <p className={s.small}>Names are matched as whole words, so &quot;Antier&quot; never matches &quot;Antiers&quot;. Domains count as linked when an answer cites them; a LinkedIn profile path also covers his posts and articles. All of this can be changed later under Competitors.</p>
+      <p className={s.small}>Names are matched as whole words, so &quot;Acme&quot; never matches &quot;Acmes&quot;. Domains count as linked when an answer cites them; a LinkedIn profile path also covers the posts and articles on it. All of this can be changed later under Competitors.</p>
       <div className="mt-4 grid gap-3">
         <label className="grid gap-1.5"><span className={s.label}>The person, full name</span><input className={s.field} value={f.person} onChange={(e) => setF({ ...f, person: e.target.value })} /></label>
-        <label className="grid gap-1.5"><span className={s.label}>His LinkedIn profile</span><input className={s.field} value={f.li} onChange={(e) => setF({ ...f, li: e.target.value })} /></label>
+        <label className="grid gap-1.5"><span className={s.label}>Their LinkedIn profile</span><input className={s.field} value={f.li} onChange={(e) => setF({ ...f, li: e.target.value })} /></label>
         <label className="grid gap-1.5"><span className={s.label}>The company</span><input className={s.field} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
         <label className="grid gap-1.5"><span className={s.label}>Company names to look for, separated by commas</span><input className={s.field} value={f.aliases} onChange={(e) => setF({ ...f, aliases: e.target.value })} /></label>
         <label className="grid gap-1.5"><span className={s.label}>Owned domains and profiles</span><input className={s.field} value={f.domains} onChange={(e) => setF({ ...f, domains: e.target.value })} /></label>
@@ -201,7 +205,7 @@ function Setup({ editable }: { editable: boolean }) {
     <aside data-tour="next" className={cx(s.box, "min-w-0 p-5")}>
       <h2 className="text-[15px] font-semibold">What happens next</h2>
       <ol className="mt-3 grid gap-3">
-        {[["Pick the prompts", "Start from 20 buyer questions or write your own."], ["Connect an AI key", "Claude, OpenAI, Gemini or Perplexity. The key stays in your browser."], ["Run and read the answers", "Each answer shows whether Shashi and Antier are named and linked, and which sites the AI trusted."]].map(([t, d], i) => (
+        {[["Pick the prompts", "Start from 20 buyer questions or write your own."], ["Connect an AI key", "Claude, OpenAI, Gemini or Perplexity. The key stays in your browser."], ["Run and read the answers", "Each answer shows whether the person and the company are named and linked, and which sites the AI trusted."]].map(([t, d], i) => (
           <li key={t} className="flex gap-3"><span className="num grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#141414] text-[12px] font-semibold text-white">{i + 1}</span><span><b className="block text-[13.5px]">{t}</b><span className={s.small}>{d}</span></span></li>
         ))}
       </ol>
@@ -279,7 +283,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
       const { data, error } = await supabase().from("citation_runs").insert({ ...base, model: p.model || res.model, status: st, answer: p.answer, input_tokens: p.input_tokens, output_tokens: p.output_tokens, error: p.refused ? "The model declined to answer" : "" }).select("id").single();
       if (error) throw error;
       if (p.sources.length) await supabase().from("citation_sources").insert(p.sources.map((x, i) => ({ workspace_id: ws.id, run_id: data.id, url: x.url, title: x.title, domain: x.domain, cited: x.cited, sort: i })));
-      // Tone and facts only matter when he is named; one small call on the main AI key.
+      // Tone and facts only matter when the person is named; one small call on the main AI key.
       if (check && st !== "failed" && detect({ answer: p.answer, sources: p.sources, status: st }, self).named) await judgeRun({ id: data.id, answer: p.answer }, facts, self);
       return st !== "failed";
     } catch (e) {
@@ -358,6 +362,7 @@ function Highlight({ text, self, rivals }: { text: string; self: Entity; rivals:
 
 function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose }: { run: RunRow; q?: Question; self: Entity; rivals: Entity[]; c: Ctx | null; facts: Partial<Facts>; editable: boolean; onJudged: () => void; onClose: () => void }) {
   const toast = useToast();
+  const who = useWho();
   const r: Run = { ...run, sources: [...(run.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) };
   const d = detect(r, self);
   const [review, setReview] = useState(run.person_review ?? "");
@@ -368,7 +373,7 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
     const { error } = await supabase().from("citation_runs").update({ person_review: v }).eq("id", run.id);
     if (error) { toast(error.message); return; }
     setReview(v); haptic(); onJudged();
-    toast(v === "confirmed" ? "Counted as Shashi" : v === "rejected" ? "Marked as someone else" : "Back to needs review", async () => { await supabase().from("citation_runs").update({ person_review: before }).eq("id", run.id); setReview(before); onJudged(); });
+    toast(v === "confirmed" ? `Counted as ${who.first}` : v === "rejected" ? "Marked as someone else" : "Back to needs review", async () => { await supabase().from("citation_runs").update({ person_review: before }).eq("id", run.id); setReview(before); onJudged(); });
   }
   const [judged, setJudged] = useState<{ sentiment: string; issues: FactIssue[] } | null>(run.judged_at ? { sentiment: run.sentiment, issues: run.fact_issues ?? [] } : null);
   const [busy, setBusy] = useState(false);
@@ -382,9 +387,9 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
           <button className={cx(s.btn, s.sm)} onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {p ? <span className={cx(s.pill, p.named ? s.pRed : s.pLine)}>{p.named ? "Shashi named" : p.review ? "Shashi: needs review" : "Shashi not named"}</span> : <span className={cx(s.pill, d.named ? s.pRed : s.pLine)}>{d.named ? "Named" : "Not named"}</span>}
-          {co && <span className={cx(s.pill, co.named ? s.pDark : s.pLine)}>{co.named ? "Antier named" : "Antier not named"}</span>}
-          {p?.attributed && <span className={cx(s.pill, s.pDark)}>Attributed: Shashi of Antier</span>}
+          {p ? <span className={cx(s.pill, p.named ? s.pRed : s.pLine)}>{p.named ? `${cap(who.first)} named` : p.review ? `${cap(who.first)}: needs review` : `${cap(who.first)} not named`}</span> : <span className={cx(s.pill, d.named ? s.pRed : s.pLine)}>{d.named ? "Named" : "Not named"}</span>}
+          {co && <span className={cx(s.pill, co.named ? s.pDark : s.pLine)}>{co.named ? `${cap(who.company)} named` : `${cap(who.company)} not named`}</span>}
+          {p?.attributed && <span className={cx(s.pill, s.pDark)}>Attributed: {who.first} of {who.company}</span>}
           {q && <span className={cx(s.pill, s.pLine)}>{AUDIENCE_LABEL[audienceOf(q)]} prompt</span>}
           <span className={cx(s.pill, d.linked ? s.pRed : s.pLine)}>{d.linked ? "Linked" : d.linked === null ? "No sources given" : "Not linked"}</span>
           {d.position && <span className={cx(s.pill, s.pDark)}>Position #{d.position}</span>}
@@ -394,9 +399,9 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
         </div>
         {p && (p.review || review) && (
           <div className={cx(s.box, "mt-3 p-3")} style={{ border: "2px solid #141414" }}>
-            <div className={s.label}>Is this Shashi Pal of Antier?</div>
-            <p className={s.small}>{review === "confirmed" ? "You confirmed this answer is about him." : review === "rejected" ? "You marked this as someone else." : "The answer has his full name but nothing nearby ties it to Antier, his role or his topics, so it is not counted until you decide."}</p>
-            {editable && <div className="mt-2 flex gap-2">{review ? <button className={cx(s.btn, s.sm)} onClick={() => decide("")}>Undo decision</button> : <><button className={cx(s.btn, s.sm, s.red)} onClick={() => decide("confirmed")}>Yes, it is him</button><button className={cx(s.btn, s.sm)} onClick={() => decide("rejected")}>Someone else</button></>}</div>}
+            <div className={s.label}>Is this {who.name} of {who.company}?</div>
+            <p className={s.small}>{review === "confirmed" ? `You confirmed this answer is about ${who.first}.` : review === "rejected" ? "You marked this as someone else." : `The answer has the full name but nothing nearby ties it to ${who.company}, the role or the topics, so it is not counted until you decide.`}</p>
+            {editable && <div className="mt-2 flex gap-2">{review ? <button className={cx(s.btn, s.sm)} onClick={() => decide("")}>Undo decision</button> : <><button className={cx(s.btn, s.sm, s.red)} onClick={() => decide("confirmed")}>Yes, it is {who.first}</button><button className={cx(s.btn, s.sm)} onClick={() => decide("rejected")}>Someone else</button></>}</div>}
           </div>
         )}
         {d.named && (
@@ -411,7 +416,7 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
         <div className={cx(s.box, "mt-4 p-4")}>{run.status === "failed" && !run.answer ? <p className={s.small}>{run.error || "No answer came back."}</p> : <Highlight text={run.answer} self={self} rivals={rivals} />}</div>
         <div className="mt-4">
           <div className={s.label}>Sources <span className={s.faint}>({r.sources.length})</span></div>
-          {r.sources.length === 0 ? <p className={s.small}>The answer cited no sources, so whether it links to his sites is unknown.</p> : (
+          {r.sources.length === 0 ? <p className={s.small}>The answer cited no sources, so whether it links to an owned site is unknown.</p> : (
             <ul className="mt-2 grid gap-1.5">{r.sources.map((x) => (
               <li key={x.url} className="flex items-start gap-2 text-[13px]">
                 <span className={cx(s.pill, x.cited ? s.pDark : s.pLine)}>{x.cited ? "Cited" : "Read"}</span>
@@ -428,7 +433,7 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
 
 // ---------------- prompts ----------------
 const AUDIENCES: Audience[] = ["expert", "vendor", "leadership"];
-const AUDIENCE_HINT: Record<Audience, string> = { expert: "Who to listen to: scores Shashi", vendor: "Who to hire: scores Antier", leadership: "Who leads it: scores both" };
+const AUDIENCE_HINT: Record<Audience, string> = { expert: "Who to listen to: scores the person", vendor: "Who to hire: scores the company", leadership: "Who leads it: scores both" };
 function KeywordsCell({ q, editable, onSave }: { q: Question; editable: boolean; onSave: (k: string[]) => void }) {
   const [v, setV] = useState((q.keywords ?? []).join(", "));
   const dirty = v !== (q.keywords ?? []).join(", ");
@@ -438,6 +443,7 @@ function KeywordsCell({ q, editable, onSave }: { q: Question; editable: boolean;
 
 function Questions({ qs, sets, runs, self, editable, c }: { qs: (Question & { sort: number })[]; sets: SetRow[]; runs: Run[]; self: Entity; editable: boolean; c: Ctx }) {
   const { ws } = useWorkspace();
+  const who = useWho();
   const toast = useToast();
   const [setView, setSetView] = useState("all");
   const [kw, setKw] = useState("");
@@ -464,14 +470,14 @@ function Questions({ qs, sets, runs, self, editable, c }: { qs: (Question & { so
       <SetsBar sets={sets} qs={qs} runs={runs} self={self} value={setView} onChange={setSetView} />
       {editable && (
         <form onSubmit={add} className={cx(s.box, "grid gap-3 p-4 md:grid-cols-[1fr_150px_150px_130px] md:items-end")}>
-          <label className="grid gap-1.5 md:col-span-4"><span className={s.label}>Buyer prompt</span><input className={s.field} placeholder="Who builds stablecoin payment infrastructure for banks in the UAE?" value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></label>
-          <label className="grid gap-1.5"><span className={s.label}>Keywords</span><input className={s.field} placeholder="stablecoin, UAE banks" value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} /></label>
+          <label className="grid gap-1.5 md:col-span-4"><span className={s.label}>Buyer prompt</span><input className={s.field} placeholder="For example: Who are the best partners for this in our region?" value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></label>
+          <label className="grid gap-1.5"><span className={s.label}>Keywords</span><input className={s.field} placeholder="Two or three words, separated by commas" value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} /></label>
           <label className="grid gap-1.5"><span className={s.label}>Who it is for</span><select className={s.field} value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience })}>{AUDIENCES.map((a) => <option key={a} value={a}>{AUDIENCE_LABEL[a]}</option>)}</select></label>
           <label className="grid gap-1.5"><span className={s.label}>Region</span><select className={s.field} value={f.region} onChange={(e) => setF({ ...f, region: e.target.value })}>{Object.keys(COUNTRY).filter(Boolean).map((r) => <option key={r}>{r}</option>)}</select></label>
           <label className="grid gap-1.5"><span className={s.label}>Language</span><select className={s.field} value={f.language} onChange={(e) => setF({ ...f, language: e.target.value })}>{LANGUAGES.map((l) => <option key={l}>{l}</option>)}</select></label>
           <label className="grid gap-1.5"><span className={s.label}>Topic</span><input className={s.field} value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })} /></label>
           <div className="flex items-end md:col-span-3"><button className={cx(s.btn, s.red)} disabled={!f.question.trim()}>Add prompt</button></div>
-          <p className={cx(s.small, "md:col-span-4")}>Write it the way a buyer would, in its language. {AUDIENCE_HINT[f.audience]}. Region sets the search location for ChatGPT, Claude and Perplexity; Gemini gets the region as a short hint. Prompts that already name Shashi or Antier are kept but left out of the scores.</p>
+          <p className={cx(s.small, "md:col-span-4")}>Write it the way a buyer would, in its language. {AUDIENCE_HINT[f.audience]}. Region sets the search location for ChatGPT, Claude and Perplexity; Gemini gets the region as a short hint. Prompts that already name {who.first} or {who.company} are kept but left out of the scores.</p>
         </form>
       )}
       <div className="flex flex-wrap items-start gap-4">
@@ -555,14 +561,14 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
   const li = useMemo(() => linkedinCited(runs, self), [runs, self]);
   const owned = (d: string) => self.domains.some((x) => { const h = x.split("/")[0]; return !x.includes("/") && (d === h || d.endsWith("." + h)); });
 
-  // The question his LinkedIn is cited for most often becomes an article idea.
+  // The question the profile's LinkedIn is cited for most often becomes an article idea.
   async function suggestArticle() {
     const counts = new Map<string, number>();
     li.forEach(({ run }) => { const t = run.question_id; counts.set(t, (counts.get(t) ?? 0) + 1); });
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     const { data } = best ? await supabase().from("citation_questions").select("question,topic").eq("id", best).maybeSingle() : { data: null };
-    const title = data ? `LinkedIn article: ${data.question}` : "LinkedIn article on the topic AI cites him for";
-    const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title, format: "Article", status: "Idea", topic: data?.topic || "AI citations", resource: "AI answers already cite his LinkedIn on this topic. A full article gives them more to cite." });
+    const title = data ? `LinkedIn article: ${data.question}` : "LinkedIn article on the topic AI cites the profile for";
+    const { error } = await supabase().from("posts").insert({ workspace_id: ws.id, title, format: "Article", status: "Idea", topic: data?.topic || "AI citations", resource: "AI answers already cite this LinkedIn profile on this topic. A full article gives them more to cite." });
     if (error) toast(error.message); else { haptic(); setMade(new Set([...made, "li-article"])); toast("Article idea added in Content Studio, Library"); }
   }
   return (
@@ -570,7 +576,7 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
       <div className={cx(s.box, "overflow-x-auto")}>
         <div className="px-4 py-3"><span className="font-semibold">Sites the AI relies on</span> <span className={s.small}>last 90 days</span></div>
         <table className={s.table}>
-          <thead><tr><th>Domain</th><th>Cited</th><th>Read only</th><th>In answers naming him</th></tr></thead>
+          <thead><tr><th>Domain</th><th>Cited</th><th>Read only</th><th>In answers naming the person</th></tr></thead>
           <tbody>{domains.map(([d, e]) => (
             <tr key={d}><td className="font-medium">{d}{owned(d) && <span className={cx(s.pill, s.pRed, "ml-2")}>Owned</span>}</td><td className={s.num}>{e.cited}</td><td className={s.num}>{e.read}</td><td className={s.num}>{e.selfNamed}</td></tr>
           ))}</tbody>
@@ -581,24 +587,24 @@ function Sources({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; 
         <SiteGaps runs={runs} self={self} rivals={rivals} editable={editable} />
         <CommentTargets runs={runs} self={self} />
         <section className={cx(s.box, "p-4")}>
-          <div className="flex items-center justify-between gap-2"><span className={s.label}>His LinkedIn in AI answers</span>{editable && <button className={cx(s.btn, s.sm, s.dark)} disabled={made.has("li-article")} onClick={suggestArticle}>{made.has("li-article") ? "Added" : "Suggest a LinkedIn article"}</button>}</div>
-          <p className={s.small}>Long LinkedIn articles get read and cited by AI tools more than short posts. Topics where his LinkedIn already gets cited are the best ones to write up next.</p>
+          <div className="flex items-center justify-between gap-2"><span className={s.label}>Their LinkedIn in AI answers</span>{editable && <button className={cx(s.btn, s.sm, s.dark)} disabled={made.has("li-article")} onClick={suggestArticle}>{made.has("li-article") ? "Added" : "Suggest a LinkedIn article"}</button>}</div>
+          <p className={s.small}>Long LinkedIn articles get read and cited by AI tools more than short posts. Topics where this LinkedIn profile already gets cited are the best ones to write up next.</p>
           {li.length ? <ul className="mt-2 grid gap-1.5">{li.slice(0, 10).map(({ run, source }, i) => <li key={i} className="text-[13px]"><a className="font-medium hover:underline" href={source.url} target="_blank" rel="noopener noreferrer">{source.title || source.url.replace(/^https?:\/\/(www\.)?/, "")}</a><span className={cx(s.small, "block")}>{engineName(run.engine)} · {fmtDay(ymd(new Date(run.run_at)), { day: "numeric", month: "short" })}</span></li>)}</ul>
-            : <p className={cx(s.small, "mt-1")}>No answer has cited his LinkedIn posts or articles yet. His profile URL must be in the owned list under Competitors.</p>}
+            : <p className={cx(s.small, "mt-1")}>No answer has cited these LinkedIn posts or articles yet. The profile URL must be in the owned list under Competitors.</p>}
         </section>
       </div>
     </div>
   );
 }
 
-// Sites that cite competitors and never Antier; shown on Sources and under the prompt gaps.
+// Sites that cite competitors and never the company; shown on Sources and under the prompt gaps.
 function SiteGaps({ runs, self, rivals, editable }: { runs: Run[]; self: Entity; rivals: Entity[]; editable: boolean }) {
   const { ws } = useWorkspace();
   const toast = useToast();
   const [made, setMade] = useState<Set<string>>(new Set());
   const gaps = useMemo(() => citationGaps(runs, self, rivals), [runs, self, rivals]);
   async function toIdea(g: { domain: string; competitors: string[] }) {
-    const { data, error } = await supabase().from("posts").insert({ workspace_id: ws.id, title: `Earn a mention on ${g.domain}`, status: "Idea", topic: "AI citations", channel: "company", resource: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. Pitch a guest piece, a quote or data there, or post on the topic it covers. Company content, not for Shashi's profile.` }).select("id").single();
+    const { data, error } = await supabase().from("posts").insert({ workspace_id: ws.id, title: `Earn a mention on ${g.domain}`, status: "Idea", topic: "AI citations", channel: "company", resource: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name ${self.name}. Pitch a guest piece, a quote or data there, or post on the topic it covers. Company content, not for ${possessive(firstNameOf(ws))} profile.` }).select("id").single();
     if (error) { toast(error.message); return; }
     haptic(); setMade(new Set([...made, g.domain]));
     toast("Added as an idea in Content Studio, Library", async () => { await supabase().from("posts").delete().eq("id", data.id); setMade((m) => { const n = new Set(m); n.delete(g.domain); return n; }); });
@@ -606,7 +612,7 @@ function SiteGaps({ runs, self, rivals, editable }: { runs: Run[]; self: Entity;
   return (
     <section className={cx(s.box, "p-4")}>
       <div className={s.label}>Site gaps</div>
-      <p className={s.small}>Sites the AI cites when it names a competitor, and never when it names Antier.</p>
+      <p className={s.small}>Sites the AI cites when it names a competitor, and never when it names {self.name}.</p>
       {!rivals.length ? <p className={cx(s.small, "mt-2")}>Add competitors to see gaps.</p> : !gaps.length ? <p className={cx(s.small, "mt-2")}>No gaps found yet.</p> : (
         <ul className="mt-2 grid gap-2">{gaps.slice(0, 12).map((g) => (
           <li key={g.domain} className="flex items-center gap-2 border-t border-[#ececec] pt-2 text-[13px]">
@@ -620,15 +626,16 @@ function SiteGaps({ runs, self, rivals, editable }: { runs: Run[]; self: Entity;
 }
 
 // ---------------- competitors ----------------
-// Two separate pools: peer experts are compared with Shashi, peer firms with Antier. Suggested rows track nothing
+// Two separate pools: peer experts are compared with the person, peer firms with the company. Suggested rows track nothing
 // until someone approves them.
 type EntRow = Entity & { sort: number };
 const POOLS: { key: string; title: string; note: string; match: (e: EntRow) => boolean; subject: "person" | "company"; ph: string }[] = [
-  { key: "experts", title: "Peer experts", note: "People AI might name instead of Shashi on expert prompts. Add people you know are his real peers; Prax never guesses names.", match: (e) => e.kind === "competitor" && e.subject === "person", subject: "person", ph: "Full name" },
-  { key: "firms", title: "Peer firms", note: "Companies AI might name instead of Antier on vendor prompts.", match: (e) => e.kind === "competitor" && e.subject !== "person", subject: "company", ph: "Company" },
+  { key: "experts", title: "Peer experts", note: "People AI might name instead of the profile on expert prompts. Add people you know are real peers; Prax never guesses names.", match: (e) => e.kind === "competitor" && e.subject === "person", subject: "person", ph: "Full name" },
+  { key: "firms", title: "Peer firms", note: "Companies AI might name instead of the profile's company on vendor prompts.", match: (e) => e.kind === "competitor" && e.subject !== "person", subject: "company", ph: "Company" },
 ];
 function Competitors({ ents, runs, qs, self, editable }: { ents: EntRow[]; runs: Run[]; qs: Question[]; self: Entity; editable: boolean }) {
   const { ws } = useWorkspace();
+  const who = useWho();
   const toast = useToast();
   const [draft, setDraft] = useState<Record<string, { name: string; aliases: string; domains: string }>>({});
   const [nf, setNf] = useState<Record<string, { name: string; aliases: string; domains: string }>>({});
@@ -682,8 +689,8 @@ function Competitors({ ents, runs, qs, self, editable }: { ents: EntRow[]; runs:
         </table>
       </section>
       <section className={cx(s.box, "p-4")}>
-        <div className={s.label}>Shashi and Antier</div>
-        <p className={s.small}>Shashi is matched only by his full name next to context (Antier, his role or his topics); a bare &quot;Shashi&quot; or &quot;Pal&quot; never counts. Edits re-score every past run.</p>
+        <div className={s.label}>{cap(who.first)} and {who.company}</div>
+        <p className={s.small}>{cap(who.first)} is matched only by the full name next to context ({who.company}, the role or the topics); a first or last name alone never counts. Edits re-score every past run.</p>
         <div className="mt-3 grid gap-3">{ents.filter((e) => e.kind === "self").map((e) => row(e, e.subject === "person" ? "The person" : "The company"))}</div>
       </section>
       {POOLS.map((pool) => {
@@ -697,7 +704,7 @@ function Competitors({ ents, runs, qs, self, editable }: { ents: EntRow[]; runs:
               {tracked.map((e) => row(e, pool.subject === "person" ? "Expert" : "Firm"))}
               {suggested.length > 0 && <div className={cx(s.small, "border-t border-[#ececec] pt-3 font-semibold")}>Suggested, approve to track. Nothing is tracked until you approve it.</div>}
               {suggested.map((e) => row(e, "Suggested"))}
-              {!members.length && <p className={cx(s.small, "border-t border-[#ececec] pt-3")}>{pool.subject === "person" ? "No peer experts yet. Add the people buyers might hear from instead of Shashi." : "No peer firms yet."}</p>}
+              {!members.length && <p className={cx(s.small, "border-t border-[#ececec] pt-3")}>{pool.subject === "person" ? `No peer experts yet. Add the people buyers might hear from instead of ${who.first}.` : "No peer firms yet."}</p>}
               {editable && tracked.length < 8 && (
                 <div className="grid gap-2 border-t border-[#ececec] pt-3 md:grid-cols-[180px_1fr_1fr_auto] md:items-end">
                   <label className="grid gap-1"><span className={s.label}>{pool.subject === "person" ? "Add peer expert" : "Add peer firm"}</span><input className={s.field} placeholder={pool.ph} value={f.name} onChange={(e) => setNf({ ...nf, [pool.key]: { ...f, name: e.target.value } })} /></label>

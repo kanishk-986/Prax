@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, KINDS, type Role } from "@/lib/workspace";
+import { pillarsOf, regionsOf, splitList, SEGMENT_BASE } from "@/lib/persona";
 import { PageHeader } from "@/components/page-header";
 import { useToast, haptic } from "@/components/toaster";
+import { ProfileStatus } from "@/components/profile-status";
 
 type Member = { user_id: string; email: string; role: Role };
 type Invite = { email: string; role: Role };
@@ -20,7 +22,9 @@ export default function Settings() {
   const { ws, can, userId } = useWorkspace();
   const owner = can("owner");
   const router = useRouter();
-  const [f, setF] = useState({ name: ws.name, headline: ws.headline, linkedin_url: ws.linkedin_url, quotas: { ...ws.quotas }, voice: ws.voice ?? "" });
+  const [f, setF] = useState({ name: ws.name, headline: ws.headline, linkedin_url: ws.linkedin_url, company: ws.company ?? "", quotas: { ...ws.quotas }, voice: ws.voice ?? "" });
+  // The strategy lists are edited as text and saved as lists (db/016). Empty means a clean, neutral profile.
+  const [lists, setLists] = useState({ pillars: pillarsOf(ws).join(", "), regions: regionsOf(ws).join(", "), segments: { ...(ws.segments ?? {}) } as Record<string, string> });
   const [saved, setSaved] = useState("");
   const members = useLive<Member>("members", ws.id);
   const invites = useLive<Invite>("invites", ws.id);
@@ -29,7 +33,8 @@ export default function Settings() {
   const done = (error: { message: string } | null, ok: string) => { if (error) toast(error.message); else { haptic(); toast(ok); } };
 
   async function save() {
-    const { error } = await supabase().from("workspaces").update(f).eq("id", ws.id);
+    const segments = Object.fromEntries(Object.entries(lists.segments).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+    const { error } = await supabase().from("workspaces").update({ ...f, company: f.company.trim(), pillars: splitList(lists.pillars), regions: splitList(lists.regions), segments }).eq("id", ws.id);
     setSaved(error ? error.message : "Saved"); done(error, "Profile saved"); router.refresh(); setTimeout(() => setSaved(""), 2000);
   }
   async function invite(e: React.FormEvent) {
@@ -42,15 +47,30 @@ export default function Settings() {
   return (
     // Same page width as every other section; profile and quotas on the left, the team on the right.
     <div className="mx-auto max-w-[1180px]">
-      <PageHeader title="Settings" sub="Profile, daily quotas and team access" />
+      <PageHeader title="Settings" sub="Profile, strategy, daily quotas and team access" />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <section className="card min-w-0 p-5">
         <h2 className="text-[14px] font-semibold">Profile</h2>
         <fieldset disabled={!owner} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1"><span className="label">Name</span><input id="s-name" className="field" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           <label className="flex flex-col gap-1"><span className="label">LinkedIn URL</span><input id="s-li" className="field" value={f.linkedin_url} onChange={(e) => setF({ ...f, linkedin_url: e.target.value })} /></label>
-          <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Headline</span><input id="s-hl" className="field" value={f.headline} onChange={(e) => setF({ ...f, headline: e.target.value })} /></label>
+          <label className="flex flex-col gap-1"><span className="label">Role or headline</span><input id="s-hl" className="field" value={f.headline} onChange={(e) => setF({ ...f, headline: e.target.value })} placeholder="For example: Co-Founder and COO" /></label>
+          <label className="flex flex-col gap-1"><span className="label">Company</span><input id="s-co" className="field" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="Company name" /></label>
         </fieldset>
+        <h3 className="mt-6 text-[13px] font-semibold">Strategy</h3>
+        <p className="text-[12px] text-muted">Drafts, campaigns, Discovery and AI citations use these. Separate items with commas.</p>
+        <fieldset disabled={!owner} className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Content pillars</span><textarea id="s-pillars" rows={2} className="field py-2 text-[13px]" value={lists.pillars} onChange={(e) => setLists({ ...lists, pillars: e.target.value })} placeholder="Three to six themes this profile is known for" /></label>
+          <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Focus regions</span><input id="s-regions" className="field" value={lists.regions} onChange={(e) => setLists({ ...lists, regions: e.target.value })} placeholder="For example: UAE, India" /></label>
+        </fieldset>
+        <div className="mt-3"><span className="label">Network segment names</span>
+          <fieldset disabled={!owner} className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {Object.entries(SEGMENT_BASE).map(([k, v]) => (
+              <label key={k} className="flex items-center gap-2"><span className="num w-3 shrink-0 text-[12px] font-semibold text-muted">{k}</span>
+                <input id={`s-seg-${k}`} className="field" value={lists.segments[k] ?? ""} placeholder={v.label} aria-label={`Segment ${k} name`} onChange={(e) => setLists({ ...lists, segments: { ...lists.segments, [k]: e.target.value } })} /></label>
+            ))}
+          </fieldset>
+        </div>
         <h3 className="mt-6 text-[13px] font-semibold">Daily quota</h3>
         <p className="text-[12px] text-muted">Each day&apos;s checklist is generated from these numbers the first time someone opens Today.</p>
         {/* Labels can wrap to two lines; each one sits at the top of its cell and every input shares the bottom line. */}
@@ -88,7 +108,7 @@ export default function Settings() {
         </ul>
         {owner && (
           <form onSubmit={invite} className="mt-4 flex flex-wrap gap-2">
-            <input id="inv-email" type="email" required className="field min-w-0 flex-1 basis-[220px]" placeholder="colleague@antiersolutions.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} />
+            <input id="inv-email" type="email" required className="field min-w-0 flex-1 basis-[220px]" placeholder="colleague@company.com" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} />
             <select id="inv-role" className="field w-auto" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value as Role })}>{ROLES.map((x) => <option key={x.r} value={x.r}>{x.r}</option>)}</select>
             <button className="btn btn-primary">Invite</button>
             <p className="w-full text-[12px] text-muted">They get access when they sign in to Prax with this email.</p>
@@ -97,6 +117,7 @@ export default function Settings() {
         <dl className="mt-5 grid gap-1 text-[12px] text-muted">{ROLES.map((x) => <div key={x.r}><span className="font-medium capitalize text-ink-2">{x.r}</span>: {x.d}</div>)}</dl>
       </section>
       </div>
+      {owner && <ProfileStatus />}
     </div>
   );
 }

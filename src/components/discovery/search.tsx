@@ -53,7 +53,7 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
             ))}
             {!s.queries.length && <span className="text-[13px] text-muted">None yet.</span>}
           </span>
-          {d.editable && <span className="flex gap-2"><label htmlFor="aiq" className="sr-only">Add a search</label><input id="aiq" className="field h-10 min-w-0 flex-1" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} placeholder="For example: SAMA open banking rules for payment firms" /><button type="button" className="btn btn-dark h-10 shrink-0 px-4" onClick={add}>Add</button></span>}
+          {d.editable && <span className="flex gap-2"><label htmlFor="aiq" className="sr-only">Add a search</label><input id="aiq" className="field h-10 min-w-0 flex-1" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} placeholder="For example: new rules on the topic in our region" /><button type="button" className="btn btn-dark h-10 shrink-0 px-4" onClick={add}>Add</button></span>}
         </section>
         <aside className="flex min-w-0 flex-[2_1_300px] flex-col gap-2.5 rounded-2xl bg-[#141414] p-[18px] text-white">
           <span className="text-[12px] font-semibold uppercase tracking-[.06em] text-[#ff8a80]">AI tools</span>

@@ -2,7 +2,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { addDays, weekStart, fmtDay, today } from "@/lib/workspace";
+import { addDays, weekStart, fmtDay, today, useWorkspace } from "@/lib/workspace";
+import { firstNameOf, possessive, type Channel } from "@/lib/persona";
 import { type Brief, weekStart as wkStart } from "@/lib/campaigns";
 
 export type Post = {
@@ -10,7 +11,7 @@ export type Post = {
   campaign_id: string | null; pillar: string; phase: string; planned_time: string; hold_status?: string;
   requested_by: string | null; requested_at: string | null; decided_by: string | null; decided_at: string | null; decision: string; decision_note: string;
   impressions: number | null; reactions: number | null; comments: number | null; created_at?: string;
-  channel?: "shashi" | "company"; newsletter?: boolean; source_kind?: string; source_ref?: string; hook?: string;
+  channel?: Channel; newsletter?: boolean; source_kind?: string; source_ref?: string; hook?: string;
   script?: { hook?: string; beats?: { say: string; show: string }[]; close?: string; caption?: string; cover?: string; captions?: string };
   visual?: { mode?: string; layout?: string; prompt?: string; slides?: { title: string; body: string }[] }; claims_ack?: boolean; resource?: string;
   angle?: string; discovery?: { topic_id?: string; finding_id?: string; rank?: number | null; score?: number; sources?: { via: string; pub: string; url: string }[]; service?: string; angle?: string; campaign?: string; move?: string };
@@ -29,10 +30,12 @@ export function StatusPill({ s }: { s: string }) {
   return <span className="pill" style={style}>{v}</span>;
 }
 
-/** Company content is never mistaken for Shashi's own post. */
+/** Company content is never mistaken for the profile's own post. */
 export function ChannelFlag({ p, long }: { p: { channel?: string }; long?: boolean }) {
+  const { ws } = useWorkspace();
   if (p.channel !== "company") return null;
-  return <span className="pill" style={{ background: "#141414", color: "#fff" }} title="Company content, not for Shashi's profile">{long ? "Company content, not for Shashi's profile" : "Company content"}</span>;
+  const line = `Company content, not for ${possessive(firstNameOf(ws))} profile`;
+  return <span className="pill" style={{ background: "#141414", color: "#fff" }} title={line}>{long ? line : "Company content"}</span>;
 }
 
 export const logActivity = (wsId: string, kind: string, label: string, refId?: string | null) =>

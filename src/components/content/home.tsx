@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { PenLine, CalendarRange, Type, Target } from "lucide-react";
 import { useWorkspace, today, addDays, weekStart, fmtDay } from "@/lib/workspace";
 import { greeting, firstName } from "@/lib/dashboard";
+import { firstNameOf } from "@/lib/persona";
 import { StartCards } from "@/components/shell";
 import { whatWorks, nextIssue } from "@/lib/content";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf } from "./shared";
@@ -20,10 +21,11 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
   // Same greeting as the Dashboard: the signed-in member's own name, then a readable email name, then none.
   const greet = greeting(hour, firstName(name, email));
   const s = (p: Post) => statusOf(p.status);
+  const first = firstNameOf(ws);
 
   const tiles = [
     { k: "Due this week", v: posts.filter((p) => p.publish_date && p.publish_date >= t && p.publish_date <= wkEnd && s(p) !== "Posted").length, go: "plan" },
-    { k: "Waiting for Shashi", v: posts.filter((p) => s(p) === "In review").length, go: "library" },
+    { k: `Waiting for ${first}`, v: posts.filter((p) => s(p) === "In review").length, go: "library" },
     { k: "Ready to post", v: posts.filter((p) => s(p) === "Ready").length, go: "library" },
     { k: "Campaigns active", v: campaigns.filter((c) => !c.template && c.status !== "paused" && c.status !== "done").length, go: "campaigns" },
   ];
@@ -32,14 +34,14 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
     const out: Need[] = [];
     for (const p of posts) {
       const st = statusOf(p.status);
-      if (st === "In review") out.push({ id: p.id + "r", label: p.title, sub: can("owner") ? "Waiting for your approval" : "With Shashi for approval", post: p, act: "open" });
+      if (st === "In review") out.push({ id: p.id + "r", label: p.title, sub: can("owner") ? "Waiting for your approval" : `With ${first} for approval`, post: p, act: "open" });
       else if ((p.publish_date === t || p.publish_date === tomorrow) && st !== "Posted" && st !== "On hold") out.push({ id: p.id + "d", label: p.title, sub: `Due ${p.publish_date === t ? "today" : "tomorrow"}${p.planned_time ? `, ${p.planned_time}` : ""} · ${st}`, post: p, act: st === "Ready" ? "open" : "write" });
       else if (st === "Idea" && p.source_kind === "discovery") out.push({ id: p.id + "v", label: p.title, sub: `New topic from Discovery Studio${p.discovery?.rank ? ` · #${p.discovery.rank} this week` : ""}${p.discovery?.score != null ? ` · score ${p.discovery.score}` : ""}`, post: p, act: "write" });
       else if (st === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap")) out.push({ id: p.id + "g", label: p.title, sub: "New topic from AI citations", post: p, act: "write" });
       else if (st === "Idea" && p.publish_date && p.publish_date <= addDays(t, 7)) out.push({ id: p.id + "i", label: p.title, sub: `Not written yet · planned ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}`, post: p, act: "write" });
     }
     return out.slice(0, 8);
-  }, [posts, t, tomorrow, can]);
+  }, [posts, t, tomorrow, can, first]);
 
   const ww = useMemo(() => whatWorks(posts.map((p) => ({ format: p.format, pillar: p.pillar, publish_date: p.publish_date, planned_time: p.planned_time, draft: p.draft, status: p.status, impressions: p.impressions, reactions: p.reactions, comments: p.comments }))), [posts]);
   const starts: [string, string, React.ElementType, () => void][] = [

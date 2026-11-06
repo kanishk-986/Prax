@@ -79,24 +79,19 @@ export type TopicRule = { name: string; words: string[] };
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
-/** Checked top to bottom; the first rule that matches wins. Regional segments first, so a Lagos payments firm is D, not A. */
+/** Checked top to bottom; the first rule that matches wins. A new profile starts with the generic role rules
+ *  only: the buyer and region segments (A, B, D) stay empty until this profile's own words go in on Segments.
+ *  Profiles that existed before db/016 had their old rules written into network_settings, so nothing changed for them. */
 export const DEFAULT_SEGMENTS: SegRule[] = [
-  { seg: "D", roles: [], companies: list("africa, african, nigeria, nigerian, lagos, abuja, kenya, kenyan, nairobi, ghana, accra, south africa, johannesburg, cape town, egypt, egyptian, cairo, morocco, casablanca, rwanda, kigali, uganda, kampala, tanzania, ethiopia, senegal, ivory coast, zambia, mpesa, m pesa, flutterwave, paystack, chipper, onafriq, yellow card, nomba, moniepoint, opay, palmpay, mfs africa") },
-  { seg: "B", roles: [], companies: list("emirates, emirati, uae, dubai, abu dhabi, sharjah, ajman, ras al khaimah, rak, saudi, ksa, riyadh, riyad, jeddah, qatar, qatari, doha, bahrain, manama, kuwait, kuwaiti, oman, muscat, gulf, gcc, mena, adgm, difc, india, indian, mumbai, bengaluru, bangalore, delhi, hyderabad, chennai, pune, gurugram, gurgaon, noida, rakbank, mashreq, adcb, adib, fab, first abu dhabi, enbd, emirates nbd, dib, cbd, wio, al rajhi, alinma, snb, sab, anb, bsf, qnb, nbk, kfh, hdfc, icici, axis bank, kotak, sbi, yes bank, indusind, paytm, razorpay, phonepe") },
+  { seg: "D", roles: [], companies: [] },
+  { seg: "B", roles: [], companies: [] },
   { seg: "C", companies: [], roles: list("partnerships, partnership, partner manager, business development, bd, bizdev, alliances, alliance, growth, chief business officer, cbo, chief revenue officer, cro, revenue, ecosystem, channel, strategic partnerships, go to market, gtm, commercial") },
-  { seg: "A", roles: list("payments, treasury"), companies: list("pay, payments, payment, stablecoin, stablecoins, remittance, remit, fintech, fx, money, wallet, card, cards, card issuing, cross border, banking as a service, baas, circle, ripple, stripe, wise, checkout, adyen, airwallex, rapyd, nium, thunes, conduit, rain, bvnk, paxos, zepz, toku") },
+  { seg: "A", roles: [], companies: [] },
   { seg: "E", companies: list("media, news, magazine, weekly, newsletter, podcast, research, consulting, advisory"), roles: list("journalist, editor, reporter, writer, author, publisher, analyst, columnist, podcast, host, commentator, researcher, professor, lecturer, speaker, influencer, creator") },
 ];
 
-/** Shashi's six content pillars (Antier strategy core, section 5). */
-export const DEFAULT_TOPICS: TopicRule[] = [
-  { name: "Money That Moves Itself", words: list("stablecoin, stablecoins, payment, payments, remittance, remittances, cross border, treasury, tokenised deposit, tokenized deposit, tokenised deposits, tokenized deposits, deposit token, deposit tokens, settlement, rails, usdc, usdt, cbdc, liquidity, fx, correspondent banking") },
-  { name: "The Liquid Balance Sheet", words: list("tokenisation, tokenization, tokenised, tokenized, rwa, rwas, real world asset, real world assets, fund, funds, private credit, real estate, bond, bonds, treasuries, asset management, asset manager, asset managers, securities") },
-  { name: "Regulation-to-Architecture", words: list("regulation, regulations, regulator, regulators, regulatory, compliance, genius act, mica, vara, mas, rbi, cbuae, sama, sec, occ, fca, licence, license, licensing, aml, kyc, travel rule, policy, rulebook, sandbox") },
-  { name: "Production-Grade or Nothing", words: list("security, custody, custodian, custodians, key management, mpc, audit, auditor, resilience, hack, hacked, breach, exploit, incident, soc 2, iso 27001, post quantum, quantum, cryptographic, infrastructure, production") },
-  { name: "Agentic Finance", words: list("ai agent, ai agents, agentic, agent, agents, autonomous, know your intent, kyi, abstraxn, machine payments, agent payments, llm, ai") },
-  { name: "Build, Buy or Partner", words: list("tco, total cost, build vs buy, build or buy, vendor, vendors, procurement, time to value, cost, costs, roi, business case, outsourcing") },
-];
+/** Topic rules start as this profile's pillars (Settings) with no words yet; words are added on the Topics tab. */
+export const defaultTopics = (pillars: string[]): TopicRule[] => pillars.map((name) => ({ name, words: [] }));
 
 /** Prospect companies are added as company rules for their segment, ahead of the keyword rules. */
 export function segmentFor(company: string, position: string, rules: SegRule[], prospectCompanies: Map<string, string>): string {

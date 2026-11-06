@@ -67,7 +67,7 @@ export function HomeTab({ d, today, go, openFinding, sendFast, planDeadline, ope
               <span className="hidden sm:inline-flex"><BandPill b={d.band(f)} /></span>
             </button>
           ))}
-          {!top.length && <p className="m-0 rounded-[14px] border border-dashed border-line-strong bg-white p-5 text-center text-[13px] text-muted">No findings yet. Run discovery to see this week&apos;s findings for Shashi.</p>}
+          {!top.length && <p className="m-0 rounded-[14px] border border-dashed border-line-strong bg-white p-5 text-center text-[13px] text-muted">No findings yet. Run discovery to see this week&apos;s findings.</p>}
           <div data-tour="upcoming" className="flex-1 overflow-hidden rounded-2xl border border-line bg-white">
             <div className="px-[18px] py-3.5"><div className="font-semibold">Coming up</div><div className="mt-0.5 text-[12.5px] text-muted">Deadlines and events found in this week&apos;s items.</div></div>
             {deadlines.map((u) => {

@@ -14,6 +14,10 @@ const TODAY = "2026-11-06"; // a Friday
 eq("slots from a Monday, 2 a week", slotDates("2026-11-09", 2, 2), ["2026-11-09", "2026-11-11", "2026-11-16", "2026-11-18"]);
 eq("slots from a Wednesday skip Monday", slotDates("2026-11-11", 1, 3), ["2026-11-11", "2026-11-13", "2026-11-16"]);
 eq("default start is next Monday", defaultBrief(TODAY).start, "2026-11-09");
+eq("a new profile has no pillar to start from", defaultBrief(TODAY).topic, "");
+eq("the profile's first pillar is the default topic", defaultBrief(TODAY, undefined, ["Ops", "Hiring"]).topic, "Ops");
+eq("a plan works with no pillars or keywords", proposePlan(defaultBrief(TODAY)).every((p) => p.title.length > 0 && p.pillar === ""), true);
+eq("fast response picks the regulation pillar", fastBrief(TODAY, "", "", ["Ops", "Rules and regulation"]).topic, "Rules and regulation");
 
 // Every objective yields a full plan with valid phases, and its weights shape the phases.
 for (const o of OBJECTIVES) {

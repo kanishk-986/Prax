@@ -10,7 +10,7 @@ const MODES = {
   "Agree and add": "50 to 70 words. Agree with the author's main point in one sentence, then add the layer they did not cover.",
   "Respectful disagree": "50 to 70 words. Accept what is right in the post, then offer a different view on one point with a reason. Courteous, never correcting the author, never against a regulator or government.",
   "Data point": "50 to 70 words. Build the comment around one number or fact that is in the post or source text, and what it implies.",
-  "COO lens": "50 to 70 words. What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline.",
+  "Operator lens": "50 to 70 words. What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline.",
   "Board lens": "50 to 70 words. What a board or risk committee would ask about this: exposure, governance, decision timing.",
   "Partner lens": "50 to 70 words. What this means for partners and ecosystems: who needs to work with whom for this to happen.",
   "Congratulate with substance": "40 to 60 words. Congratulate in one plain sentence, then add one specific observation about why the milestone matters. No flattery.",

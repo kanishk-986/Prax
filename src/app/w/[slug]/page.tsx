@@ -9,6 +9,9 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
 import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
 import { LinkedInMcpButton } from "@/components/linkedin-mcp";
+import { GetStarted, setupSteps } from "@/components/get-started";
+import { useExtension } from "@/lib/bridge";
+import { cap, firstNameOf, possessive, pillarsOf } from "@/lib/persona";
 import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
 import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, type Entity, type Question, type Run } from "@/lib/citations";
 
@@ -26,12 +29,12 @@ const REACH = [
   { key: "search_appearances", label: "Search appearances", sub: "last week" },
 ];
 
-const DASH_TOUR: TourStep[] = [
+const dashTour = (n: string): TourStep[] => [
   { target: "header", title: "What the dashboard is for", body: "One place to see how the week is going for this profile and what to do next. Every number comes from the work logged in Prax." },
-  { target: "kpis", title: "The five numbers that matter", body: "People in the pipeline, warm paths from Network, posts out this week, comments against the weekly target, and how often AI answers name Shashi. Small chips show the change on last week. Click a tile to open that section." },
+  { target: "kpis", title: "The five numbers that matter", body: `People in the pipeline, warm paths from Network, posts out this week, comments against the weekly target, and how often AI answers name ${n}. Small chips show the change on last week. Click a tile to open that section.` },
   { target: "needs", title: "Needs you now", body: "Everything waiting on you, most urgent first: overdue follow-ups and posts lead, then approvals, today's plan and housekeeping." },
   { target: "glance", title: "This week at a glance", body: "One line for each part of Prax: Today, Content Studio, Comment Studio, Pipeline, Network, Discovery Studio and AI citations. Click a line to go there." },
-  { target: "reach", title: "LinkedIn reach", body: "Impressions, followers, profile viewers and search appearances, captured when you open his LinkedIn analytics with the extension." },
+  { target: "reach", title: "LinkedIn reach", body: `Impressions, followers, profile viewers and search appearances, captured when you open ${possessive(n)} LinkedIn analytics with the extension.` },
   { target: "activity", title: "Recent activity", body: "Ticks on Today and pipeline moves, newest first, as the team works." },
   { target: "open-today", title: "Start the day", body: "Open Today for the plan: comments, posts, follow-ups and connections, in that order." },
   { target: "mcp", title: "LinkedIn MCP", body: "A direct LinkedIn connection is coming soon. Nothing is connected yet, and Prax will still never post or send for you." },
@@ -41,6 +44,8 @@ const NOT_POSTED = ["Posted", "On hold", "Published"];
 
 export default function Dashboard() {
   const { ws, can, name, email } = useWorkspace();
+  const first = firstNameOf(ws);
+  const { status: ext } = useExtension();
   const t = today();
   const wk = weekStart(t);
   const lastWk = addDays(wk, -7);
@@ -131,15 +136,18 @@ export default function Dashboard() {
     const list: (NeedInput & Need)[] = [];
     pipe.due.forEach((p) => list.push({ kind: "followup", due: p.next_date, title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `${p.stage} · ${p.next_action || "Next step due"}`, cta: "Open", href: `${base}/pipeline?p=${p.id}`, tone: "red" }));
     content.soon.forEach((p) => list.push({ kind: "post", due: p.publish_date, title: p.title || "Untitled post", sub: `${p.format} · ${p.status}${p.publish_date && p.publish_date < t ? " · planned date has passed" : ""}`, cta: p.status === "Ready" ? "Open" : "Finish", href: `${base}/studio-content?tab=plan`, tone: "red" }));
-    if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : "Waiting for Shashi to approve", cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
+    if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : `Waiting for ${first} to approve`, cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
     if (!week.today.total) list.push({ kind: "today", title: "Open today's plan", sub: "It builds from the daily quota", cta: "Start", href: `${base}/today`, tone: "dark" });
     else if (week.today.done < week.today.total) list.push({ kind: "today", title: `${week.today.total - week.today.done} of ${week.today.total} tasks left today`, sub: "Comments, posts, follow-ups and connections", cta: "Continue", href: `${base}/today`, tone: "dark" });
     if (disc.open.length) list.push({ kind: "discovery", title: `${disc.open.length} Digest ${disc.open.length === 1 ? "topic" : "topics"} not sent yet`, sub: `Top: ${disc.open[0].title}`, cta: "Review", href: `${base}/discovery?tab=digest`, tone: "dim" });
     if (cit.active && (cit.lastDays == null || cit.lastDays >= 7)) list.push({ kind: "citations", title: "Run the AI citation prompts", sub: cit.lastDays == null ? `${cit.active} prompts have never been run` : `Last run ${cit.lastDays} days ago`, cta: "Run", href: `${base}/citations`, tone: "dim" });
     if (pipe.warming) list.push({ kind: "warming", title: `${pipe.warming} ${pipe.warming === 1 ? "person" : "people"} warming up`, sub: "Two comments each, then a connection note", cta: "Open", href: `${base}/pipeline`, tone: "dim" });
-    if (warm == null) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
+    // A new profile (nobody in Pipeline) has the import as a set-up step already, so it is not listed twice.
+    if (warm == null && prospects.rows.length) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
     return rankNeeds(list, t);
-  }, [pipe, content, week.today, disc, cit, warm, base, t, can]);
+  }, [pipe, content, week.today, disc, cit, warm, base, t, can, first, prospects.rows.length]);
+  // A new profile has nobody in Pipeline yet: show what to do first instead of leaving a row of zeros to read.
+  const setup = setupSteps({ base, first, hasStrategy: pillarsOf(ws).length > 0 && !!ws.voice?.trim(), extConnected: !!ext?.connected, people: people ?? 0, prospects: prospects.rows.length });
 
   const hour = new Date().getHours();
   const loading = items.loading || prospects.loading;
@@ -156,9 +164,10 @@ export default function Dashboard() {
         {/* On phones Today is one tap away in the menu and in Needs you now, so the header keeps to two buttons. */}
         <span className="hidden sm:contents"><Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link></span>
       </>}
-      steps={DASH_TOUR}>
+      steps={dashTour(first)}>
 
       {loading ? <Skeleton /> : (<>
+        {!prospects.rows.length && <div className={reveal(0).className} style={reveal(0).style}><GetStarted name={possessive(first) + " profile"} steps={setup} /></div>}
         <KpiTiles tour="kpis" items={[
           { label: "In pipeline", value: pipe.open, tone: "dark", href: `${base}/pipeline`,
             delta: pipe.added ? { text: `+${pipe.added}`, dir: "up", label: "added this week" } : null, sub: pipe.added ? undefined : `${pipe.conv} in conversation` },
@@ -167,8 +176,8 @@ export default function Dashboard() {
             delta: postDelta && (content.posted.now || content.posted.prev) ? { ...postDelta, label: "vs last week" } : null, sub: content.planned || content.posted.now ? undefined : "Nothing planned yet" },
           { label: "Comments this week", value: week.comments.now, of: `of ${ws.quotas.comment * wkDays}`, href: `${base}/today`, spark: week.commentSpark,
             delta: commentDelta && (week.comments.now || week.comments.prev) ? { ...commentDelta, label: "vs last week" } : null, sub: week.comments.now || week.comments.prev ? undefined : "None yet this week" },
-          // "Shashi named in X% of AI answers": latest answer per prompt and AI tool over 28 days, strict person matching.
-          { label: "Shashi in AI answers", href: `${base}/citations`,
+          // "<Name> named in X% of AI answers": latest answer per prompt and AI tool over 28 days, strict person matching.
+          { label: `${cap(first)} in AI answers`, href: `${base}/citations`,
             value: cit.share.pct == null ? "None" : <><CountUp value={cit.share.pct} />%</>, of: cit.share.pct == null ? undefined : "named",
             sub: cit.share.pct == null ? (cit.active ? "No AI answers in 28 days" : "No prompts set up yet") : cit.change ? undefined : `${cit.share.named} of ${cit.share.total} answers`,
             delta: cit.change ? { ...cit.change, label: "vs last week" } : null },
@@ -190,7 +199,7 @@ export default function Dashboard() {
               <Glance href={`${base}/discovery?tab=digest`} name="Discovery Studio" alert={disc.open.length > 0}
                 line={disc.ranked ? `Digest ready: ${disc.ranked} topics · ${disc.sent} sent to Content Studio${disc.rising ? ` · ${disc.rising} rising` : ""}` : "No Digest for this week yet"} />
               <Glance href={`${base}/citations`} name="AI citations" alert={cit.gaps > 0}
-                line={!cit.active ? "No prompts set up yet" : cit.share.total ? `Shashi named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
+                line={!cit.active ? "No prompts set up yet" : cit.share.total ? `${cap(first)} named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
                 aside={cit.last ? <span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span> : undefined} />
             </Panel>
           </div>
@@ -211,7 +220,7 @@ export default function Dashboard() {
                   <span className={`num shrink-0 text-right ${e?.now ? "text-[18px] font-semibold tracking-[-0.02em]" : "text-[13px] text-muted"}`}>{e?.now ? Number(e.now.value).toLocaleString("en-GB") : "None"}</span>
                 </div>
               ); })}
-              {!REACH.some((r) => reach[r.key]?.now) && <p className="border-t border-line px-[18px] py-3 text-[12.5px] text-muted">Nothing captured yet. Open his LinkedIn analytics with the extension on to capture these.</p>}
+              {!REACH.some((r) => reach[r.key]?.now) && <p className="border-t border-line px-[18px] py-3 text-[12.5px] text-muted">Nothing captured yet. Open {possessive(first)} LinkedIn analytics with the extension on to capture these.</p>}
             </Panel>
           </div>
         </div>

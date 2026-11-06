@@ -1,10 +1,11 @@
 "use client";
-// Discovery Studio: what Shashi should post about, comment on or watch this week, and why.
+// Discovery Studio: what this profile should post about, comment on or watch this week, and why.
 // Tabs: Home, AI search, Crawl, Findings, Digest, Sources, Criteria. Logic in src/lib/discovery.ts.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today as todayYmd, addDays, weekStart } from "@/lib/workspace";
+import { pillarsOf, regionsOf, regionText, whoLine, PROFILE_CHANNEL } from "@/lib/persona";
 import { useExtension } from "@/lib/bridge";
 import { ENGINES, ESTIMATE, type Engine } from "@/lib/citations";
 import { Section, type TourStep, type TabDef } from "@/components/shell";
@@ -26,23 +27,23 @@ import { CriteriaTab } from "@/components/discovery/criteria";
 
 type Tab = "home" | "ai" | "crawl" | "findings" | "digest" | "sources" | "criteria";
 const HEAD: Record<Tab, string> = {
-  home: "This week, what Shashi should post about, comment on, or watch, and why.",
+  home: "This week, what to post about, comment on, or watch, and why.",
   ai: "What the AI searches, on which tools, and what each search found.",
   crawl: "Every link in your lists, read from the server, with what each one gave.",
-  findings: "Every finding, scored on seven measures for Shashi and his buyers.",
+  findings: "Every finding, scored on seven measures for this profile and its buyers.",
   digest: "Topics, not articles. Every article on the same story is merged into one topic and ranked.",
   sources: "Where discovery looks. LinkedIn only through posts you send from the Prax bar.",
   criteria: "How findings are scored and topics ranked. Changes apply to the next run.",
 };
 const STEPS: TourStep[] = [
-  { target: "counts", tab: "home", title: "What discovery is for", body: "Each week it finds what Shashi should post about, comment on, or watch. These are the counts by band." },
+  { target: "counts", tab: "home", title: "What discovery is for", body: "Each week it finds what to post about, comment on, or watch. These are the counts by band." },
   { target: "flow", tab: "home", title: "How it flows", body: "Run, then Findings, then the Digest. AI search and Crawl bring in articles, Findings scores each one, and the Digest merges them into ranked topics." },
-  { target: "fast", tab: "home", title: "Fast response", body: "Regulator news from the last 72 hours lands here, ready for a quick draft and Shashi's approval." },
+  { target: "fast", tab: "home", title: "Fast response", body: "Regulator news from the last 72 hours lands here, ready for a quick draft and approval." },
   { target: "coverage", tab: "home", title: "Coverage", body: "Every pass reports what it read. Blocked and gated sources are shown, never hidden as a quiet week." },
   { target: "ai", tab: "ai", title: "AI search", body: "By pillar, by company or person, by event word and by AI citations gap, plus your own searches. It runs in this browser on every AI tool you have a key for. Only cited sources are kept." },
   { target: "ailog", tab: "ai", title: "The search log", body: "Every search on every tool, live: results, cited sources and how many dates were confirmed by reading the page." },
   { target: "crawl", tab: "crawl", title: "Crawl", body: "Upload an Excel or CSV of links. The server reads each one every Monday, takes the 5 newest articles from list pages, and lists gated and blocked sites." },
-  { target: "filters", tab: "findings", title: "Findings", body: "Single articles, filtered by band, pillar, region, source, engine, Antier service and where they were found." },
+  { target: "filters", tab: "findings", title: "Findings", body: "Single articles, filtered by band, pillar, region, source, engine, service and where they were found." },
   { target: "card", tab: "findings", title: "A finding", body: "Seven scores, why it matters, a suggested angle, the warm line from Network, and where it can go: Content Studio, Comment Studio or an AI citations gap." },
   { target: "dtop", tab: "digest", title: "The Digest", body: "Articles on the same story merged into topics and ranked on fit, coverage, source quality, found both ways, gap, warm and timing. Top 3 here, #4 to #10 below." },
   { target: "opps", tab: "digest", title: "Beyond posts", body: "Speaking and pitch deadlines, journalist requests with a reply you send yourself, and tenders for sales only." },
@@ -81,7 +82,8 @@ export default function DiscoveryStudio() {
   const [runOpen, setRunOpen] = useState(false);
   const [week, setWeek] = useState(thisWeek);
   const [reminded, setReminded] = useState(false);
-  const settings = useMemo(() => mergeSettings(raw), [raw]);
+  const pillars = useMemo(() => pillarsOf(ws), [ws]), region = regionText(ws);
+  const settings = useMemo(() => mergeSettings(raw, regionsOf(ws)), [raw, ws]);
   const findings = useMemo(() => findingsLive.rows.filter((f) => !hidden.includes(f.id)), [findingsLive.rows, hidden]);
 
   useEffect(() => {
@@ -126,12 +128,12 @@ export default function DiscoveryStudio() {
     ...RESEARCH_RESOURCES.map(([name]) => ({ name, kind: "Research Resources List" })),
   ], [targets, vips, competitors]);
   const gaps = useMemo(() => posts.rows.filter((p) => p.topic === "AI citations" && (p.status === "Idea" || !p.status)).map((p) => p.title).slice(0, 8), [posts.rows]);
-  const plan = useMemo(() => searchPlan({ packs: settings.packs, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: settings.queries }), [settings, entities, today, gaps]);
-  const packCount = Object.fromEntries(PACKS.map((p) => [p.id, searchPlan({ packs: { pillar: false, entity: false, event: false, gap: false, [p.id]: true }, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: [] }).length]));
+  const plan = useMemo(() => searchPlan({ packs: settings.packs, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: settings.queries, pillars, region }), [settings, entities, today, gaps, pillars, region]);
+  const packCount = Object.fromEntries(PACKS.map((p) => [p.id, searchPlan({ packs: { pillar: false, entity: false, event: false, gap: false, [p.id]: true }, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: [], pillars, region }).length]));
   const [pickEngines, setPickEngines] = useState<Engine[] | null>(null);
   const chosen = (pickEngines ?? engines.filter((e) => e.ready).map((e) => e.id as Engine)).filter((e) => engines.find((x) => x.id === e)?.ready);
 
-  const runner = useRunner({ wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips] }, toast);
+  const runner = useRunner({ wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips], pillars, who: whoLine(ws), geos: settings.geo, region }, toast);
 
   async function saveSettings(patch: Partial<Settings>, note: string) {
     const prev = raw ?? {}, next = { ...settings, ...patch };
@@ -171,7 +173,7 @@ export default function DiscoveryStudio() {
   async function sendFinding(f: Finding, opts: { fast?: boolean; title?: string; date?: string | null } = {}) {
     const fast = opts.fast ?? f.source_type === "Regulator";
     const row = {
-      workspace_id: ws.id, title: (opts.title ?? `${fast ? "Fast response: " : ""}${f.title}`).slice(0, 200), format: "Text post", status: "Idea", pillar: f.pillar, topic: "Discovery Studio", channel: "shashi",
+      workspace_id: ws.id, title: (opts.title ?? `${fast ? "Fast response: " : ""}${f.title}`).slice(0, 200), format: "Text post", status: "Idea", pillar: f.pillar, topic: "Discovery Studio", channel: PROFILE_CHANNEL,
       source_kind: "discovery", source_ref: f.id, angle: f.angle, publish_date: opts.date ?? null, resource: `${f.publisher || hostOf(f.url)}: ${f.url}`,
       discovery: { finding_id: f.id, rank: null, score: total(f), sources: [sourceOf(f)], service: f.service, angle: f.angle, campaign: "", move: band(f) === "Comment-worthy" ? "Comment" : "Post", fast },
     };

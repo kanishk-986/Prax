@@ -1,19 +1,20 @@
 // Discovery Studio logic with no React and no network: the seven-dimension rubric and bands, the rules scorer,
 // link lists (CSV and Excel, hyperlinks hidden behind cell text kept), list pages and page dates, the AI search
 // plan and its replies, merging articles into topics, topic priority (Q85) and the Digest selection.
-// Based on the Antier discovery agent (passes by theme, entity, event word) and its Research Resources List.
+// Based on the first profile's discovery agent (passes by theme, entity, event word) and its Research Resources List.
+// Who it scores for (name, role, company, pillars, focus regions) comes from the profile; see src/lib/persona.ts.
 // Checked by scripts/test-discovery.ts.
 import { unzipSync, strFromU8 } from "fflate";
 
 // ---------- the rubric ----------
 export const DIMENSIONS = [
   ["Buyer fit", "Does a bank, fintech, PSP or asset manager now face a decision?"],
-  ["Pillar fit", "Does it fit one of the six pillars?"],
-  ["Geography", "MENA or India highest"],
-  ["Antier service", "Matches a top service"],
+  ["Pillar fit", "Does it fit one of the pillars?"],
+  ["Geography", "The focus regions highest"],
+  ["Service fit", "Matches a top service"],
   ["Freshness", "72 hours scores 5"],
   ["Evidence", "Primary or two independent sources"],
-  ["Shashi angle", "A COO can speak from operations"],
+  ["Profile angle", "The profile can speak from experience"],
 ] as const;
 export const DEFAULT_WEIGHTS = [25, 20, 15, 15, 10, 10, 5];
 export const DEFAULT_BANDS = { post: 70, comment: 55, watch: 35, target: 40 };
@@ -45,7 +46,8 @@ export function bandOf(f: Scorable, weights = DEFAULT_WEIGHTS, b: Bands = DEFAUL
 }
 
 // ---------- the vocabulary the rules scorer uses ----------
-/** Same six pillars as src/lib/campaigns.ts (checked by the test). */
+/** Built-in words for the first profile's six pillars (and the services and regions below). They apply only to a
+ *  profile whose pillars carry these names; any other pillar is matched by the words of its own name. */
 export const PILLAR_WORDS: Record<string, string[]> = {
   "Money That Moves Itself": ["stablecoin", "settlement", "remittance", "cross-border", "payment", "payments", "tokenised deposit", "tokenized deposit", "cbdc", "digital rupee", "e-rupee", "digital dirham", "wallet"],
   "The Liquid Balance Sheet": ["tokenised fund", "tokenized fund", "private credit", "rwa", "real world asset", "real-world asset", "tokenisation", "tokenization", "bond", "money market", "treasury", "fund"],
@@ -123,13 +125,21 @@ export type RuleScore = { scores: number[]; pillar: string; geo: string; service
  * A first score from the words on the page, so a crawl with no AI key still sorts itself. The AI check in the
  * browser refines it later (scored_by "ai").
  */
-export function ruleScore(a: Article, todayYmd: string): RuleScore {
+/** pillars: the profile's pillars; left out, the built-in vocabulary is used as it is (the first profile). */
+export function pillarWords(pillars?: string[]) {
+  if (!pillars) return PILLAR_WORDS;
+  return Object.fromEntries(pillars.map((p) => [p, PILLAR_WORDS[p] ?? p.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3)]));
+}
+/** True when the profile uses the built-in pillars, so the built-in services and regions apply too. */
+export const builtInVocabulary = (pillars?: string[]) => !pillars || pillars.some((p) => p in PILLAR_WORDS);
+export function ruleScore(a: Article, todayYmd: string, pillars?: string[]): RuleScore {
   const text = ` ${a.title} ${a.excerpt ?? ""} `.toLowerCase().replace(/\s+/g, " ");
   const st = a.source_type || sourceTypeOf(a.url);
   const buyer = hits(text, BUYER) > 0, decision = hits(text, DECISION) > 0;
-  const pil = best(text, PILLAR_WORDS), svc = best(text, SERVICE_WORDS);
-  const geoScore = hits(text, MENA) ? 5 : hits(text, INDIA) ? 5 : hits(text, EM) ? 3 : hits(text, WEST) ? 2 : 1;
-  const geo = hits(text, MENA) ? "MENA" : hits(text, INDIA) ? "India" : hits(text, EM) ? "Other emerging markets" : hits(text, WEST) ? "US and EU with a regional implication" : "";
+  const vocab = builtInVocabulary(pillars);
+  const pil = best(text, pillarWords(pillars)), svc = vocab ? best(text, SERVICE_WORDS) : { top: "", n: 0 };
+  const geoScore = !vocab ? 3 : hits(text, MENA) ? 5 : hits(text, INDIA) ? 5 : hits(text, EM) ? 3 : hits(text, WEST) ? 2 : 1;
+  const geo = !vocab ? "" : hits(text, MENA) ? "MENA" : hits(text, INDIA) ? "India" : hits(text, EM) ? "Other emerging markets" : hits(text, WEST) ? "US and EU with a regional implication" : "";
   const op = hits(text, OPERATOR);
   const scores = [
     buyer && decision ? 5 : decision ? 4 : buyer ? 3 : 1,
@@ -420,20 +430,21 @@ export const PRIORITY_FACTORS = [
   ["Source quality", "Regulator or primary first, then major media, then blogs"],
   ["Found both ways", "Found by AI search and by Crawl"],
   ["Gap", "Matches an AI citations gap"],
-  ["Warm", "Names people or firms Shashi knows, from Network"],
+  ["Warm", "Names people or firms the profile knows, from Network"],
   ["Timing", "A deadline is near: consultation, event or tender"],
 ] as const;
 export const DEFAULT_SETTINGS: Settings = {
   weights: DEFAULT_WEIGHTS, bands: DEFAULT_BANDS, priority: DEFAULT_PRIORITY, penalties: DEFAULT_PENALTIES,
-  geo: GEOS, excluded: [], run_day: "Monday", batch: 15, window_days: 7,
+  geo: [], excluded: [], run_day: "Monday", batch: 15, window_days: 7,
   packs: { pillar: true, entity: true, event: true, gap: true }, queries: [],
 };
-export function mergeSettings(s?: Partial<Settings> | null): Settings {
+/** regions: the profile's focus regions, the geography order when none is saved. */
+export function mergeSettings(s?: Partial<Settings> | null, regions: string[] = []): Settings {
   const d = DEFAULT_SETTINGS, x = s ?? {};
   return {
     weights: Array.isArray(x.weights) && weightsOk(x.weights) ? x.weights : d.weights,
     bands: { ...d.bands, ...(x.bands ?? {}) }, priority: Array.isArray(x.priority) && weightsOk(x.priority) ? x.priority : d.priority,
-    penalties: { ...d.penalties, ...(x.penalties ?? {}) }, geo: x.geo?.length ? x.geo : d.geo, excluded: x.excluded ?? d.excluded,
+    penalties: { ...d.penalties, ...(x.penalties ?? {}) }, geo: x.geo?.length ? x.geo : regions.length ? regions : d.geo, excluded: x.excluded ?? d.excluded,
     run_day: x.run_day || d.run_day, batch: Math.max(5, Math.min(30, Number(x.batch) || d.batch)), window_days: x.window_days === 3 ? 3 : 7,
     packs: { ...d.packs, ...(x.packs ?? {}) }, queries: x.queries ?? d.queries,
   };
@@ -460,19 +471,22 @@ export function rotateBatch<T>(list: T[], batch: number, week: number): T[] {
   const n = Math.min(batch, list.length), start = (week * n) % list.length;
   return Array.from({ length: n }, (_, i) => list[(start + i) % list.length]);
 }
-export function searchPlan(o: { packs: Settings["packs"]; entities: string[]; batch: number; todayYmd: string; gaps: string[]; queries: string[] }): PlannedSearch[] {
+/** pillars and region come from the profile (src/lib/persona.ts); the built-in queries apply only to the built-in pillars. */
+export function searchPlan(o: { packs: Settings["packs"]; entities: string[]; batch: number; todayYmd: string; gaps: string[]; queries: string[]; pillars: string[]; region?: string }): PlannedSearch[] {
   const out: PlannedSearch[] = [];
-  if (o.packs.pillar) Object.entries(PILLAR_QUERIES).forEach(([p, q], i) => out.push({ id: `p${i}`, pack: "pillar", query: q || p }));
-  if (o.packs.entity) rotateBatch([...new Set(o.entities.filter(Boolean))], o.batch, weekIndex(o.todayYmd)).forEach((e, i) => out.push({ id: `e${i}`, pack: "entity", query: `${e}: latest announcements on digital assets, stablecoins, tokenisation or payments` }));
-  if (o.packs.event) EVENT_WORDS.forEach((w, i) => out.push({ id: `v${i}`, pack: "event", query: `${w} stablecoin, tokenisation or digital asset project by a bank or regulator in the GCC or India` }));
+  const vocab = builtInVocabulary(o.pillars), where = o.region ? ` in ${o.region}` : "";
+  const about = o.pillars.length ? o.pillars.join(", ") : "the industry";
+  if (o.packs.pillar) o.pillars.forEach((p, i) => out.push({ id: `p${i}`, pack: "pillar", query: PILLAR_QUERIES[p] || `${p}: news and decisions${where}` }));
+  if (o.packs.entity) rotateBatch([...new Set(o.entities.filter(Boolean))], o.batch, weekIndex(o.todayYmd)).forEach((e, i) => out.push({ id: `e${i}`, pack: "entity", query: !vocab ? `${e}: latest announcements, launches and partnerships on ${about}` : `${e}: latest announcements on digital assets, stablecoins, tokenisation or payments` }));
+  if (o.packs.event) EVENT_WORDS.forEach((w, i) => out.push({ id: `v${i}`, pack: "event", query: !vocab ? `${w} on ${about}${where}` : `${w} stablecoin, tokenisation or digital asset project by a bank or regulator in the GCC or India` }));
   if (o.packs.gap) o.gaps.forEach((g, i) => out.push({ id: `g${i}`, pack: "gap", query: g }));
   o.queries.forEach((q, i) => q.trim() && out.push({ id: `c${i}`, pack: "custom", query: q.trim() }));
   return out;
 }
-export function searchPrompt(query: string, windowDays: number, todayYmd: string) {
+export function searchPrompt(query: string, windowDays: number, todayYmd: string, region = "") {
   const since = new Date(Date.parse(todayYmd + "T12:00:00Z") - windowDays * 864e5).toISOString().slice(0, 10);
   return `Search the web for news and documents published since ${since} (the last ${windowDays === 3 ? "72 hours" : "7 days"}) on: ${query}.
-Prefer regulators, primary sources and major business media. Banks, fintechs, payment firms, asset managers and regulators in the GCC and India come first.
+Prefer regulators, primary sources and major business media.${region ? ` Companies and regulators in ${region} come first.` : ""}
 List only pages you opened and cite. For each give the exact page URL, its title, the publisher, the publication date as written on the page (YYYY-MM-DD, or "" if not shown), one sentence on what happened, and the organisations named.
 Return only JSON: {"items": [{"url": "...", "title": "...", "publisher": "...", "date": "YYYY-MM-DD", "summary": "...", "organisations": ["..."]}]}`;
 }
@@ -501,16 +515,18 @@ export function parseSearchItems(answer: string, sources: CitedSource[]): { retu
 
 // ---------- the AI check of scores ----------
 export type AiScore = { scores: number[]; pillar: string; geo: string; service: string; kind: string; why: string; angle: string; orgs: string[] };
-export function scorePrompt(items: { id: string; title: string; publisher: string; date: string; excerpt: string }[], pillars: string[]) {
-  return `Score each item for Shashi Pal, Co-Founder and COO of Antier, which builds stablecoin, tokenisation, payments and custody infrastructure for banks and fintechs in the GCC and India.
-Score 0 to 5 on: buyer (a bank, fintech, PSP or asset manager now faces a decision), pillar (fits one of: ${pillars.join("; ")}), geo (MENA or India 5, other emerging markets 3, US and EU with a regional implication 2), service (matches an Antier service: ${SERVICES.join(", ")}), freshness (72 hours 5, 7 days 4), evidence (primary or two independent sources 5, a press release alone 2), angle (a COO can speak from operations).
+/** who: whoLine of the profile ("Name, Role at Company"); geos: the geography order from Criteria, first is highest. */
+export function scorePrompt(items: { id: string; title: string; publisher: string; date: string; excerpt: string }[], pillars: string[], who: string, geos: string[]) {
+  const vocab = builtInVocabulary(pillars);
+  return `Score each item for ${who}.
+Score 0 to 5 on: buyer (one of their buyers now faces a decision), pillar (fits one of: ${pillars.join("; ") || "their topics"}), geo (${geos.length ? `${geos.join(", then ")}, in that order, the first highest` : "any region scores 3"}), service (${vocab ? `matches a service: ${SERVICES.join(", ")}` : "matches what their company offers"}), freshness (72 hours 5, 7 days 4), evidence (primary or two independent sources 5, a press release alone 2), angle (they can speak about it from their own experience).
 Challenge each one: an old story resurfacing, a vendor claim or a single weak source scores low.
-For each give the pillar, geo (${GEOS.join(", ")}), service, kind (Fact, Analysis, Signal or Speculation), why it matters to his buyers in one sentence, a suggested angle in one line, and the organisations named. No dashes, no contractions.
+For each give the pillar, geo (${geos.join(", ") || "the region named"}), service, kind (Fact, Analysis, Signal or Speculation), why it matters to their buyers in one sentence, a suggested angle in one line, and the organisations named. No dashes, no contractions.
 ITEMS:
 ${items.map((x) => `[${x.id}] ${x.title} · ${x.publisher} · ${x.date || "date unknown"}\n${x.excerpt.slice(0, 600)}`).join("\n\n")}
 Return only JSON: {"scores": [{"id": "...", "buyer": 4, "pillar_fit": 4, "geo": 5, "service": 4, "freshness": 5, "evidence": 4, "angle_fit": 3, "pillar": "...", "geo_name": "...", "service_name": "...", "kind": "Fact", "why": "...", "angle": "...", "organisations": ["..."]}]}`;
 }
-export function parseScores(j: unknown): Record<string, AiScore> {
+export function parseScores(j: unknown, geos: string[] = GEOS): Record<string, AiScore> {
   const list = ((j ?? {}) as { scores?: unknown }).scores;
   const out: Record<string, AiScore> = {};
   if (!Array.isArray(list)) return out;
@@ -519,7 +535,7 @@ export function parseScores(j: unknown): Record<string, AiScore> {
     const id = String(x.id ?? ""); if (!id) continue;
     out[id] = {
       scores: [n(x.buyer), n(x.pillar_fit), n(x.geo), n(x.service), n(x.freshness), n(x.evidence), n(x.angle_fit)],
-      pillar: String(x.pillar ?? ""), geo: GEOS.includes(String(x.geo_name)) ? String(x.geo_name) : "", service: SERVICES.includes(String(x.service_name)) ? String(x.service_name) : "",
+      pillar: String(x.pillar ?? ""), geo: geos.includes(String(x.geo_name)) ? String(x.geo_name) : "", service: SERVICES.includes(String(x.service_name)) ? String(x.service_name) : String(x.service_name ?? "").slice(0, 60),
       kind: ["Fact", "Analysis", "Signal", "Speculation"].includes(String(x.kind)) ? String(x.kind) : "", why: String(x.why ?? "").trim(), angle: String(x.angle ?? "").trim(),
       orgs: Array.isArray(x.organisations) ? (x.organisations as unknown[]).map(String).filter(Boolean).slice(0, 8) : [],
     };
@@ -585,7 +601,7 @@ export function priorityParts(t: TopicFacts): number[] {
 }
 export function priorityMinus(t: Pick<TopicFacts, "posted" | "crowded">, pen = DEFAULT_PENALTIES): [string, number][] {
   const out: [string, number][] = [];
-  if (t.posted) out.push(["Shashi posted on it recently", -pen.posted]);
+  if (t.posted) out.push(["Posted on it recently", -pen.posted]);
   if (t.crowded) out.push(["Crowded: peers already posted", -pen.crowded]);
   return out;
 }
@@ -618,7 +634,7 @@ export function selectDigest<T extends TopicFacts & { title: string }>(topics: T
   const after = ranked.slice(10);
   return { top: ranked.slice(0, 3), list: ranked.slice(3, 10), rising: after.filter(risingOf).sort((a, b) => b.grow - a.grow).slice(0, 4), rest: after.filter((t) => !risingOf(t)) };
 }
-/** Which Antier services draw the most topics in the top 10. */
+/** Which services draw the most topics in the top 10. */
 export function servicesLine(top: { service: string }[]) {
   const c = new Map<string, number>();
   for (const t of top) if (t.service) c.set(t.service, (c.get(t.service) ?? 0) + 1);
@@ -626,8 +642,11 @@ export function servicesLine(top: { service: string }[]) {
 }
 
 // ---------- replies and sales notes ----------
-export function replyDraft(o: { service: string; title: string; ask: string }) {
-  return `Hello,\n\nShashi Pal here, Co-Founder and COO of Antier. We build ${o.service ? o.service.toLowerCase() : "digital asset infrastructure"} for banks in the GCC and India, so this is close to what we do every day.\n\nOn your question${o.ask ? ` ("${o.ask.slice(0, 160)}")` : ""}: what breaks first in a bank pilot is rarely the chain; it is reconciliation and reporting. I am happy to explain what we have seen in production.\n\nHappy to talk this week.\n\nShashi`;
+/** who: the profile's names, role and company, and its focus regions as text (src/lib/persona.ts). */
+export function replyDraft(o: { service: string; title: string; ask: string }, who: { name: string; first: string; role: string; company: string; region: string }) {
+  const intro = `${who.name} here${who.role ? `, ${who.role}` : ""}${who.company ? `${who.role ? " at" : ", at"} ${who.company}` : ""}.`;
+  const work = o.service ? ` We work on ${o.service.toLowerCase()}${who.region ? ` in ${who.region}` : ""}, so this is close to what we do every day.` : "";
+  return `Hello,\n\n${intro}${work}\n\nOn your question${o.ask ? ` ("${o.ask.slice(0, 160)}")` : ""}: [one specific point from your own experience].\n\nHappy to talk this week.\n\n${who.first}`;
 }
 
 // ---------- findings to Digest topics ----------
@@ -706,7 +725,7 @@ export function suggestWeights(findings: Pick<Finding, "status" | "dismiss_reaso
 export function topicPost(t: Pick<Topic, "key" | "title" | "pillar" | "service" | "angle" | "sources" | "move">, o: { workspace_id: string; topic_id: string; rank: number | null; score: number; campaign?: { id: string; name: string } | null }) {
   const sources = t.sources.slice(0, 8);
   return {
-    workspace_id: o.workspace_id, title: t.title.slice(0, 200), format: "Text post", status: "Idea", pillar: t.pillar, topic: "Discovery Studio", channel: "shashi",
+    workspace_id: o.workspace_id, title: t.title.slice(0, 200), format: "Text post", status: "Idea", pillar: t.pillar, topic: "Discovery Studio", channel: "shashi", // the stored value for the profile's own posts (PROFILE_CHANNEL)
     source_kind: "discovery", source_ref: o.topic_id, angle: t.angle, campaign_id: o.campaign?.id ?? null,
     resource: sources.map((s) => `${s.pub}: ${s.url}`).join("\n"),
     discovery: { topic_id: o.topic_id, key: t.key, rank: o.rank, score: o.score, sources, service: t.service, angle: t.angle, campaign: o.campaign?.name ?? "", move: t.move },

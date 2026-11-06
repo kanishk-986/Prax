@@ -9,7 +9,8 @@ import {
   searchPlan, rotateBatch, parseSearchItems, parseScores, mergeSettings, buildTopics, applyMerges, topicPost, suggestWeights, PILLAR_WORDS, type Finding, type TopicFacts,
 } from "../src/lib/discovery.ts";
 import { urlProblem, isPrivateIp, suggestAngles, angleLine, postSource } from "../src/lib/content.ts";
-import { PILLARS } from "../src/lib/campaigns.ts";
+// Fixture: the first profile's six pillars, the ones the built-in vocabulary is written for.
+const PILLARS = ["Money That Moves Itself", "The Liquid Balance Sheet", "Regulation-to-Architecture", "Production-Grade or Nothing", "Agentic Finance", "Build, Buy or Partner"];
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -39,7 +40,7 @@ eq("LinkedIn 45 is watch", bandOf(art([2, 3, 2, 2, 3, 2, 2], { source_type: "Lin
 eq("target author 40+ is comment-worthy", bandOf(art([2, 3, 2, 2, 3, 2, 2], { source_type: "LinkedIn", target: true })), "Comment-worthy");
 eq("custom bands apply", bandOf(art([3, 3, 3, 3, 3, 3, 3]), DEFAULT_WEIGHTS, { post: 50, comment: 55, watch: 35, target: 40 }), "Watch");
 eq("settings fall back when weights do not total 100", mergeSettings({ weights: [50, 50, 50, 0, 0, 0, 0] }).weights, DEFAULT_WEIGHTS);
-eq("same pillars as campaigns", Object.keys(PILLAR_WORDS), PILLARS);
+eq("built-in vocabulary covers the six pillars", Object.keys(PILLAR_WORDS), PILLARS);
 
 // ---------- the rules scorer ----------
 eq("freshness 72 hours", freshness("2026-11-04", T), 5);
@@ -58,6 +59,9 @@ eq("rules scorer: MENA", [rs.geo, rs.scores[2]], ["MENA", 5]);
 eq("rules scorer: service", rs.service, "Stablecoin infrastructure");
 eq("rules scorer: pillar", rs.pillar, "Regulation-to-Architecture");
 eq("rules scorer: band", bandOf({ ...rs, confirmed: true }), "Post-worthy");
+const rsOwn = ruleScore({ url: "https://www.vara.ae/news/reserve", title: "VARA opens a consultation on reserve rules for stablecoin issuers serving UAE banks", published: "2026-11-05", confirmed: true }, T, ["Clinical trials", "Hospital operations"]);
+eq("new profile: no built-in pillar, service or region labels", [rsOwn.pillar, rsOwn.service, rsOwn.geo], ["", "", ""]);
+eq("new profile: its own pillar words count", ruleScore({ url: "https://x.com/a", title: "Hospital operations under strain", published: "2026-11-05", confirmed: true }, T, ["Clinical trials", "Hospital operations"]).pillar, "Hospital operations");
 eq("opportunity: tender", opportunityOf("Central bank tender for a tokenisation sandbox", "Request for proposals closes on 24 November 2026", T), { kind: "sales", due: 18 });
 eq("opportunity: speakers", opportunityOf("Call for speakers: digital assets summit", "Deadline: 2026-11-15", T), { kind: "pitch", due: 9 });
 eq("opportunity: journalist", opportunityOf("A journalist seeks experts on stablecoin pilots", "", T), { kind: "press", due: null });
@@ -139,7 +143,7 @@ eq("an article is not a list page", isListPage('<meta property="article:publishe
 eq("newest first, undated after", newestArticles(links, 3).map((l) => l.date), ["2026-11-04", "2026-11-01", "2026-10-20"]);
 
 // ---------- AI search ----------
-const plan = searchPlan({ packs: { pillar: true, entity: true, event: false, gap: true }, entities: ["A", "B", "C", "D", "E"], batch: 2, todayYmd: T, gaps: ["Who builds stablecoin rails for UAE banks?"], queries: ["SAMA open banking", " "] });
+const plan = searchPlan({ packs: { pillar: true, entity: true, event: false, gap: true }, entities: ["A", "B", "C", "D", "E"], batch: 2, todayYmd: T, pillars: PILLARS, gaps: ["Who builds stablecoin rails for UAE banks?"], queries: ["SAMA open banking", " "] });
 eq("plan: 6 pillars, 2 entities, 1 gap, 1 own", plan.map((p) => p.pack).join(","), "pillar,pillar,pillar,pillar,pillar,pillar,entity,entity,gap,custom");
 eq("rotation moves weekly", [rotateBatch([1, 2, 3, 4, 5], 2, 0), rotateBatch([1, 2, 3, 4, 5], 2, 1), rotateBatch([1, 2, 3, 4, 5], 2, 3)], [[1, 2], [3, 4], [2, 3]]);
 const answer = 'Here: {"items": [{"url": "https://www.vara.ae/news/reserve", "title": "VARA reserve rules", "publisher": "VARA", "date": "2026-11-05", "summary": "Opens consultation", "organisations": ["VARA"]}, {"url": "https://made-up.example.com/x", "title": "Invented", "date": "2026-11-05"}]}';
@@ -172,7 +176,7 @@ eq("priority of a strong topic", priority(facts()), Math.round(0.96 * 45 + 20 + 
 eq("gap adds 10", priority(facts({ gap: true })) - priority(facts()), 10);
 eq("posted recently takes 15", priority(facts({ posted: true })) - priority(facts()), -15);
 eq("crowded takes 8", priority(facts({ crowded: true })) - priority(facts()), -8);
-eq("custom penalties", priorityMinus({ posted: true, crowded: true }, { posted: 5, crowded: 2 }), [["Shashi posted on it recently", -5], ["Crowded: peers already posted", -2]]);
+eq("custom penalties", priorityMinus({ posted: true, crowded: true }, { posted: 5, crowded: 2 }), [["Posted on it recently", -5], ["Crowded: peers already posted", -2]]);
 eq("never below 0", priority(facts({ fit: 0, ai: 0, crawl: 0, li: 0, grow: 0, quality: 0, warm: 0, due: null, posted: true, crowded: true })), 0);
 eq("timing steps", [12, 18, 30, null].map((d) => priorityParts(facts({ due: d }))[6]), [1, 0.6, 0.3, 0]);
 eq("found both ways needs both", priorityParts(facts({ crawl: 0 }))[3], 0);
@@ -219,8 +223,10 @@ eq("suggest weights after weak-source dismissals", suggestWeights([1, 2, 3].map(
 eq("no suggestions without outcomes", suggestWeights([], DEFAULT_WEIGHTS).length, 0);
 
 // ---------- Content Studio: angles and sources ----------
-eq("four angles from the topic", suggestAngles("VARA reserve rules").map((a) => a.kind), ["Contrarian", "GCC and India lens", "Operator view", "Numbers and prediction"]);
-eq("angle uses the topic", suggestAngles("VARA reserve rules.")[1].text, "What \"VARA reserve rules\" means for mid-size banks in the GCC and India");
+eq("four angles from the topic", suggestAngles("VARA reserve rules").map((a) => a.kind), ["Contrarian", "Regional lens", "Operator view", "Numbers and prediction"]);
+eq("angle uses the topic and the profile's regions", suggestAngles("VARA reserve rules.", "the GCC and India")[1].text, "What \"VARA reserve rules\" means for buyers in the GCC and India");
+eq("angle without regions names none", /GCC|India/.test(suggestAngles("VARA reserve rules").map((a) => a.text).join(" ")), false);
+eq("old saved angle kinds still strip", angleLine("GCC and India lens: banks first"), "Banks first");
 eq("angle line strips the kind", angleLine("How we see it: custody comes first"), "Custody comes first");
 eq("source: discovery", postSource({ source_kind: "discovery", campaign_id: "x" }), "discovery");
 eq("source: citations", postSource({ topic: "AI citations" }), "citations");

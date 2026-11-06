@@ -6,6 +6,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, ymd, today, weekStart, addDays } from "@/lib/workspace";
+import { firstNameOf, companyOf, possessive } from "@/lib/persona";
 import { Section, KpiTiles, DarkCard, StartCards, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { decodeText } from "@/lib/text";
@@ -203,7 +204,7 @@ function VoiceLab({ studio, save }: { studio: Studio; save: Save }) {
             <input ref={input} type="file" multiple accept=".pdf,.txt,.docx,.md" className="hidden" onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
             {names.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{names.map((n) => <span key={n} className="chip">{n}</span>)}</div>}
             <textarea className="field mt-3 min-h-[220px] py-2 text-[12px] leading-relaxed" value={text} onChange={(e) => setText(e.target.value)}
-              placeholder={"Paste anything Shashi wrote himself: his LinkedIn About section, past comments and posts, CV sections, emails.\n\nThe more of his own writing, the closer the match. 2,000 characters or more works best."} />
+              placeholder={`Paste anything ${firstNameOf(ws)} wrote by hand: the LinkedIn About section, past comments and posts, CV sections, emails.\n\nThe more of their own writing, the closer the match. 2,000 characters or more works best.`} />
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button className="btn btn-primary" disabled={text.trim().length < 400 || !!busy} onClick={build}><Wand2 size={14} /> {busy.startsWith("Building") ? "Building" : "Build voice fingerprint"}</button>
               <span className={`num text-[12px] ${text.length >= 2000 ? "text-good" : "text-muted"}`}>{text.length.toLocaleString()} characters</span>
@@ -362,7 +363,7 @@ function Playbooks({ studio, save }: { studio: Studio; save: Save }) {
 
 // ---------------- Tuning ----------------
 function TuningTab({ studio, save }: { studio: Studio; save: Save }) {
-  const { can } = useWorkspace();
+  const { ws, can } = useWorkspace();
   const ed = can("editor");
   const [t, setT] = useState<Tuning>(studio.tuning);
   const s = (v: Partial<Tuning>) => setT({ ...t, ...v });
@@ -399,7 +400,7 @@ function TuningTab({ studio, save }: { studio: Studio; save: Save }) {
           <Toggle disabled={!ed} on={t.repair} onChange={(v) => s({ repair: v })} label="Guardrail repair" sub="Fixes banned words, dashes and contractions before you see the draft" />
           <Toggle disabled={!ed} on={t.smartOrder} onChange={(v) => s({ smartOrder: v })} label="Smart style choice" sub="Write with Prax picks the style that fits the post type" />
           <label className="flex flex-col gap-1.5 pt-3"><span className="text-[13px] font-medium">Sign-off line</span><span className="text-[12px] text-muted">Added to connection notes when it fits in 300 characters. Never added to comments.</span>
-            <input className="field" disabled={!ed} value={t.signature} onChange={(e) => s({ signature: e.target.value })} placeholder="Optional, for example: Shashi, Antier" />
+            <input className="field" disabled={!ed} value={t.signature} onChange={(e) => s({ signature: e.target.value })} placeholder={`Optional, for example: ${[firstNameOf(ws, ""), companyOf(ws, "")].filter(Boolean).join(", ") || "a first name and company"}`} />
           </label>
         </div>
       </div>
@@ -449,7 +450,7 @@ function RewriteLab({ studio }: { studio: Studio }) {
         <button className="mt-2 flex items-center gap-1 text-[12px] text-muted hover:text-ink" onClick={() => setShowPost(!showPost)}><ChevronDown size={13} className={showPost ? "rotate-180" : ""} /> Add the post it replies to, for the Impact score</button>
         {showPost && <textarea className="field anim-rise mt-2 min-h-[100px] py-2 text-[12px]" value={post} onChange={(e) => setPost(e.target.value)} placeholder="Paste the LinkedIn post" />}
         <div className="mt-3 flex flex-wrap gap-2">
-          <button className="btn btn-primary" disabled={!input.trim() || !!busy} onClick={() => run("voice")}>{busy === "voice" ? "Rewriting" : "Rewrite in Shashi's voice"}</button>
+          <button className="btn btn-primary" disabled={!input.trim() || !!busy} onClick={() => run("voice")}>{busy === "voice" ? "Rewriting" : `Rewrite in ${possessive(firstNameOf(ws))} voice`}</button>
           <button className="btn" disabled={!input.trim() || !!busy} onClick={() => run("strip")}>{busy === "strip" ? "Cleaning" : "Strip AI tells"}</button>
           <button className="btn" disabled={!input.trim() || !!busy || !post.trim()} title={post.trim() ? "" : "Add the post first"} onClick={() => run("score")}>{busy === "score" ? "Scoring" : "Score only"}</button>
         </div>

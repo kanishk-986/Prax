@@ -6,6 +6,7 @@ import { useWorkspace, fmtDay, today } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { type Pov, type Newsletter, mergePov, DEFAULT_NEWSLETTER, nextIssue } from "@/lib/content";
 import { Modal } from "./shared";
+import { firstNameOf } from "@/lib/persona";
 
 export type ContentSettings = { pov: Pov; newsletter: Newsletter };
 
@@ -28,9 +29,10 @@ export function useContentSettings() {
   return { settings: s, ready, save };
 }
 
-/** Point-of-view bank: what Shashi believes, what he can prove, the numbers and clients he allows. Drafts use only this. */
+/** Point-of-view bank: what the profile believes, can prove, and the numbers and clients it allows. Drafts use only this. */
 export function PovModal({ settings, save, onClose }: { settings: ContentSettings; save: (s: ContentSettings) => Promise<string | null>; onClose: () => void }) {
-  const { can } = useWorkspace();
+  const { ws, can } = useWorkspace();
+  const first = firstNameOf(ws);
   const toast = useToast();
   const ed = can("editor");
   const [p, setP] = useState<Pov>(settings.pov);
@@ -48,7 +50,7 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
   );
   return (
     <Modal title="Point of view" wide onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button>{ed && <button className="btn btn-primary" onClick={done}>Save</button>}</>}>
-      <p className="m-0 mb-4 text-[13px] leading-relaxed text-muted">What Shashi believes, what he can prove and the numbers he allows. Every draft and campaign plan uses only what is here, so nothing is made up. Proof points must be ticked as cleared before the AI may use them.</p>
+      <p className="m-0 mb-4 text-[13px] leading-relaxed text-muted">What {first} believes, can prove, and the numbers {first} allows. Every draft and campaign plan uses only what is here, so nothing is made up. Proof points must be ticked as cleared before the AI may use them.</p>
       <div className="grid gap-5 md:grid-cols-2">
         <section>
           <div className="label">Stances</div>
@@ -58,15 +60,15 @@ export function PovModal({ settings, save, onClose }: { settings: ContentSetting
         <section>
           <div className="label">Proof points</div>
           <List items={p.proofs.map((x, i) => <label key={i} className="flex items-start gap-2"><input type="checkbox" disabled={!ed} checked={x.cleared} onChange={(e) => setP({ ...p, proofs: p.proofs.map((y, j) => (j === i ? { ...y, cleared: e.target.checked } : y)) })} /><span>{x.text} <span className="text-[11.5px] font-semibold" style={{ color: x.cleared ? "#141414" : "#d64545" }}>{x.cleared ? "Cleared" : "Not cleared"}</span></span></label>)} onRemove={(i) => setP({ ...p, proofs: p.proofs.filter((_, j) => j !== i) })} />
-          {ed && <div className="mt-2 flex gap-2"><input className="field" placeholder="For example: Antier since 2011" value={add.proof} onChange={(e) => setAdd({ ...add, proof: e.target.value })} /><button className="btn" aria-label="Add proof point" onClick={() => { if (add.proof.trim()) { setP({ ...p, proofs: [...p.proofs, { text: add.proof.trim(), cleared: false }] }); setAdd({ ...add, proof: "" }); } }}><Plus size={14} /></button></div>}
+          {ed && <div className="mt-2 flex gap-2"><input className="field" placeholder="For example: in business since 2011" value={add.proof} onChange={(e) => setAdd({ ...add, proof: e.target.value })} /><button className="btn" aria-label="Add proof point" onClick={() => { if (add.proof.trim()) { setP({ ...p, proofs: [...p.proofs, { text: add.proof.trim(), cleared: false }] }); setAdd({ ...add, proof: "" }); } }}><Plus size={14} /></button></div>}
         </section>
         <section>
-          <div className="label">Numbers he allows</div>
+          <div className="label">Numbers allowed</div>
           <List items={p.numbers.map((x) => <span key={x.value}><b className="num">{x.value}</b> <span className="text-muted">{x.context}</span></span>)} onRemove={(i) => setP({ ...p, numbers: p.numbers.filter((_, j) => j !== i) })} />
           {ed && <div className="mt-2 flex gap-2"><input className="field w-[110px]" placeholder="38 seconds" value={add.num} onChange={(e) => setAdd({ ...add, num: e.target.value })} /><input className="field" placeholder="What it measures, and the source" value={add.ctx} onChange={(e) => setAdd({ ...add, ctx: e.target.value })} /><button className="btn" aria-label="Add number" onClick={() => { if (add.num.trim()) { setP({ ...p, numbers: [...p.numbers, { value: add.num.trim(), context: add.ctx.trim() }] }); setAdd({ ...add, num: "", ctx: "" }); } }}><Plus size={14} /></button></div>}
         </section>
         <section>
-          <div className="label">Clients he may name</div>
+          <div className="label">Clients that may be named</div>
           <List items={p.clients} onRemove={(i) => setP({ ...p, clients: p.clients.filter((_, j) => j !== i) })} />
           {ed && <div className="mt-2 flex gap-2"><input className="field" placeholder="Only with their permission" value={add.client} onChange={(e) => setAdd({ ...add, client: e.target.value })} /><button className="btn" aria-label="Add client" onClick={() => { if (add.client.trim()) { setP({ ...p, clients: [...p.clients, add.client.trim()] }); setAdd({ ...add, client: "" }); } }}><Plus size={14} /></button></div>}
         </section>

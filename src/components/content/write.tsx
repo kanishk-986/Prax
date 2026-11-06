@@ -7,7 +7,7 @@ import { useWorkspace, today, fmtDay, addDays } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { humanScore } from "@/lib/studio";
-import { PILLARS } from "@/lib/campaigns";
+import { cap, fullNameOf, firstNameOf, companyOf, pillarsOf, regionText, possessive, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS } from "@/lib/content";
 import { carouselPdf, type Slide } from "@/lib/carousel-pdf";
 import { type Post, type Campaign, StatusPill, statusOf, logActivity, syncApprovalSession } from "./shared";
@@ -19,12 +19,12 @@ type TypeKey = "Text post" | "Image post" | "Carousel" | "Video" | "Poll" | "Art
 type Script = { hook: string; beats: { say: string; show: string }[]; close: string; caption: string; cover: string; captions: string };
 
 const SOURCES: [SourceKind, string, string, React.ElementType][] = [
-  ["idea", "An idea in his head", "A few words is enough.", Lightbulb],
+  ["idea", "An idea in mind", "A few words is enough.", Lightbulb],
   ["link", "A link or article", "Prax reads the page and finds the point.", Link2],
   ["pdf", "A PDF or report", "Upload it from your computer.", FileText],
-  ["draft", "A rough draft", "Tidied and kept in his voice.", PenLine],
-  ["comment", "One of his comments", "A strong comment, grown into a post.", MessageSquare],
-  ["gap", "A topic gap", "From AI citations, or a pillar he has not covered lately.", TrendingDown],
+  ["draft", "A rough draft", "Tidied and kept in their voice.", PenLine],
+  ["comment", "One of their comments", "A strong comment, grown into a post.", MessageSquare],
+  ["gap", "A topic gap", "From AI citations, or a pillar not covered lately.", TrendingDown],
 ];
 const TYPES: [TypeKey, string, string][] = [
   ["Text post", "An opinion or lesson.", "600 to 1,300 characters"], ["Image post", "One visual, short text.", "300 to 900 characters"],
@@ -47,6 +47,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   posts: Post[]; campaigns: Campaign[]; settings: ContentSettings; seed: Post | null; clearSeed: () => void; openPost: (p: Post) => void;
 }) {
   const { ws, can, userId } = useWorkspace();
+  // Who the posts are for, from the profile; neutral wording when a field is missing.
+  const first = firstNameOf(ws), company = companyOf(ws), region = regionText(ws);
+  const pillars = useMemo(() => pillarsOf(ws), [ws]);
+  const byline = [fullNameOf(ws, ""), companyOf(ws, "")].filter(Boolean).join(" · ") || "Prax";
   const toast = useToast();
   const { status: ext } = useExtension();
   const editable = can("editor"), owner = can("owner");
@@ -77,7 +81,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const [imgPrompt, setImgPrompt] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [pollOpts, setPollOpts] = useState<string[]>(["", ""]);
-  const [channel, setChannel] = useState<"shashi" | "company">("shashi");
+  const [channel, setChannel] = useState<Channel>(PROFILE_CHANNEL);
   const [newsletter, setNewsletter] = useState(false);
   const [pillar, setPillar] = useState("");
   const [planDay, setPlanDay] = useState(addDays(today(), 1));
@@ -101,11 +105,11 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (!seed) return;
     setPostId(seed.id); setCampaignId(seed.campaign_id); setType(((TYPES.find((t) => t[0] === seed.format) ?? TYPES[0])[0]));
     setSrc((seed.source_kind as SourceKind) || "idea"); setSrcText(seed.resource || seed.title); setIdea({ title: seed.title, why: "", pillar: seed.pillar, score: 0 });
-    setPillar(seed.pillar || ""); setChannel(seed.channel === "company" ? "company" : "shashi"); setNewsletter(!!seed.newsletter);
+    setPillar(seed.pillar || ""); setChannel(seed.channel === "company" ? "company" : PROFILE_CHANNEL); setNewsletter(!!seed.newsletter);
     setText(seed.draft || ""); setHook(seed.hook || ""); if (seed.script && seed.script.beats) setScript({ ...emptyScript(), ...seed.script } as Script);
     // A Discovery or AI citations topic skips the starting point; Discovery's suggested angle comes preselected.
     const fromDisc = seed.source_kind === "discovery", fromCit = seed.topic === "AI citations" || seed.source_kind === "gap";
-    const base = suggestAngles(seed.title);
+    const base = suggestAngles(seed.title, region);
     const disc = seed.discovery?.angle || (fromDisc ? seed.angle ?? "" : "");
     const list = disc ? [{ kind: "Suggested by Discovery Studio", text: angleLine(disc) }, ...base] : base;
     setAngles(list);
@@ -114,7 +118,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     setTopic(fromDisc ? { tag: `From Discovery Studio${seed.discovery?.rank ? ` · #${seed.discovery.rank} this week` : ""}${seed.discovery?.score != null ? ` · score ${seed.discovery.score}` : ""}`, title: seed.title, line: `${seed.discovery?.sources?.length ?? 0} sources loaded${seed.discovery?.campaign ? ` · campaign: ${seed.discovery.campaign}` : ""}`, sources: seed.discovery?.sources ?? [] }
       : fromCit ? { tag: seed.channel === "company" ? "From AI citations · company content" : "From AI citations", title: seed.title, line: "The gap prompt and its rivals are loaded", sources: [] } : null);
     setStep(seed.draft ? S.draft : S.angle); clearSeed();
-  }, [seed, clearSeed]);
+  }, [seed, clearSeed, region]);
 
   useEffect(() => {
     Promise.all([
@@ -132,31 +136,31 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   // Suggested angles follow the idea; a Discovery suggestion stays first.
   useEffect(() => {
     if (!idea?.title) return;
-    setAngles((cur) => { const disc = cur.filter((a) => a.kind === "Suggested by Discovery Studio"); return [...disc, ...suggestAngles(idea.title)]; });
-  }, [idea?.title]);
+    setAngles((cur) => { const disc = cur.filter((a) => a.kind === "Suggested by Discovery Studio"); return [...disc, ...suggestAngles(idea.title, region)]; });
+  }, [idea?.title, region]);
 
   // Topic gaps: ideas sent from AI citations, and pillars with nothing posted or planned in 30 days.
   const gaps = useMemo(() => {
     const t = today(), since = addDays(t, -30);
     const fromCitations = posts.filter((p) => statusOf(p.status) === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap")).map((p) => ({ id: "p" + p.id, label: p.title, sub: p.channel === "company" ? "From AI citations · company content" : "From AI citations", pillar: p.pillar }));
-    const quiet = PILLARS.filter((pl) => !posts.some((p) => p.pillar === pl && (p.publish_date ?? "") >= since)).map((pl) => {
+    const quiet = pillars.filter((pl) => !posts.some((p) => p.pillar === pl && (p.publish_date ?? "") >= since)).map((pl) => {
       const last = posts.filter((p) => p.pillar === pl && p.publish_date).map((p) => p.publish_date!).sort().pop();
       return { id: "q" + pl, label: pl, sub: last ? `Last post ${fmtDay(last, { day: "numeric", month: "short" })}` : "Nothing posted yet", pillar: pl };
     });
     return [...fromCitations, ...quiet];
-  }, [posts]);
+  }, [posts, pillars]);
 
   const material = () => {
     if (src === "link" && page) return `SOURCE PAGE (${page.host}): ${page.title}\nThe point to post about: ${page.points[page.pick] ?? ""}\n\n${page.text.slice(0, 6000)}`;
     if (src === "pdf" && pdf) return `SOURCE PDF (${pdf.name}). The point to post about: ${pdf.points[pdf.pick] ?? ""}\n\n${pdf.text.slice(0, 6000)}`;
-    if (src === "comment") { const c = saved.comments.find((x) => x.id === commentPick); return c ? `HIS OWN COMMENT, to grow into a post:\n${c.text}` : ""; }
+    if (src === "comment") { const c = saved.comments.find((x) => x.id === commentPick); return c ? `THEIR OWN COMMENT, to grow into a post:\n${c.text}` : ""; }
     if (src === "gap") { const g = gaps.find((x) => x.id === gapPick); return g ? `TOPIC GAP: ${g.label}. ${g.sub}.` : ""; }
-    if (src === "draft") return `HIS ROUGH DRAFT, keep his words where they work:\n${srcText}`;
+    if (src === "draft") return `THEIR ROUGH DRAFT, keep their words where they work:\n${srcText}`;
     return `HIS IDEA: ${srcText}`;
   };
   const angleText = angle === "own" ? ownAngle.trim() : angles[angle]?.text ?? "";
-  const angleCtx = () => (angleText ? `\nANGLE (what Shashi says about it; every line follows it): ${angleText}` : "");
-  const ctx = () => `${material()}\n\nFORMAT: ${type}.\n${povText(settings.pov)}\nContent pillars: ${PILLARS.join("; ")}.${channel === "company" ? "\nThis is for the Antier company page, written as the company, not as Shashi." : ""}`;
+  const angleCtx = () => (angleText ? `\nANGLE (what ${first} says about it; every line follows it): ${angleText}` : "");
+  const ctx = () => `${material()}\n\nFORMAT: ${type}.\n${povText(settings.pov, first)}\n${pillars.length ? `Content pillars: ${pillars.join("; ")}.` : ""}${channel === "company" ? `\nThis is for the ${company} company page, written as the company, not as ${first}.` : ""}`;
   const ai = async <T,>(label: string, user: string): Promise<T | null> => {
     setBusy(label); setErr("");
     try { const out = await askExtension<string>("ai", { kind: "studio", user }, 90000); const j = parseJSON<T>(out); if (!j) throw new Error("The AI reply could not be read. Try again."); return j; }
@@ -171,7 +175,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (!r.ok) { setErr(j.error ?? "That page could not be read."); return; }
     const base = { title: j.title || j.host, host: j.host, text: j.text as string, points: [] as string[], pick: 0 };
     setPage(base);
-    const pts = await ai<{ points: string[] }>("points", `PAGE: ${j.title}\n${String(j.text).slice(0, 8000)}\n\nPull the three points from this page most relevant to a C-suite fintech and banking audience and to these pillars: ${PILLARS.join("; ")}. Each under 14 words. Return only JSON: {"points": ["...", "...", "..."]}`);
+    const pts = await ai<{ points: string[] }>("points", `PAGE: ${j.title}\n${String(j.text).slice(0, 8000)}\n\nPull the three points from this page most relevant to this profile's senior buyers${pillars.length ? ` and to these pillars: ${pillars.join("; ")}` : ""}. Each under 14 words. Return only JSON: {"points": ["...", "...", "..."]}`);
     setPage({ ...base, points: pts?.points?.slice(0, 3) ?? String(j.text).split(/\n+/).filter((x: string) => x.length > 60).slice(0, 3).map((x: string) => x.slice(0, 120)) });
   }
   async function readPdf(f: File) {
@@ -182,15 +186,15 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (!r.ok) { setErr(j.error ?? "The PDF could not be read."); return; }
     const base = { name: f.name, text: j.text as string, points: [] as string[], pick: 0 };
     setPdf(base);
-    const pts = await ai<{ points: string[] }>("points", `DOCUMENT: ${f.name}\n${String(j.text).slice(0, 8000)}\n\nPull the three points most relevant to a C-suite fintech and banking audience. Each under 14 words. Return only JSON: {"points": ["...", "...", "..."]}`);
+    const pts = await ai<{ points: string[] }>("points", `DOCUMENT: ${f.name}\n${String(j.text).slice(0, 8000)}\n\nPull the three points most relevant to this profile's senior buyers. Each under 14 words. Return only JSON: {"points": ["...", "...", "..."]}`);
     setPdf({ ...base, points: pts?.points?.slice(0, 3) ?? [] });
   }
   async function getIdeas() {
-    const j = await ai<unknown>("ideas", `${ctx()}\n\nPropose 4 post ideas for this profile from the source above. Score each 0 to 100 on fit with his pillars, relevance to C-suite buyers at banks and fintechs in MENA and India, and freshness. Give one line on why, and the pillar.\nReturn only JSON: {"ideas": [{"title": "...", "why": "...", "pillar": "...", "score": 80}]}`);
+    const j = await ai<unknown>("ideas", `${ctx()}\n\nPropose 4 post ideas for this profile from the source above. Score each 0 to 100 on fit with the pillars, relevance to the profile's senior buyers${region ? ` in ${region}` : ""}, and freshness. Give one line on why, and the pillar.\nReturn only JSON: {"ideas": [{"title": "...", "why": "...", "pillar": "...", "score": 80}]}`);
     if (j) { const list = parseIdeas(j); setIdeas(list); if (list[0]) { setIdea(list[0]); setPillar(list[0].pillar); } }
   }
   async function getAngles() {
-    const j = await ai<{ angles: { kind: string; text: string }[] }>("angles", `${ctx()}\n\nIDEA: ${idea?.title}\n\nWrite one angle of each kind for this post, one line each, under 22 words: ${ANGLE_KINDS.join("; ")}. Each says what Shashi argues, not what the news says. No dashes, no contractions.\nReturn only JSON: {"angles": [{"kind": "Contrarian", "text": "..."}]}`);
+    const j = await ai<{ angles: { kind: string; text: string }[] }>("angles", `${ctx()}\n\nIDEA: ${idea?.title}\n\nWrite one angle of each kind for this post, one line each, under 22 words: ${ANGLE_KINDS.join("; ")}. Each says what ${first} argues, not what the news says. No dashes, no contractions.\nReturn only JSON: {"angles": [{"kind": "Contrarian", "text": "..."}]}`);
     const isKind = (k: string) => (ANGLE_KINDS as readonly string[]).includes(k);
     const got = (j?.angles ?? []).filter((a) => a?.text && isKind(a.kind)).map((a) => ({ kind: a.kind, text: String(a.text).trim() }));
     if (got.length) setAngles((cur) => [...cur.filter((a) => !isKind(a.kind)), ...got]);
@@ -212,7 +216,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (j?.text) { setText(j.text); toast(`${label} applied`, () => setText(prev)); }
   }
   async function getScript() {
-    const j = await ai<Partial<Script>>("script", `${ctx()}${angleCtx()}\n\nIDEA: ${idea?.title}\nFIRST LINE HE SAYS: ${hook}\n\nWrite a 45 to 75 second talking-head script: 3 to 5 beats, each with what he says (one or two sentences) and what shows on screen, a closing line, and a caption of 2 to 3 sentences for the post. No dashes, no contractions.\nReturn only JSON: {"beats": [{"say": "...", "show": "..."}], "close": "...", "caption": "..."}`);
+    const j = await ai<Partial<Script>>("script", `${ctx()}${angleCtx()}\n\nIDEA: ${idea?.title}\nFIRST LINE SPOKEN: ${hook}\n\nWrite a 45 to 75 second talking-head script: 3 to 5 beats, each with what is said (one or two sentences) and what shows on screen, a closing line, and a caption of 2 to 3 sentences for the post. No dashes, no contractions.\nReturn only JSON: {"beats": [{"say": "...", "show": "..."}], "close": "...", "caption": "..."}`);
     if (j) setScript((s) => ({ ...s, hook, beats: (j.beats ?? s.beats).slice(0, 5), close: j.close ?? s.close, caption: j.caption ?? s.caption }));
   }
   async function getSlides() {
@@ -257,7 +261,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (!p) return;
     await syncApprovalSession(ws.id, ws.slug, posts.map((x) => (x.id === p.id ? p : x)).concat(posts.some((x) => x.id === p.id) ? [] : [p]));
     logActivity(ws.id, "approval", `Sent for approval: ${p.title}`, p.id); haptic();
-    toast("Sent to Shashi. It is in his weekly approval session on Today.", async () => { await supabase().from("posts").update({ status: "Drafting", requested_at: null, requested_by: null }).eq("id", p.id); });
+    toast(`Sent to ${first}. It is in the weekly approval session on Today.`, async () => { await supabase().from("posts").update({ status: "Drafting", requested_at: null, requested_by: null }).eq("id", p.id); });
   }
   async function decide(approved: boolean) {
     if (!approved && !note.trim()) { toast("Add a short note so the team knows what to change"); return; }
@@ -271,14 +275,14 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
     if (!postId) return;
     const { error } = await supabase().from("posts").update({ status: "Drafting", requested_at: null, requested_by: null }).eq("id", postId);
     if (error) { toast(error.message); return; }
-    haptic(); toast("Withdrawn. Shashi no longer sees it.", async () => { await supabase().from("posts").update({ status: "In review", requested_at: live?.requested_at, requested_by: live?.requested_by }).eq("id", postId); });
+    haptic(); toast(`Withdrawn. ${first} no longer sees it.`, async () => { await supabase().from("posts").update({ status: "In review", requested_at: live?.requested_at, requested_by: live?.requested_by }).eq("id", postId); });
   }
   async function addToPlan() {
     if (!postId) return;
     const prev = { publish_date: live?.publish_date ?? null, planned_time: live?.planned_time ?? "" };
     const { error } = await supabase().from("posts").update({ publish_date: planDay, planned_time: planTime }).eq("id", postId);
     if (error) { toast(error.message); return; }
-    haptic(); toast(`Planned for ${fmtDay(planDay)}, ${planTime}. Today reminds Shashi then.`, async () => { await supabase().from("posts").update(prev).eq("id", postId); });
+    haptic(); toast(`Planned for ${fmtDay(planDay)}, ${planTime}. Today reminds ${first} then.`, async () => { await supabase().from("posts").update(prev).eq("id", postId); });
   }
   async function handOff() {
     try { await navigator.clipboard.writeText(body); } catch {}
@@ -320,7 +324,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                 <span className="text-[14px] font-semibold">{t}</span><span className="text-[12.5px] leading-snug text-muted">{sub}</span></button>)}
             </div>
             <div className="card flex flex-col gap-3 p-4">
-              {(src === "idea" || src === "draft") && <label className="flex flex-col gap-2"><span className="label">{src === "idea" ? "What does Shashi want to say?" : "Paste the rough draft"}</span><textarea className="field min-h-[110px] text-[14px]" value={srcText} onChange={(e) => setSrcText(e.target.value)} placeholder={src === "idea" ? "A sentence or two is enough." : "His own words, however rough."} /></label>}
+              {(src === "idea" || src === "draft") && <label className="flex flex-col gap-2"><span className="label">{src === "idea" ? `What does ${first} want to say?` : "Paste the rough draft"}</span><textarea className="field min-h-[110px] text-[14px]" value={srcText} onChange={(e) => setSrcText(e.target.value)} placeholder={src === "idea" ? "A sentence or two is enough." : "Their own words, however rough."} /></label>}
               {src === "link" && <>
                 <label htmlFor="src-url" className="label">Paste a link</label>
                 <div className="flex gap-2"><input id="src-url" type="url" className="field h-11" placeholder="https://" value={url} onChange={(e) => { setUrl(e.target.value); setPage(null); }} /><button className="btn btn-primary h-11 px-5" disabled={!url || busy === "link"} onClick={readLink}>{busy === "link" ? "Reading" : page ? "Read again" : "Fetch"}</button></div>
@@ -341,7 +345,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                   <span className="flex flex-wrap gap-1.5">{pdf.points.map((pt, i) => <button key={i} className="rounded-full px-3 py-1 text-left text-[12.5px] font-semibold" style={{ background: pdf.pick === i ? "#d64545" : "rgba(255,255,255,.1)" }} onClick={() => setPdf({ ...pdf, pick: i })}>{pt}</button>)}{!pdf.points.length && <span className="text-[12.5px] text-[#cfcfcf]">{busy === "points" ? "Finding the points" : "Read. Pick the angle in the next steps."}</span>}</span></div>}
               </>}
               {src === "comment" && <>
-                <span className="label">Pick one of his comments</span>
+                <span className="label">Pick one of their comments</span>
                 {saved.comments.map((c) => <button key={c.id} aria-pressed={commentPick === c.id} className={pick(commentPick === c.id)} onClick={() => setCommentPick(c.id)}><span className="text-[11.5px] text-faint">{c.meta}</span><span className="line-clamp-3 text-[13.5px] leading-snug">{c.text}</span></button>)}
                 {!saved.comments.length && <p className="m-0 text-[13px] text-muted">No saved or posted comments yet. Save drafts in Comment Studio, or post comments with the extension.</p>}
               </>}
@@ -357,8 +361,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3" data-tour="types">
               {TYPES.map(([k, sub, len]) => <button key={k} aria-pressed={type === k} className={pick(type === k)} onClick={() => setType(k)}><span className="text-[14px] font-semibold">{k}</span><span className="text-[12.5px] text-muted">{sub}</span><span className="num text-[11px] text-faint">{len}</span></button>)}
             </div>
-            <label className="flex flex-col gap-1.5"><span className="label">Where it goes</span><select className="field w-auto" value={channel} onChange={(e) => setChannel(e.target.value as "shashi" | "company")}><option value="shashi">Shashi&apos;s own profile</option><option value="company">Antier company page</option></select></label>
-            {channel === "company" && <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] text-white">Company content, not for Shashi&apos;s profile. It is flagged this way in Library and Plan.</p>}
+            <label className="flex flex-col gap-1.5"><span className="label">Where it goes</span><select className="field w-auto" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}><option value={PROFILE_CHANNEL}>{possessive(first)} own profile</option><option value="company">{cap(company)} company page</option></select></label>
+            {channel === "company" && <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] text-white">Company content, not for {possessive(first)} profile. It is flagged this way in Library and Plan.</p>}
           </div>}
 
           {step === 2 && <div className="flex flex-col gap-3">
@@ -367,12 +371,12 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <span className="num grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full text-[16px] text-white" style={{ background: idea?.title === x.title ? "#d64545" : "#141414" }}>{x.score}</span>
               <span className="flex min-w-0 flex-col gap-1"><span className="text-[15px] font-semibold leading-snug">{x.title}</span><span className="text-[13px] text-muted">{x.why}</span><span className="text-[12px] font-semibold text-[#d64545]">{x.pillar}</span></span></button>)}
             <div className="card flex flex-col gap-2 p-3.5"><span className="label">Or use your own</span><div className="flex gap-2"><input className="field" placeholder="The idea in one line" value={ownIdea} onChange={(e) => setOwnIdea(e.target.value)} /><button className="btn btn-dark" disabled={!ownIdea.trim()} onClick={() => { setIdea({ title: ownIdea.trim(), why: "", pillar, score: 0 }); setOwnIdea(""); }}>Use it</button></div>
-              <label className="flex items-center gap-2 text-[12.5px] text-muted">Pillar<select className="field h-8 w-auto" value={pillar} onChange={(e) => setPillar(e.target.value)}><option value="">Not set</option>{PILLARS.map((p) => <option key={p}>{p}</option>)}</select></label>
+              <label className="flex items-center gap-2 text-[12.5px] text-muted">Pillar<select className="field h-8 w-auto" value={pillar} onChange={(e) => setPillar(e.target.value)}><option value="">Not set</option>{pillars.map((p) => <option key={p}>{p}</option>)}</select></label>
               {idea && <span className="text-[13px]">Chosen: <b>{idea.title}</b></span>}</div>
           </div>}
 
           {step === S.angle && <div className="flex flex-col gap-3" data-tour="angles">
-            <H t="Choose the angle" sub="What Shashi will say about it. The angle steers the opening line and all three drafts." right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getAngles}>{busy === "angles" ? "Thinking" : "Sharpen with AI"}</button>} />
+            <H t="Choose the angle" sub={`What ${first} will say about it. The angle steers the opening line and all three drafts.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getAngles}>{busy === "angles" ? "Thinking" : "Sharpen with AI"}</button>} />
             {topic && <div className="flex flex-col gap-1.5 rounded-[14px] border border-line bg-white px-4 py-3.5"><span className="text-[12px] font-semibold text-[#d64545]">{topic.tag}</span><span className="text-[15px] font-[650] leading-snug">{topic.title}</span><span className="text-[12.5px] text-muted">{topic.line}</span></div>}
             {angles.map((a, i) => <button key={a.kind + i} aria-pressed={angle === i} className={pick(angle === i)} onClick={() => setAngle(i)}>
               <span className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: a.kind === "Suggested by Discovery Studio" ? "#d64545" : "#5f5f5f" }}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === i ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />{a.kind}</span>
@@ -380,13 +384,13 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
             <div className={pick(angle === "own") + " !gap-2"}>
               <button className="flex items-center gap-2 text-[12px] font-semibold" onClick={() => setAngle("own")}><span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ border: angle === "own" ? "4px solid #d64545" : "1.5px solid #c0c0c0" }} />Your own angle</button>
               <label htmlFor="own-angle" className="sr-only">Your own angle</label>
-              <textarea id="own-angle" className="field text-[14px]" rows={2} value={ownAngle} onFocus={() => setAngle("own")} onChange={(e) => { setOwnAngle(e.target.value); setAngle("own"); }} placeholder="In one line: what Shashi wants to say about it" />
+              <textarea id="own-angle" className="field text-[14px]" rows={2} value={ownAngle} onFocus={() => setAngle("own")} onChange={(e) => { setOwnAngle(e.target.value); setAngle("own"); }} placeholder={`In one line: what ${first} wants to say about it`} />
             </div>
           </div>}
 
           {step === S.hook && <div className="flex flex-col gap-3">
             <AngleBar />
-            <H t={video ? "Choose the first line he says" : "Choose the opening line"} sub={video ? "The first 3 seconds decide whether people keep watching." : `Mobile shows about ${FOLD.mobile} characters before "see more". Each line is checked against it.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getHooks}><Sparkles size={14} /> {busy === "hooks" ? "Writing" : hooks.length ? "Write again" : "Write hooks"}</button>} />
+            <H t={video ? `Choose the first line ${first} says` : "Choose the opening line"} sub={video ? "The first 3 seconds decide whether people keep watching." : `Mobile shows about ${FOLD.mobile} characters before "see more". Each line is checked against it.`} right={editable && <button className="btn h-9" disabled={!!busy || !idea} onClick={getHooks}><Sparkles size={14} /> {busy === "hooks" ? "Writing" : hooks.length ? "Write again" : "Write hooks"}</button>} />
             {hooks.map((h) => { const ok = video ? sayableIn3s(h.text) : hookFits(h.text, device); return (
               <button key={h.text} aria-pressed={hook === h.text} className={pick(hook === h.text) + " !flex-row !items-center !gap-3"} onClick={() => setHook(h.text)}>
                 <span className="h-[18px] w-[18px] shrink-0 rounded-full bg-white" style={{ border: hook === h.text ? "6px solid #d64545" : "1.5px solid #d0d0d0" }} />
@@ -398,7 +402,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           {step === S.draft && !video && <div className="flex flex-col gap-3">
             <AngleBar />
-            <H t="Shape the draft" sub="Three drafts to choose from. Edit freely; every rule is checked as you type." right={<span className="text-[12.5px] text-muted">In Shashi&apos;s voice · <Link href={`/w/${ws.slug}/studio`} className="font-semibold text-ink underline underline-offset-2">Voice settings</Link></span>} />
+            <H t="Shape the draft" sub="Three drafts to choose from. Edit freely; every rule is checked as you type." right={<span className="text-[12.5px] text-muted">In {possessive(first)} voice · <Link href={`/w/${ws.slug}/studio`} className="font-semibold text-ink underline underline-offset-2">Voice settings</Link></span>} />
             <div className="flex flex-wrap gap-2">
               {drafts.map((d, i) => <button key={i} aria-pressed={dIdx === i} className={pick(dIdx === i) + " !flex-1 !gap-1 !p-3"} onClick={() => { setDIdx(i); setText(d.text); }}><span className="text-[13px] font-semibold">Draft {"ABC"[i]} · {d.angle || "Angle"}</span><span className="num flex gap-3 text-[11.5px]"><span>Human {humanScore(d.text).score}</span><span style={{ color: d.impact >= 70 ? "#d64545" : "#5f5f5f" }}>Impact {d.impact || "–"}</span></span></button>)}
               {editable && <button className="btn h-auto min-h-[56px] px-4" disabled={!!busy || !hook} onClick={getDrafts}><Sparkles size={14} /> {busy === "drafts" ? "Writing" : drafts.length ? "Write three more" : "Write three drafts"}</button>}
@@ -416,7 +420,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           {step === S.draft && video && <div className="flex flex-col gap-3">
             <AngleBar />
-            <H t="Write the script" sub="What Shashi says, and what shows on screen while he says it." right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-[12px] text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
+            <H t="Write the script" sub={`What ${first} says, and what shows on screen while it is said.`} right={<span className="flex items-center gap-2"><span className="num rounded-full bg-[#141414] px-3 py-1 text-[12px] text-white">About {Math.round(spoken / 2.5)} seconds spoken</span>{editable && <button className="btn h-9" disabled={!!busy || !hook} onClick={getScript}><Sparkles size={14} /> {busy === "script" ? "Writing" : "Write the script"}</button>}</span>} />
             <label className="flex flex-col gap-2 rounded-2xl bg-[#141414] p-4 text-white"><span className="text-[12.5px] font-semibold text-[#ff8a80]">Hook · first 3 seconds</span><input className="h-11 rounded-xl border border-white/20 bg-white/5 px-3 text-[15px] font-semibold text-white outline-none" value={script.hook || hook} onChange={(e) => setScript({ ...script, hook: e.target.value })} /></label>
             {script.beats.map((b, i) => (
               <div key={i} className="card flex gap-3 p-3.5">
@@ -438,13 +442,13 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <H t="Cover and captions" sub="The first frame people see in the feed, and how the words appear on screen." />
               <div className="grid grid-cols-3 gap-2.5">{[["dark", "#141414", "#fff"], ["red", "#d64545", "#fff"], ["white", "#fff", "#141414"]].map(([k, bg, fg]) => (
                 <button key={k} aria-pressed={script.cover === k} className={pick(script.cover === k) + " !p-2.5"} onClick={() => setScript({ ...script, cover: k })}>
-                  <span className="flex aspect-[4/5] w-full flex-col gap-2 rounded-xl p-3 text-left" style={{ background: bg, color: fg, border: k === "white" ? "1px solid #e8e8e8" : 0 }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">Shashi Pal · Antier</span><span className="text-[14px] font-bold leading-snug">{script.hook || hook}</span></span>
+                  <span className="flex aspect-[4/5] w-full flex-col gap-2 rounded-xl p-3 text-left" style={{ background: bg, color: fg, border: k === "white" ? "1px solid #e8e8e8" : 0 }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-[14px] font-bold leading-snug">{script.hook || hook}</span></span>
                   <span className="text-[12.5px] font-semibold capitalize">{k} cover</span></button>))}</div>
               <div className="card flex flex-wrap items-center gap-3 p-4"><span className="min-w-[200px] flex-1"><b className="block">Burned-in captions</b><span className="text-[12.5px] text-muted">Most feed videos play muted, so the words carry the point.</span></span>
                 <div className="flex rounded-lg border border-line p-0.5">{[["bold", "Bold block"], ["line", "Clean line"], ["off", "Off"]].map(([k, l]) => <button key={k} className={`h-8 rounded-md px-3 text-[13px] font-semibold ${script.captions === k ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => setScript({ ...script, captions: k })}>{l}</button>)}</div></div>
-              <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-3 text-[13px] text-white">Prax writes the script and captions; Shashi records the video.</p>
+              <p className="m-0 rounded-xl bg-[#141414] px-3.5 py-3 text-[13px] text-white">Prax writes the script and captions; {first} records the video.</p>
             </> : type === "Carousel" ? <>
-              <H t="Build the carousel" sub="Antier's template keeps the text sharp. LinkedIn takes it as a PDF document." right={<span className="flex gap-2">{editable && <button className="btn h-9" disabled={!!busy} onClick={getSlides}><Sparkles size={14} /> {busy === "slides" ? "Writing" : slides.length ? "Write again" : "Write the slides"}</button>}<button className="btn btn-primary h-9" disabled={!slides.length} onClick={() => { const b = carouselPdf(slides); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([b.buffer as ArrayBuffer], { type: "application/pdf" })); a.download = `${(idea?.title || "carousel").slice(0, 40).replace(/[^\w]+/g, "-").toLowerCase()}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }}><Download size={14} /> Download PDF</button></span>} />
+              <H t="Build the carousel" sub="The house template keeps the text sharp. LinkedIn takes it as a PDF document." right={<span className="flex gap-2">{editable && <button className="btn h-9" disabled={!!busy} onClick={getSlides}><Sparkles size={14} /> {busy === "slides" ? "Writing" : slides.length ? "Write again" : "Write the slides"}</button>}<button className="btn btn-primary h-9" disabled={!slides.length} onClick={() => { const b = carouselPdf(slides, byline.replace(" · ", " - ")); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([b.buffer as ArrayBuffer], { type: "application/pdf" })); a.download = `${(idea?.title || "carousel").slice(0, 40).replace(/[^\w]+/g, "-").toLowerCase()}.pdf`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }}><Download size={14} /> Download PDF</button></span>} />
               <div className="flex gap-2.5 overflow-x-auto pb-2">{slides.map((s, i) => { const dark = i === 0 || i === slides.length - 1; return (
                 <div key={i} className="flex h-[200px] w-[160px] shrink-0 flex-col gap-1.5 rounded-xl border p-3" style={{ background: dark ? "#141414" : "#fff", color: dark ? "#fff" : "#141414", borderColor: dark ? "#141414" : "#e8e8e8" }}>
                   <span className="num text-[10px] text-[#d64545]">{String(i + 1).padStart(2, "0")}</span>
@@ -458,7 +462,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <button className="btn w-fit" disabled={pollOpts.length >= 4} onClick={() => setPollOpts([...pollOpts, ""])}>Add an option</button>
             </> : <>
               <H t="Add a visual" sub="Optional. Plain text posts often reach further, which suits an opinion." />
-              <div className="grid grid-cols-3 gap-2.5">{[["statement", "Statement card", "His key line, set large."], ["diagram", "Simple diagram", "Boxes that show a flow."], ["photo", "Photo with caption", "An editorial image."]].map(([k, t, sub]) => (
+              <div className="grid grid-cols-3 gap-2.5">{[["statement", "Statement card", "The key line, set large."], ["diagram", "Simple diagram", "Boxes that show a flow."], ["photo", "Photo with caption", "An editorial image."]].map(([k, t, sub]) => (
                 <button key={k} aria-pressed={layout === k} className={pick(layout === k) + " !p-2.5"} onClick={() => setLayout(k)}>
                   <svg viewBox="0 0 120 80" className="w-full rounded-lg border border-[#ececec]" aria-hidden="true"><rect width="120" height="80" fill="#fff" />{k === "statement" ? <><rect x="14" y="18" width="78" height="6" fill="#141414" /><rect x="14" y="30" width="66" height="6" fill="#141414" /><rect x="14" y="42" width="40" height="6" fill="#141414" /><rect x="14" y="62" width="14" height="2" fill="#d64545" /></> : k === "diagram" ? <><rect x="10" y="30" width="26" height="20" rx="2" fill="none" stroke="#141414" /><rect x="47" y="30" width="26" height="20" rx="2" fill="none" stroke="#141414" /><rect x="84" y="30" width="26" height="20" rx="2" fill="#141414" /><path d="M37 40h9M74 40h9" stroke="#d64545" /></> : <><rect x="10" y="10" width="100" height="44" rx="2" fill="#ececec" /><rect x="10" y="62" width="62" height="4" fill="#141414" /></>}</svg>
                   <span className="text-[13px] font-semibold">{t}</span><span className="text-[12px] text-muted">{sub}</span></button>))}</div>
@@ -473,10 +477,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
           {step === S.plan && <div className="flex flex-col gap-3.5" data-tour="handoff">
             {angleText && <AngleBar />}
-            <H t="Plan and hand off" sub="Prax never posts. It copies the post, opens LinkedIn and reminds Shashi at the planned time." right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
+            <H t="Plan and hand off" sub={`Prax never posts. It copies the post, opens LinkedIn and reminds ${first} at the planned time.`} right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
             {type === "Article" && settings.newsletter.name && <label className="flex items-center gap-2 rounded-xl border border-line bg-white px-3.5 py-3 text-[13.5px]"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} />Part of the <b>{settings.newsletter.name}</b> newsletter</label>}
             {!!flags.length && <div className="rounded-xl border-2 border-[#d64545] bg-white p-4" data-tour="claims">
-              <div className="mb-2 text-[13px] font-semibold">Check before it goes to Shashi</div>
+              <div className="mb-2 text-[13px] font-semibold">Check before it goes to {first}</div>
               <ul className="m-0 flex list-none flex-col gap-2 p-0">{flags.map((f, i) => <li key={i} className="text-[13px]"><span className="font-semibold text-[#d64545]">{f.kind === "returns" ? "Returns" : f.kind === "timeline" ? "Timeline" : f.kind === "client" ? "Client named" : f.kind === "regulator" ? "Regulator" : "Confidential"}</span> · &ldquo;{f.text}&rdquo;<span className="block text-[12px] text-muted">{f.why}</span></li>)}</ul>
               <label className="mt-3 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />I checked these and they are fine to publish</label>
             </div>}
@@ -485,12 +489,12 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               {st === "In review" ? (owner ? <>
                 <textarea className="field text-[13px]" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
                 <div className="flex gap-2"><button className="btn btn-primary" onClick={() => decide(true)}>Approve</button><button className="btn" onClick={() => decide(false)}>Ask for changes</button></div>
-              </> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13px]">With Shashi. It is in his approval session on Today.</span><button className="btn" onClick={withdraw}>Withdraw</button></div>)
+              </> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[13px]">With {first}. It is in the approval session on Today.</span><button className="btn" onClick={withdraw}>Withdraw</button></div>)
                 : st === "Ready" || st === "Posted" ? <span className="text-[13px]">Approved. It can go on the plan.</span>
                 : <>
-                  {live?.decision === "changes" && live.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">Shashi asked for changes: &ldquo;{live.decision_note}&rdquo;</p>}
-                  <p className="m-0 text-[13px] leading-relaxed">Shashi owns this profile, so team drafts need his yes before they are planned. He sees them in one weekly approval session on his Today list.</p>
-                  {editable && <div className="flex flex-wrap gap-2"><button className="btn" onClick={saveDraft}>Save draft</button><button className="btn btn-primary" onClick={sendForApproval}>Send to Shashi for approval</button>{owner && <button className="btn btn-ghost" onClick={() => decide(true)}>Approve it myself</button>}</div>}
+                  {live?.decision === "changes" && live.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">{first} asked for changes: &ldquo;{live.decision_note}&rdquo;</p>}
+                  <p className="m-0 text-[13px] leading-relaxed">{cap(first)} owns this profile, so team drafts need a yes before they are planned. They arrive in one weekly approval session on Today.</p>
+                  {editable && <div className="flex flex-wrap gap-2"><button className="btn" onClick={saveDraft}>Save draft</button><button className="btn btn-primary" onClick={sendForApproval}>Send to {first} for approval</button>{owner && <button className="btn btn-ghost" onClick={() => decide(true)}>Approve it myself</button>}</div>}
                 </>}
             </div>
             <div className="grid grid-cols-2 gap-2.5">
@@ -498,7 +502,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               <label className="flex flex-col gap-1.5"><span className="label">Time, Dubai</span><input type="time" className="field h-11" value={planTime} onChange={(e) => setPlanTime(e.target.value)} /></label>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button className="btn btn-dark h-12 px-5" disabled={st !== "Ready"} title={st !== "Ready" ? "Shashi approves it first" : ""} onClick={addToPlan}>Add to the plan</button>
+              <button className="btn btn-dark h-12 px-5" disabled={st !== "Ready"} title={st !== "Ready" ? `${cap(first)} approves it first` : ""} onClick={addToPlan}>Add to the plan</button>
               <button className="btn btn-primary h-12 px-5" disabled={st !== "Ready" && st !== "Posted"} onClick={handOff}><Copy size={15} /> Copy and open LinkedIn</button>
               <button className="btn btn-ghost h-12" onClick={reset}>Start a new post</button>
             </div>
@@ -513,9 +517,9 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
         <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
           <LinkedInPreview text={body || hook} image={image} company={channel === "company"} device={device} setDevice={setDevice}
-            video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">Shashi Pal · Antier</span><span className="text-[17px] font-bold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-[13px] font-bold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
+            video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-[17px] font-bold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-[13px] font-bold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
             footer={!video && <> · Human {human.score}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />
-          {channel === "company" && <p className="m-0 text-center text-[12.5px] font-semibold">Company content, not for Shashi&apos;s profile</p>}
+          {channel === "company" && <p className="m-0 text-center text-[12.5px] font-semibold">Company content, not for {possessive(first)} profile</p>}
         </aside>
       </div>
     </div>

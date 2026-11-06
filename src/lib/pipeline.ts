@@ -152,17 +152,19 @@ export function planFor(p: Pipeline, stage: string): string[] {
 /** The Today item key for one step, kept in daily_items.note. */
 export const stepKey = (prospectId: string, stage: string, i: number) => `pipeline:${prospectId}:${stage}:${i}`;
 
-/** What to ask the AI for, in Prax's voice rules. The reply is copied and sent by hand. */
-export function messagePrompt(l: Pick<Prospect, "name" | "role" | "company" | "why" | "notes">, stage: string, pipeline: string): string {
-  return `Draft one short LinkedIn direct message from Shashi Pal (Co-Founder and COO, Antier) to ${l.name}${l.role ? `, ${l.role}` : ""}${l.company ? ` at ${l.company}` : ""}.
+/** What to ask the AI for, in Prax's voice rules. The reply is copied and sent by hand.
+ *  who: the sender, whoLine of the profile in src/lib/persona.ts ("Name, Role at Company"). */
+export function messagePrompt(l: Pick<Prospect, "name" | "role" | "company" | "why" | "notes">, stage: string, pipeline: string, who: string): string {
+  return `Draft one short LinkedIn direct message from ${who} to ${l.name}${l.role ? `, ${l.role}` : ""}${l.company ? ` at ${l.company}` : ""}.
 Pipeline: ${pipeline}. Stage: ${stage}. ${l.why ? `Why they fit: ${l.why}. ` : ""}${l.notes ? `Notes: ${l.notes.slice(0, 600)}. ` : ""}
 Rules: under 70 words, plain and specific, no pitch, no em dashes, no contractions, no emoji, one clear ask that suits the stage. Return only the message text.`;
 }
 /** A plain fallback when the extension is not there. */
-export function templateMessage(l: Pick<Prospect, "name">, stage: string): string {
+/** company: the profile's company, empty when unknown. */
+export function templateMessage(l: Pick<Prospect, "name">, stage: string, company = ""): string {
   const f = l.name.split(/\s+/)[0] || l.name;
-  if (stage === "Target" || stage === "Warming") return `Hi ${f}, I have been following your posts. We work on the same problems with banks at Antier, and I would value being connected.`;
-  if (stage === "Connected") return `Thanks for connecting, ${f}. Your recent point matched what we keep seeing with Gulf and Indian banks. Happy to share a short note on how two of them handled it, if useful.`;
+  if (stage === "Target" || stage === "Warming") return `Hi ${f}, I have been following your posts. We work on similar problems${company ? ` at ${company}` : ""}, and I would value being connected.`;
+  if (stage === "Connected") return `Thanks for connecting, ${f}. Your recent point matched what we keep seeing in our own work. Happy to share a short note on how others handled it, if useful.`;
   if (stage === "In conversation") return `${f}, here is the short note I mentioned. Two pages, no pitch. Would a 20-minute call next week help?`;
   if (stage === "Resource sent") return `${f}, did the note help? If a 20-minute call would be useful, I can do Tuesday or Wednesday.`;
   return `${f}, following up on our last conversation. Is there a good time this week for a short call?`;

@@ -4,7 +4,7 @@
 // every move asks for the next action and its date, so it lands on Today. [ and ] move the focused row.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
-import { useWorkspace, SEGMENTS, today as todayYmd } from "@/lib/workspace";
+import { useWorkspace, useSegments, today as todayYmd } from "@/lib/workspace";
 import { indexPeople, normName, warmPaths, type Warm } from "@/lib/network";
 import { doNext, heatOf, isClosed, stepStage, dueText, dueTone, fmtShort, avgDays, byCompany, type HeatBand, type Pipeline, type Prospect } from "@/lib/pipeline";
 import { Section, type TourStep } from "@/components/shell";
@@ -14,12 +14,12 @@ import { MoveDialog, PipelinesPanel, ImportPanel, AddLeadPanel } from "./panels"
 import type { PipelineApi, PipelineData } from "./types";
 
 const TOUR: TourStep[] = [
-  { target: "header", title: "What Pipeline is for", body: "Everyone Shashi is building a relationship with, and the one next step for each. Prax suggests and drafts; you send every comment and message yourself." },
+  { target: "header", title: "What Pipeline is for", body: "Everyone this profile is building a relationship with, and the one next step for each. Prax suggests and drafts; you send every comment and message yourself." },
   { target: "donext", title: "Do next", body: "The few people who need you now: overdue first, then today. Open one to see the action and finish it." },
   { target: "tools", title: "Find people fast", body: "Search, or narrow to Overdue or Hot. Segment and owner sit under More filters. Group by company shows every contact at each bank together." },
   { target: "list", title: "Everyone, by stage", body: "Each stage folds open or closed. A row shows the next action and how warm the person is. Click anyone to open their panel." },
   { target: "pipemenu", title: "Pipelines", body: "Switch pipelines here, start a new one from a template, and manage stages and lost reasons." },
-  { target: "actions", title: "Add people", body: "Add people from Shashi's Network or a CSV. Every change of stage asks for the next action and its date, so nothing falls off Today." },
+  { target: "actions", title: "Add people", body: "Add people from Network or a CSV. Every change of stage asks for the next action and its date, so nothing falls off Today." },
 ];
 
 export type LeadInfo = { heat: ReturnType<typeof heatOf>; warm: Warm | null; warmText: string; comments: number; replies: number; lastComment: string };
@@ -40,6 +40,7 @@ function warmLine(w: Warm | null, company: string, hasExport: boolean): string {
 }
 
 export function PipelineScreen({ data, api }: { data: PipelineData; api: PipelineApi }) {
+  const segs = useSegments();
   const { ws, can } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
@@ -223,7 +224,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
                 <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
                 <div className="pl-pop absolute left-0 top-11 z-[41] flex w-[280px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-[#e3e3e3] bg-white p-3.5 shadow-[0_16px_40px_rgba(20,20,20,.14)] max-sm:left-auto max-sm:right-0">
                   <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold">Segment
-                    <select value={fSeg} onChange={(e) => setFSeg(e.target.value)} className="field h-9! font-normal"><option value="">All</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></label>
+                    <select value={fSeg} onChange={(e) => setFSeg(e.target.value)} className="field h-9! font-normal"><option value="">All</option>{Object.entries(segs).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></label>
                   <label className="flex flex-col gap-1.5 text-[12.5px] font-semibold">Owner
                     <select value={fOwner} onChange={(e) => setFOwner(e.target.value)} className="field h-9! font-normal"><option value="">All</option>{data.members.map((m) => <option key={m.user_id} value={m.user_id}>{ownerName(m.email)}</option>)}<option value="none">No owner</option></select></label>
                   <button type="button" className="btn h-8! self-start px-3! text-[12.5px] font-semibold" onClick={clearFilters}>Clear all filters</button>

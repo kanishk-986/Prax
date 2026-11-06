@@ -17,7 +17,7 @@ export const LENGTHS = { short: { lo: 35, hi: 50, label: "Short", sub: "35 to 50
 
 export const DEFAULT_STYLES: Style[] = [
   { id: "agree-add", name: "Agree and add", desc: "The layer the author left out", on: true, rules: "Agree with the main point in one sentence, then add the layer the author did not cover: a consequence, a dependency or a second-order effect." },
-  { id: "coo", name: "COO lens", desc: "The operations behind the headline", on: true, rules: "What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline. Speak from having run it." },
+  { id: "coo", name: "Operator lens", desc: "The operations behind the headline", on: true, rules: "What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline. Speak from having run it." },
   { id: "board", name: "Board lens", desc: "What a board would ask", on: true, rules: "What a board or risk committee would ask about this: exposure, governance, decision timing, who owns the risk." },
   { id: "question", name: "Question", desc: "Earns a reply from the author", on: true, rules: "Add one fact or consequence, then end on one specific question the author can answer from judgment. Never a generic question." },
   { id: "data", name: "Data point", desc: "One number and what it implies", on: true, rules: "Build around one number or fact that is in the post or its source, and what it implies. Never invent a figure." },
@@ -30,7 +30,7 @@ export const DEFAULT_STYLES: Style[] = [
 
 const pb = (type: string, aim: string, works: string[], filler: string[]): Playbook => ({ type, aim, works, filler, examples: [] });
 export const DEFAULT_PLAYBOOKS: Playbook[] = [
-  pb("Announcement or win", "Credit the work, then name what it changes for the market.", ["Name the hard part of what they did", "Say who else it changes things for", "One line of credit, then one line of substance"], ["Congratulations with nothing after it", "Making the comment about Antier", "Turning it into a critique"]),
+  pb("Announcement or win", "Credit the work, then name what it changes for the market.", ["Name the hard part of what they did", "Say who else it changes things for", "One line of credit, then one line of substance"], ["Congratulations with nothing after it", "Making the comment about your own company", "Turning it into a critique"]),
   pb("New role or milestone", "Wish them well and say what the role will face first.", ["Name the first problem the role will meet", "Connect it to a shift in their market", "Keep it short and warm"], ["Generic 'well deserved'", "Pitching services to the new hire", "Listing their career back to them"]),
   pb("Opinion or hot take", "Take a position. Agreement without addition is noise.", ["Agree, then push the claim one step further", "Name the case where the view breaks down", "Bring evidence from operating experience"], ["Fence-sitting", "Restating their take in other words", "Disagreeing with the person, not the idea"]),
   pb("Data or report", "Interrogate the number or say what it implies.", ["Question the sample or the method, specifically", "Name the second-order effect the data implies", "Say what the chart cannot show"], ["Repeating the headline figure", "Inventing a competing statistic", "'Numbers do not lie' filler"]),
@@ -42,7 +42,7 @@ export const DEFAULT_PLAYBOOKS: Playbook[] = [
   pb("Industry news", "Say what it means for people doing the work.", ["Translate the news into a concrete consequence", "Name who wins and who has more work", "Connect it to a pattern seen before"], ["Repeating the headline with an adjective", "Vague future-gazing", "Hot-take posturing with no reasoning"]),
   pb("Question to the audience", "Answer it directly in the first sentence, then justify.", ["Give the actual answer before any context", "Ground it in one thing seen in practice", "Push back on the framing if it hides an assumption"], ["Answering an easier question", "Listing every option without choosing", "Answering with another question"]),
   pb("How-to or lesson", "Add the step they left out, or where the advice fails.", ["Name the failure mode: 'this works until'", "Add the missing step and why it matters", "Say which item does most of the work"], ["A longer list of your own", "Praising it without testing it", "'Saving this for later' energy"]),
-  pb("Hiring", "Be useful to the hire or the hirer. Everything else is spam.", ["Say what kind of person thrives in the role", "Ask a question a candidate would want answered"], ["Commenting for reach", "'Interested' with nothing else", "Pitching Antier"]),
+  pb("Hiring", "Be useful to the hire or the hirer. Everything else is spam.", ["Say what kind of person thrives in the role", "Ask a question a candidate would want answered"], ["Commenting for reach", "'Interested' with nothing else", "Pitching your own company"]),
   pb("Other", "Find the one point worth extending and extend it.", ["Pick the single most useful claim", "Add one specific consequence or question"], ["Summarising the post", "Generic agreement", "Off-topic promotion"]),
 ];
 

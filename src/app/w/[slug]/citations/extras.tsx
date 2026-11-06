@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { X, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useWorkspace, today } from "@/lib/workspace";
+import { useWorkspace, useWho, today } from "@/lib/workspace";
+import { cap, possessive, pillarsOf, regionText, whoLine } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { upsertToday } from "@/components/content/shared";
@@ -22,7 +23,7 @@ const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ")
 const LIVE = ENGINES.filter((e) => e.live);
 const hex = (b: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (t: string) => hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)));
-const PILLARS = ["Money That Moves Itself", "The Liquid Balance Sheet", "Regulation-to-Architecture", "Production-Grade or Nothing", "Agentic Finance", "Build, Buy or Partner"];
+
 
 export type RecRow = { id: string; kind: "profile" | "elsewhere"; title: string; detail: string; question_ids: string[]; status: string; baseline: { named: number; total: number } | null; accepted_at: string | null; post_id: string | null };
 export type SetRow = { id: string; name: string; sort: number };
@@ -62,7 +63,7 @@ export function AlertsCard({ runs, qs, self, rivals }: { runs: Run[]; qs: Questi
   return (
     <section className={cx(s.box, "p-4")}>
       <div className="flex items-center justify-between"><span className={s.label}>Alerts</span><span className={s.small}>since the previous run</span></div>
-      {!list.length ? <p className={cx(s.small, "mt-2")}>Nothing changed. Alerts appear when an answer stops or starts naming him, gets a fact wrong, or a competitor overtakes.</p> : (
+      {!list.length ? <p className={cx(s.small, "mt-2")}>Nothing changed. Alerts appear when an answer stops or starts naming {self.name}, gets a fact wrong, or a competitor overtakes.</p> : (
         <ul className="mt-2 grid gap-2">{list.slice(0, 8).map((a, i) => (
           <li key={i} className="flex items-start gap-2 text-[13px]"><span className={cx(s.pill, ALERT_PILL[a.kind])}>{ALERT_LABEL[a.kind]}</span><span className="min-w-0 pt-0.5">{a.text.replace(/^(Newly named|Dropped out): /, "")}{a.engine && <span className={s.small}> · {ENGINES.find((e) => e.id === a.engine)?.name}</span>}</span></li>
         ))}</ul>
@@ -78,7 +79,7 @@ export function NextMoves({ recs, computed, onAll }: { recs: RecRow[]; computed:
       <div className="flex items-center justify-between"><span className={s.label}>Your next moves</span><button className={cx(s.btn, s.sm)} onClick={onAll}>All actions</button></div>
       {!open.length ? <p className={cx(s.small, "mt-2")}>No actions yet. They appear once questions have been run.</p> : (
         <ul className="mt-2 grid gap-2.5">{open.map((r, i) => (
-          <li key={i} className="border-t border-[#ececec] pt-2.5 first:border-0 first:pt-0"><span className={cx(s.pill, r.kind === "profile" ? s.pRed : s.pDark)}>{r.kind === "profile" ? "On his profile" : "Elsewhere"}</span><div className="mt-1 text-[13.5px] font-medium">{r.title}</div></li>
+          <li key={i} className="border-t border-[#ececec] pt-2.5 first:border-0 first:pt-0"><span className={cx(s.pill, r.kind === "profile" ? s.pRed : s.pDark)}>{r.kind === "profile" ? "On the profile" : "Elsewhere"}</span><div className="mt-1 text-[13.5px] font-medium">{r.title}</div></li>
         ))}</ul>
       )}
     </section>
@@ -87,6 +88,7 @@ export function NextMoves({ recs, computed, onAll }: { recs: RecRow[]; computed:
 
 export function ProfileCard({ facts, onFacts }: { facts: Partial<Facts>; onFacts: () => void }) {
   const { ws } = useWorkspace();
+  const who = useWho();
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
     supabase().from("profile_docs").select("raw_text").eq("workspace_id", ws.id).eq("subject", "self").order("created_at", { ascending: false }).limit(1)
@@ -97,19 +99,20 @@ export function ProfileCard({ facts, onFacts }: { facts: Partial<Facts>; onFacts
   const hasFacts = Object.values(facts).some((v) => v && String(v).trim());
   return (
     <section className={cx(s.box, "p-4")}>
-      <div className="flex items-center justify-between"><span className={s.label}>His LinkedIn profile</span><Link href={`/w/${ws.slug}/profile`} className={cx(s.btn, s.sm)}>Profile Studio</Link></div>
-      <p className={cx(s.small, "mt-1")}>AI tools read his headline and About section. They should say the same things as the facts sheet.</p>
+      <div className="flex items-center justify-between"><span className={s.label}>{cap(possessive(who.first))} LinkedIn profile</span><Link href={`/w/${ws.slug}/profile`} className={cx(s.btn, s.sm)}>Profile Studio</Link></div>
+      <p className={cx(s.small, "mt-1")}>AI tools read the headline and About section. They should say the same things as the facts sheet.</p>
       {!hasFacts ? <button className={cx(s.btn, s.sm, s.dark, "mt-3")} onClick={onFacts}>Fill in the facts sheet</button>
         : !rows.length ? <p className={cx(s.small, "mt-2")}>Add titles, products or regions to the facts sheet to check them.</p>
-        : missing.length === 0 ? <p className="mt-2 text-[13px] font-medium">Every fact appears on his profile.</p>
+        : missing.length === 0 ? <p className="mt-2 text-[13px] font-medium">Every fact appears on the profile.</p>
         : <ul className="mt-2 grid gap-1">{missing.slice(0, 6).map((r) => <li key={r.fact + r.value} className="text-[13px]"><span className={cx(s.pill, s.pLine)}>{r.fact}</span> <span className="font-medium">{r.value}</span> <span className={s.small}>is not on his profile</span></li>)}</ul>}
     </section>
   );
 }
 
 // ---------------- questions: quick setup, suggestions, sets ----------------
-async function draftQuestions(n: number, existing: string[], topics: string[], headline: string) {
-  const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You write the questions a senior buyer at a bank, fintech or asset manager types into an AI assistant when looking for a technology partner or expert. Never mention any company by name.", user: `Profile: ${headline}\nTopics: ${topics.join(", ")}\nAlready tracked:\n${existing.slice(0, 60).join("\n") || "(none)"}\n\nWrite ${n} new questions a buyer would ask, spread across these topics, mostly about the UAE, Saudi Arabia and India, a few global. Plain words, no brand names. Return only JSON: {"questions": [{"question": "...", "topic": "one of the topics", "region": "UAE"}]}` });
+/** region: the profile's focus regions as text (regionText in src/lib/persona.ts), empty for a mix. */
+async function draftQuestions(n: number, existing: string[], topics: string[], headline: string, region: string) {
+  const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You write the questions a senior buyer types into an AI assistant when looking for a partner, a vendor or an expert. Never mention any company by name.", user: `Profile: ${headline}\nTopics: ${topics.join(", ")}\nAlready tracked:\n${existing.slice(0, 60).join("\n") || "(none)"}\n\nWrite ${n} new questions a buyer would ask, spread across these topics, ${region ? `mostly about ${region}, a few global` : "across regions, some global"}. Plain words, no brand names. Return only JSON: {"questions": [{"question": "...", "topic": "one of the topics", "region": "UAE"}]}` });
   const j = parseJSON<{ questions: { question: string; topic: string; region?: string }[] }>(out);
   return (j?.questions ?? []).filter((q) => q.question && !existing.some((e) => e.toLowerCase() === q.question.toLowerCase())).slice(0, n);
 }
@@ -121,15 +124,17 @@ export function QuickSetup({ count }: { count: number }) {
   async function run() {
     setBusy(true);
     let rows: { question: string; topic: string; region?: string }[] = [], source = "ai";
-    try { rows = await draftQuestions(20, [], PILLARS, ws.headline); } catch { /* no key: use the starter list */ }
-    if (!rows.length) { rows = starterQuestions("the UAE").map((q) => ({ ...q, region: "UAE" })); source = "starter"; }
+    const pillars = pillarsOf(ws), region = regionText(ws);
+    if (!pillars.length) { setBusy(false); toast("Add pillars in Settings first, or write your own prompts.", undefined, { info: true }); return; }
+    try { rows = await draftQuestions(20, [], pillars, ws.headline, region); } catch { /* no key: use the starter list */ }
+    if (!rows.length) { rows = starterQuestions(pillars, region); source = "starter"; }
     const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => ({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source, sort: count + i + 1 })));
     setBusy(false);
     if (error) toast(error.message); else { haptic(); toast(`${rows.length} questions drafted. Approve the ones to track.`); }
   }
   return (
     <section className={cx(s.panel, "flex flex-wrap items-center gap-4 p-5")}>
-      <div className="min-w-[240px] flex-1"><div className="text-[17px] font-semibold">Start with 20 buyer questions</div><p className="text-[13px] text-[#cfcfcf]">Prax drafts them from his pillars and profile with your AI key, or uses a ready list if no key is set. Nothing is tracked until you approve it.</p></div>
+      <div className="min-w-[240px] flex-1"><div className="text-[17px] font-semibold">Start with 20 buyer questions</div><p className="text-[13px] text-[#cfcfcf]">Prax drafts them from the pillars and profile with your AI key, or uses a ready list if no key is set. Nothing is tracked until you approve it.</p></div>
       <button className={cx(s.btn, s.red)} disabled={busy} onClick={run}>{busy ? "Drafting" : "Draft 20 questions"}</button>
     </section>
   );
@@ -147,7 +152,7 @@ export function Suggested({ qs }: { qs: (Question & { sort: number })[] }) {
   async function more() {
     setBusy(true);
     try {
-      const rows = await draftQuestions(8, qs.map((q) => q.question), PILLARS, ws.headline);
+      const rows = await draftQuestions(8, qs.map((q) => q.question), pillarsOf(ws), ws.headline, regionText(ws));
       if (!rows.length) throw new Error("No new questions came back. Try again.");
       const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => ({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source: "ai", sort: qs.length + i + 1 })));
       if (error) throw error;
@@ -191,7 +196,7 @@ export function SetsBar({ sets, qs, runs, self, value, onChange }: { sets: SetRo
         </button>
       ))}
       {can("editor") && (adding
-        ? <span className="flex gap-1.5"><input autoFocus className={cx(s.field, "h-[30px] w-44")} placeholder="Set name, e.g. GCC banks" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) add(); if (e.key === "Escape") setAdding(false); }} /><button className={cx(s.btn, s.sm, s.red)} disabled={!name.trim()} onClick={add}>Add</button></span>
+        ? <span className="flex gap-1.5"><input autoFocus className={cx(s.field, "h-[30px] w-44")} placeholder="Set name, e.g. Top buyers" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) add(); if (e.key === "Escape") setAdding(false); }} /><button className={cx(s.btn, s.sm, s.red)} disabled={!name.trim()} onClick={add}>Add</button></span>
         : <button className={cx(s.btn, s.sm)} onClick={() => setAdding(true)}>+ New set</button>)}
     </div>
   );
@@ -227,7 +232,7 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
     setBusy(true);
     try {
       const ctx = askContext(runs, qs, self, rivals);
-      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You advise a founder of a B2B fintech engineering firm on getting named by AI assistants. Recommend concrete actions only: things to publish on his LinkedIn, and places to be mentioned elsewhere. Never suggest spam, paid placements disguised as editorial, or anything against a regulator.", user: `DATA:\n${ctx}\n\nGive up to 5 new recommendations. Return only JSON: {"recs": [{"kind": "profile", "title": "short action", "detail": "one or two sentences why"}]}` });
+      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: `You advise ${whoLine(ws)} on getting named by AI assistants. Recommend concrete actions only: things to publish on their LinkedIn, and places to be mentioned elsewhere. Never suggest spam, paid placements disguised as editorial, or anything against a regulator.`, user: `DATA:\n${ctx}\n\nGive up to 5 new recommendations. Return only JSON: {"recs": [{"kind": "profile", "title": "short action", "detail": "one or two sentences why"}]}` });
       const j = parseJSON<{ recs: { kind: string; title: string; detail: string }[] }>(out);
       const rows = (j?.recs ?? []).filter((x) => x.title && (x.kind === "profile" || x.kind === "elsewhere"));
       if (!rows.length) throw new Error("No recommendations came back. Try again.");
@@ -248,7 +253,7 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
       <div className="grid gap-4 lg:grid-cols-2">
         {groups.map(({ k, items }) => (
           <section key={k} className={cx(s.box, "p-4")}>
-            <div className={s.label}>{k === "profile" ? "On his profile" : "Elsewhere"}</div>
+            <div className={s.label}>{k === "profile" ? "On the profile" : "Elsewhere"}</div>
             {!items.length ? <p className={cx(s.small, "mt-2")}>Nothing here yet.</p> : (
               <ul className="mt-2 grid gap-3">{items.map((r, i) => {
                 const row = isRow(r) ? r : null, l = row?.status === "accepted" || row?.status === "done" ? lift(row.baseline, scoreOn(r.question_ids)) : null;
@@ -277,6 +282,7 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
 // ---------------- draft test ----------------
 export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self: Entity; initial?: string; onClose: () => void }) {
   const { ws } = useWorkspace();
+  const who = useWho();
   const { status } = useExtension();
   const toast = useToast();
   const active = qs.filter((q) => q.status === "active" && !findBrand(q, self));
@@ -301,7 +307,7 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
     const out: { q: string; engine: Engine; named: boolean; answer: string }[] = [];
     for (const qid of pickQ) for (const engine of engines) {
       const q = active.find((x) => x.id === qid)!;
-      const prompt = `${q.question}\n\nAmong the sources you may use, consider this new piece by Shashi Pal of Antier:\n"""\n${draft.slice(0, 6000)}\n"""`;
+      const prompt = `${q.question}\n\nAmong the sources you may use, consider this new piece by ${who.name}${who.company ? ` of ${who.company}` : ""}:\n"""\n${draft.slice(0, 6000)}\n"""`;
       try {
         const r = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country: "" }, 240000);
         const p = parseEngine(engine, r.raws);
@@ -317,7 +323,7 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
   }
   return (
     <Side title="Is this citable?" onClose={onClose} wide>
-      <p className={s.small}>Paste a post or article draft. Prax asks your chosen questions with the draft offered as a source and checks whether the answer names Shashi or Antier. A test, not a guarantee; nothing is saved. Each question and engine is one paid run on your key.</p>
+      <p className={s.small}>Paste a post or article draft. Prax asks your chosen questions with the draft offered as a source and checks whether the answer names {who.first} or {who.company}. A test, not a guarantee; nothing is saved. Each question and engine is one paid run on your key.</p>
       <textarea className={cx(s.field, "mt-3 h-auto min-h-[180px] py-2 leading-relaxed")} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Paste the draft" />
       <div className="mt-3"><div className={s.label}>Questions to test</div>
         <div className="mt-1.5 grid max-h-[180px] gap-1 overflow-auto">{active.map((q) => (
@@ -348,13 +354,13 @@ export function AskPanel({ runs, qs, self, rivals, onClose }: { runs: Run[]; qs:
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [showData, setShowData] = useState(false);
-  const STARTERS = ["Which questions did we lose since the last run?", "Where do competitors beat us, and on which engine?", "What should Shashi publish next to get named more?"];
+  const STARTERS = ["Which questions did we lose since the last run?", "Where do competitors beat us, and on which engine?", "What should we publish next to get named more?"];
   async function ask(text: string) {
     if (!text.trim()) return;
     const history = [...msgs, { who: "you" as const, text }];
     setMsgs(history); setQ(""); setBusy(true);
     try {
-      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You answer questions about AI citation results for Shashi Pal and Antier. Use only the DATA given. Be short, specific and plain. If the data does not answer the question, say so. No dashes.", user: `DATA:\n${ctx}\n\nCONVERSATION:\n${history.slice(-6).map((m) => `${m.who === "you" ? "User" : "Prax"}: ${m.text}`).join("\n")}\n\nAnswer the last question.` });
+      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: `You answer questions about AI citation results for ${self.name}. Use only the DATA given. Be short, specific and plain. If the data does not answer the question, say so. No dashes.`, user: `DATA:\n${ctx}\n\nCONVERSATION:\n${history.slice(-6).map((m) => `${m.who === "you" ? "User" : "Prax"}: ${m.text}`).join("\n")}\n\nAnswer the last question.` });
       setMsgs([...history, { who: "prax", text: out.trim() }]);
     } catch (e) { setMsgs([...history, { who: "prax", text: (e as Error).message }]); }
     setBusy(false);
@@ -382,11 +388,14 @@ export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose
   const { ws, can } = useWorkspace();
   const toast = useToast();
   const [f, setF] = useState<Facts>({ ...EMPTY_FACTS, ...facts });
-  const [side, setSide] = useState<"Shashi" | "Antier">("Shashi");
-  const ALL: Record<"Shashi" | "Antier", [keyof Facts, string, string][]> = {
-    Shashi: [["titles", "His titles", "Co-Founder and COO"], ["other", "Other true facts about him", ""]],
-    Antier: [["company", "Company names", "Antier, Antier Solutions"], ["products", "Products and services", "Stablecoin infrastructure, tokenisation platforms"], ["licences", "Licences and registrations", ""], ["regions", "Regions served", "UAE, Saudi Arabia, India"], ["founded", "Founded", "2011"]],
+  const who = useWho();
+  // Two tabs, the person and the company; the placeholders come from the profile, never from another one.
+  const [side, setSide] = useState<"person" | "company">("person");
+  const ALL: Record<"person" | "company", [keyof Facts, string, string][]> = {
+    person: [["titles", "Titles", who.role || "For example: Founder and CEO"], ["other", "Other true facts", ""]],
+    company: [["company", "Company names", who.company === "the company" ? "" : who.company], ["products", "Products and services", ""], ["licences", "Licences and registrations", ""], ["regions", "Regions served", regionText(ws)], ["founded", "Founded", ""]],
   };
+  const TAB = { person: cap(who.first), company: cap(who.company) };
   const FIELDS = ALL[side];
   async function save() {
     const { error } = await supabase().from("citation_facts").upsert({ workspace_id: ws.id, facts: f, updated_at: new Date().toISOString() });
@@ -394,8 +403,8 @@ export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose
   }
   return (
     <Side title="Facts sheet" onClose={onClose}>
-      <p className={s.small}>The true facts AI answers are checked against, and what his LinkedIn profile should say. Separate items with commas.</p>
-      <div className="mt-3 flex gap-2" role="tablist">{(["Shashi", "Antier"] as const).map((t) => <button key={t} role="tab" aria-selected={side === t} className={cx(s.btn, s.sm, side === t && s.dark)} onClick={() => setSide(t)}>{t}</button>)}</div>
+      <p className={s.small}>The true facts AI answers are checked against, and what the LinkedIn profile should say. Separate items with commas.</p>
+      <div className="mt-3 flex gap-2" role="tablist">{(["person", "company"] as const).map((t) => <button key={t} role="tab" aria-selected={side === t} className={cx(s.btn, s.sm, side === t && s.dark)} onClick={() => setSide(t)}>{TAB[t]}</button>)}</div>
       <div className="mt-3 grid gap-3">{FIELDS.map(([k, label, ph]) => (
         <label key={k} className="grid gap-1.5"><span className={s.label}>{label}</span>
           {k === "other" ? <textarea className={cx(s.field, "h-auto min-h-[80px] py-2")} value={f[k]} disabled={!can("editor")} onChange={(e) => setF({ ...f, [k]: e.target.value })} /> : <input className={s.field} placeholder={ph} value={f[k]} disabled={!can("editor")} onChange={(e) => setF({ ...f, [k]: e.target.value })} />}
@@ -419,7 +428,7 @@ export function buildSnapshot(runs: Run[], qs: Question[], self: Entity, rivals:
     changes: changes(runs, self).slice(0, 8).map((c) => `${c.kind === "new" ? "Newly named" : "Dropped out"} on ${ENGINES.find((e) => e.id === c.engine)?.name}: ${qText(c.question_id)}`),
     alerts: alerts(runs, qs, self, rivals).filter((a) => a.kind === "wrong_fact" || a.kind === "overtook").slice(0, 4).map((a) => a.text),
     gaps: citationGaps(runs, self, rivals).slice(0, 8).map((g) => ({ domain: g.domain, competitors: g.competitors })),
-    leaderboard: [self, ...rivals].map((e) => { const x = shareOfVoice(runs, qs, e, self); return { name: e.kind === "self" ? "Antier" : e.name, named: x.named, total: x.total, you: e.kind === "self" }; }).sort((a, b) => b.named - a.named),
+    leaderboard: [self, ...rivals].map((e) => { const x = shareOfVoice(runs, qs, e, self); return { name: e.name, named: x.named, total: x.total, you: e.kind === "self" }; }).sort((a, b) => b.named - a.named),
     recs: recs.filter((r) => r.status !== "dismissed").map((r) => { const l = lift(r.baseline, scoreOn(r.question_ids)); return { kind: r.kind, title: r.title, status: r.status, lift: l ? `${l.before}% to ${l.after}% named` : "" }; }),
   };
 }
@@ -462,7 +471,7 @@ export function ShareDialog({ snap, onClose }: { snap: ReportSnapshot; onClose: 
 }
 
 // ---------------- comment targets ----------------
-/** LinkedIn people and pages the AI cites on his topics: worth commenting on, so they become VIPs and Today tasks. */
+/** LinkedIn people and pages the AI cites on the profile's topics: worth commenting on, so they become VIPs and Today tasks. */
 export function commentTargets(runs: Run[], self: Entity) {
   const m = new Map<string, { url: string; name: string; kind: string; n: number }>();
   for (const r of runs) for (const x of r.sources) {
@@ -481,6 +490,7 @@ export function commentTargets(runs: Run[], self: Entity) {
 
 export function CommentTargets({ runs, self }: { runs: Run[]; self: Entity }) {
   const { ws, can } = useWorkspace();
+  const who = useWho();
   const toast = useToast();
   const list = useMemo(() => commentTargets(runs, self).slice(0, 12), [runs, self]);
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -495,7 +505,7 @@ export function CommentTargets({ runs, self }: { runs: Run[]; self: Entity }) {
   return (
     <section className={cx(s.box, "p-4")}>
       <div className={s.label}>Comment targets</div>
-      <p className={s.small}>LinkedIn people and pages the AI cites on his topics. Thoughtful comments on their posts put his name next to sources AI already trusts.</p>
+      <p className={s.small}>LinkedIn people and pages the AI cites on these topics. Thoughtful comments on their posts put {possessive(who.first)} name next to sources AI already trusts.</p>
       {!list.length ? <p className={cx(s.small, "mt-2")}>None cited yet.</p> : <ul className="mt-2 grid gap-2">{list.map((t) => (
         <li key={t.url} className="flex items-center gap-2 border-t border-[#ececec] pt-2 text-[13px]">
           <span className="min-w-0 flex-1"><a href={t.url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">{t.name}</a><span className={cx(s.small, "block")}>{t.kind} · cited {t.n} time{t.n > 1 ? "s" : ""}</span></span>

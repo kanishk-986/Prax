@@ -18,7 +18,7 @@ export default function Strategy() {
         { label: "Words", value: words, sub: "across all sections" },
         { label: "Latest section", value: rows[0] ? fmtDay(rows[0].created_at.slice(0, 10), { day: "numeric", month: "short" }) : "None", sub: rows[0] ? "added" : "nothing added yet" },
       ]} />
-      <RecordList table="notes" order="sort" filter={(q) => q.eq("kind", "strategy")} defaults={{ kind: "strategy", sort: 0 }} empty="No strategy sections yet." adding={adding} onAdding={setAdding}
+      <RecordList table="notes" order="sort" filter={(q) => q.eq("kind", "strategy")} defaults={{ kind: "strategy", sort: 0 }} empty="No strategy sections yet." adding={adding} onAdding={setAdding} author
         cols={[{ key: "title", label: "Section", className: "font-medium w-[240px]" }, { key: "body", label: "", className: "text-ink-2 whitespace-pre-line", render: (r) => <span className="line-clamp-4">{r.body}</span> }]}
         fields={[{ key: "title", label: "Section title", wide: true }, { key: "sort", label: "Order", type: "number" }, { key: "body", label: "Text", type: "textarea" }]} />
     </Section>

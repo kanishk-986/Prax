@@ -128,14 +128,14 @@ export function claimsCheck(text: string, opts: { companies?: string[]; permitte
 export type Pov = { stances: string[]; proofs: { text: string; cleared: boolean }[]; numbers: { value: string; context: string }[]; clients: string[] };
 export const EMPTY_POV: Pov = { stances: [], proofs: [], numbers: [], clients: [] };
 export const mergePov = (p?: Partial<Pov> | null): Pov => ({ stances: p?.stances ?? [], proofs: p?.proofs ?? [], numbers: p?.numbers ?? [], clients: p?.clients ?? [] });
-/** The bank as prompt text. Only cleared proof points and allowed numbers are given to the AI. */
-export function povText(p: Pov) {
+/** The bank as prompt text. Only cleared proof points and allowed numbers are given to the AI. first: the profile's first name. */
+export function povText(p: Pov, first = "The profile owner") {
   const parts: string[] = [];
-  if (p.stances.length) parts.push(`Shashi's stances: ${p.stances.map((s) => `"${s}"`).join("; ")}.`);
+  if (p.stances.length) parts.push(`${first}${/s$/i.test(first) ? "'" : "'s"} stances: ${p.stances.map((s) => `"${s}"`).join("; ")}.`);
   const proofs = p.proofs.filter((x) => x.cleared).map((x) => x.text);
   if (proofs.length) parts.push(`Cleared proof points (use only these): ${proofs.join("; ")}.`);
-  if (p.numbers.length) parts.push(`Numbers he allows (use only these, exactly): ${p.numbers.map((n) => `${n.value} (${n.context})`).join("; ")}.`);
-  if (p.clients.length) parts.push(`Clients he may name: ${p.clients.join(", ")}. Name no other client.`);
+  if (p.numbers.length) parts.push(`Numbers allowed (use only these, exactly): ${p.numbers.map((n) => `${n.value} (${n.context})`).join("; ")}.`);
+  if (p.clients.length) parts.push(`Clients that may be named: ${p.clients.join(", ")}. Name no other client.`);
   return parts.length ? parts.join(" ") + " Use no other numbers, proof points or client names." : "No point-of-view bank yet: use no numbers, proof points or client names that are not in the source.";
 }
 
@@ -199,19 +199,20 @@ export function whatWorks(posts: ResultPost[]) {
 }
 
 // ---------- the angle step (Q92) ----------
-export const ANGLE_KINDS = ["Contrarian", "GCC and India lens", "Operator view", "Numbers and prediction"] as const;
-/** Four suggested angles built from the topic, for every starting point. The AI can rewrite them; these work without a key. */
-export function suggestAngles(topic: string): { kind: string; text: string }[] {
+export const ANGLE_KINDS = ["Contrarian", "Regional lens", "Operator view", "Numbers and prediction"] as const;
+/** Four suggested angles built from the topic, for every starting point. The AI can rewrite them; these work without a key.
+ *  region: the profile's focus regions as text (regionText in src/lib/persona.ts), empty when none are set. */
+export function suggestAngles(topic: string, region = ""): { kind: string; text: string }[] {
   const t = topic.trim().replace(/[.!?]+$/, "") ? `"${topic.trim().replace(/[.!?]+$/, "")}"` : "this";
   return [
-    { kind: "Contrarian", text: `What most coverage of ${t} misses, and why it matters to a bank COO` },
-    { kind: "GCC and India lens", text: `What ${t} means for mid-size banks in the GCC and India` },
+    { kind: "Contrarian", text: `What most coverage of ${t} misses, and why it matters to the people who have to act on it` },
+    { kind: "Regional lens", text: region ? `What ${t} means for buyers in ${region}` : `What ${t} means close to home, for the buyers this profile serves` },
     { kind: "Operator view", text: `How to actually build for ${t}: the controls and decisions that come first` },
     { kind: "Numbers and prediction", text: `The numbers behind ${t}, and where they will be in 12 months` },
   ];
 }
 /** A Discovery angle often starts with its kind ("How we see it: ..."); the step shows only the line. */
-export const angleLine = (a: string) => { const t = a.replace(/^(How we see it|Contrarian|GCC and India lens|Operator view|Numbers and prediction)\s*:\s*/i, "").trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+export const angleLine = (a: string) => { const t = a.replace(/^(How we see it|Contrarian|Regional lens|GCC and India lens|Operator view|Numbers and prediction)\s*:\s*/i, "").trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // ---------- where a post came from (Library Source filter, Q93) ----------
 export type PostSource = "discovery" | "citations" | "campaign" | "here";
