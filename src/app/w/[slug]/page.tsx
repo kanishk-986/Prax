@@ -14,9 +14,11 @@ import { Section, KpiTiles, NeedsYou, Activity, Panel, CountUp, reveal, type Tou
 import { ProviderLogo } from "@/components/provider-mark";
 import { providerName } from "@/lib/providers";
 import { GetStarted, setupSteps } from "@/components/get-started";
+import { useActiveStrategy } from "@/components/strategy/data";
+import { commentTarget as strategyCommentTarget } from "@/lib/strategy";
 import { useExtension } from "@/lib/bridge";
 import { cap, firstNameOf, possessive, pillarsOf } from "@/lib/persona";
-import { deltaOf, pointsDelta, weekOverWeek, rankNeeds, commentDays, weeklyCommentTarget, whenLabel, weekSentence, relTime, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
+import { deltaOf, pointsDelta, weekOverWeek, rankNeeds, commentDays, whenLabel, weekSentence, relTime, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
 import { ENGINES, personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
@@ -81,7 +83,9 @@ export default function Dashboard() {
       .then(({ data }: { data: RunRow[] | null }) => setRuns((data ?? []).map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) }))));
   }, [ws.id, cit0.ready, cit0.scope]);
 
-  const commentTarget = weeklyCommentTarget(ws.quotas.comment);
+  // The active strategy's goal sets the weekly comment target when it has one (Q109); else the daily quota for five days.
+  const { goal } = useActiveStrategy();
+  const commentTarget = strategyCommentTarget(goal, ws.quotas.comment);
   const week = useMemo(() => {
     const rows = items.rows;
     const tod = rows.filter((r) => r.day === t);

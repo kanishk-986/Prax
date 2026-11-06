@@ -9,7 +9,7 @@ import { warmPaths, indexPeople, type Person, type ProspectLite } from "@/lib/ne
 import { campaignLift, scoped, type Run, type Question, type Entity, type Source } from "@/lib/citations";
 import { useCitationProfile } from "@/lib/citation-profile";
 import {
-  OBJECTIVES, FORMATS, MEASURES, objective, defaultBrief, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
+  OBJECTIVES, FORMATS, MEASURES, objective, defaultBrief, withPlan, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
 } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, statusOf, logActivity, upsertToday, Modal } from "./shared";
@@ -44,7 +44,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
   const [sel, setSel] = useState<string | null>(live[0]?.id ?? null);
   const [kind, setKind] = useState<Campaign["kind"]>("standard");
   const [name, setName] = useState("");
-  const [brief, setBrief] = useState<Brief>(() => defaultBrief(today(), undefined, pillarsOf(ws)));
+  const [brief, setBrief] = useState<Brief>(() => withPlan(defaultBrief(today(), undefined, pillarsOf(ws)), settings?.plan));
   const [editing, setEditing] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanItem[]>([]);
   const [tried, setTried] = useState(false);
@@ -56,7 +56,8 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
 
   function startNew(k: Campaign["kind"]) {
     setKind(k); setName(""); setEditing(null); setTried(false); setPlan([]);
-    setBrief(k === "fast" ? fastBrief(today(), "", "", pillars) : k === "event" ? { ...defaultBrief(today(), "event", pillars), event: { name: "", start: "", end: "" } } : defaultBrief(today(), undefined, pillars));
+    // A standard campaign starts from the Strategy's Content system (days, posts a week, formats) when it has one.
+    setBrief(k === "fast" ? fastBrief(today(), "", "", pillars) : k === "event" ? { ...defaultBrief(today(), "event", pillars), event: { name: "", start: "", end: "" } } : withPlan(defaultBrief(today(), undefined, pillars), settings?.plan));
     setView("brief");
   }
   function edit(c: Campaign) { setKind(c.kind); setName(c.name); setBrief({ ...defaultBrief(today()), ...c.brief }); setEditing(c.id); setTried(false); setView("brief"); }
@@ -296,7 +297,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
           <label className="flex flex-col gap-1.5"><Label>Starts</Label><input className="field w-[160px]" type="date" value={brief.start} onChange={(e) => set("start", e.target.value)} /></label>
           <div className="flex flex-col gap-1.5"><Label>Duration</Label><div className="flex rounded-lg border border-line p-0.5">{[2, 4, 6, 8].map((w) => <button key={w} type="button" className={`h-8 rounded-md px-3 text-body font-semibold ${brief.weeks === w ? "bg-[#d64545] text-white" : "text-muted"}`} onClick={() => set("weeks", w)}>{w} weeks</button>)}</div></div>
           <div className="flex flex-col gap-1.5"><Label>Posts per week</Label><div className="flex items-center gap-1"><button type="button" className="btn h-8 w-8 p-0" aria-label="Fewer" onClick={() => set("ppw", Math.max(1, brief.ppw - 1))}>−</button><span className="num w-8 text-center text-title">{brief.ppw}</span><button type="button" className="btn h-8 w-8 p-0" aria-label="More" onClick={() => set("ppw", Math.min(5, brief.ppw + 1))}>+</button></div></div>
-          <span className="num pb-2 text-meta text-muted">{brief.weeks * brief.ppw} posts</span>
+          <span className="num pb-2 text-meta text-muted">{brief.weeks * brief.ppw} posts{brief.days?.length ? ` on ${brief.days.slice(0, brief.ppw).map((d) => ["Mon", "Tue", "Wed", "Thu", "Fri"][d]).join(", ")}, from the strategy` : ""}</span>
         </div>}
 
         {kind === "standard" && <div className="flex flex-col gap-2"><Label>Mix of formats</Label><div className="flex flex-wrap gap-1.5">{FORMATS.map((f) => <button key={f} type="button" className={chipCls(brief.mix.includes(f))} onClick={() => toggle("mix", f)}>{f}</button>)}</div></div>}

@@ -12,6 +12,8 @@ import { useToast, haptic } from "@/components/toaster";
 import { LeadPanel } from "./lead-panel";
 import { MoveDialog, PipelinesPanel, ImportPanel, AddLeadPanel } from "./panels";
 import type { PipelineApi, PipelineData } from "./types";
+import { useActiveStrategy, leadFacts } from "@/components/strategy/data";
+import { adviceFor, type Advice } from "@/lib/strategy";
 
 const TOUR: TourStep[] = [
   { target: "header", title: "What Pipeline is for", body: "Everyone this profile is building a relationship with, and the one next step for each. Prax suggests and drafts; you send every comment and message yourself." },
@@ -72,6 +74,13 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
     return m;
   }, [data.leads, data.comments, data.network, idx, t]);
   const bandOf = useCallback((l: Prospect) => info.get(l.id)?.heat.band ?? "Cold", [info]);
+  // The active strategy's rules for each lead (Q109): a suggested next action, a template and extra touch plan steps.
+  const strat = useActiveStrategy();
+  const advice = useMemo(() => new Map<string, Advice>(data.leads.map((l) => [l.id, adviceFor(strat.nodes, { day: t, lead: leadFacts(l, t, { heat: info.get(l.id)?.heat.band, warm: !!info.get(l.id)?.warm?.level }) })])), [data.leads, strat.nodes, t, info]);
+  const nextOf = (l: Prospect) => {
+    const s = advice.get(l.id)?.next;
+    return l.next_action || !s ? l.next_action || "No next action set" : <>Suggested: {s.text}<span className="block text-meta text-muted">From strategy: {s.rule}</span></>;
+  };
 
   // ---------- filters ----------
   const [q, setQ] = useState("");
@@ -152,7 +161,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
         </span>
         <span className="min-w-0 flex-[1_1_160px] truncate text-body max-sm:hidden">{second}</span>
         <span className="flex min-w-0 flex-[2_1_240px] flex-col gap-0.5">
-          <span className={`text-body leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || l.next_action || "No next action set"}</span>
+          <span className={`text-body leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || (closed ? l.next_action || "No next action set" : nextOf(l))}</span>
           {closed ? <span className="text-meta text-muted">{l.stage === P.won_stage ? P.won_stage : l.next_date ? `Check in ${fmtShort(l.next_date)}` : P.lost_stage}</span>
             : <span className={`whitespace-nowrap text-meta ${toneCls(tone)}`}>{dueText(l.next_date, t)}</span>}
         </span>
@@ -201,7 +210,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
             : dn.rows.map((l) => (
               <div key={l.id} className="pl-row flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#f0f0f0] px-5 py-3">
                 <span className="flex min-w-0 flex-[1_1_220px] flex-col gap-0.5"><span className="text-body font-semibold">{l.name}</span><span className="text-meta text-muted">{l.company || "No company"}</span></span>
-                <span className="min-w-0 flex-[2_1_260px] text-body leading-snug">{l.next_action || "No next action set"}</span>
+                <span className={`min-w-0 flex-[2_1_260px] text-body leading-snug ${l.next_action ? "" : "text-muted"}`}>{nextOf(l)}</span>
                 <span className={`min-w-[104px] shrink-0 whitespace-nowrap text-right text-meta max-sm:text-left ${toneCls(dueTone(l.next_date, t))}`}>{dueText(l.next_date, t)}</span>
                 <button type="button" className="btn h-[34px]! shrink-0 px-3.5! font-semibold" onClick={() => openLead(l.id)}>Open</button>
               </div>
@@ -265,7 +274,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
         </section>
       </div>
 
-      {lead && <LeadPanel lead={lead} pipe={pipeOf(lead)} info={info.get(lead.id)} data={data} api={api} onMove={(to) => startMove(lead, to)} onClose={() => setSel(null)} dialogOpen={!!move} logged={logged} />}
+      {lead && <LeadPanel lead={lead} pipe={pipeOf(lead)} info={info.get(lead.id)} advice={advice.get(lead.id)} data={data} api={api} onMove={(to) => startMove(lead, to)} onClose={() => setSel(null)} dialogOpen={!!move} logged={logged} />}
       {moving && move && <MoveDialog lead={moving} pipe={pipeOf(moving)} to={move.to} reasons={data.reasons} onCancel={() => setMove(null)}
         onConfirm={async (m) => {
           const p = pipeOf(moving), stay = m.to === moving.stage;

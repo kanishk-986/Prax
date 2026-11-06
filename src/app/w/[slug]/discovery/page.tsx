@@ -14,8 +14,10 @@ import { useToast, haptic } from "@/components/toaster";
 import { upsertToday, type Campaign } from "@/components/content/shared";
 import {
   type Finding, type Settings, type LinkRow, mergeSettings, bandOf, totalScore, buildTopics, applyMerges, selectDigest, searchPlan, topicPost, matchCampaign,
-  daysBetween, hostOf, RESEARCH_RESOURCES, PACK_LABEL,
+  daysBetween, hostOf, RESEARCH_RESOURCES, PACK_LABEL, buyersOf,
 } from "@/lib/discovery";
+import { useActiveStrategy, leadFacts } from "@/components/strategy/data";
+import { raisedCompanies, RAISE_POINTS } from "@/lib/strategy";
 import { type Data, type Run, type List, type Link, type TopicRow, type LogRow, type Ranked, SidePanel, Box } from "@/components/discovery/shared";
 import { useRunner } from "@/components/discovery/runner";
 import { HomeTab, type Deadline } from "@/components/discovery/home";
@@ -104,6 +106,12 @@ export default function DiscoveryStudio() {
   }, [orgKey, ws.id]);
   const warm = useCallback((orgs: string[]) => [...new Set(orgs.map((o) => o.toLowerCase().trim()))].reduce((a, o) => a + (warmMap.get(o) ?? 0), 0), [warmMap]);
 
+  // The strategy's "Raise Discovery and warm priority" rules (Q109): topics naming a raised lead's company rank higher.
+  const strat = useActiveStrategy();
+  const [leadRows, setLeadRows] = useState<{ id: string; name: string; company: string; segment: string; region: string; stage: string; next_date: string | null }[]>([]);
+  useEffect(() => { if (!strat.nodes.some((n) => n.type === "action")) return; supabase().from("prospects").select("id,name,company,segment,region,stage,next_date").eq("workspace_id", ws.id).neq("company", "").limit(500).then(({ data }: { data: typeof leadRows | null }) => setLeadRows(data ?? [])); }, [ws.id, strat.nodes]);
+  const raisedMap = useMemo(() => raisedCompanies(strat.nodes, leadRows.map((l) => leadFacts(l, today)), today), [strat.nodes, leadRows, today]);
+  const raise = useCallback((orgs: string[]) => { for (const o of orgs) { const r = raisedMap.get(o.toLowerCase().replace(/\s+/g, " ").trim()); if (r) return { rule: r, points: RAISE_POINTS }; } return null; }, [raisedMap]);
   const band = useCallback((f: Finding) => bandOf(f, settings.weights, settings.bands), [settings]);
   const total = useCallback((f: Finding) => totalScore(f.scores, settings.weights), [settings]);
   const engines = LIVE_ENGINES.map((e) => ({ id: e.id, name: e.name, model: e.model, ready: !!ext?.searchKeys?.[e.id] }));
@@ -111,13 +119,13 @@ export default function DiscoveryStudio() {
   // The Digest for the chosen week, with the merge decisions made on it.
   const digest = useMemo(() => {
     const day = week === thisWeek ? today : addDays(week, 6);
-    const ctx = { weights: settings.weights, bands: settings.bands, today: day, warm, posts: posts.rows };
+    const ctx = { weights: settings.weights, bands: settings.bands, today: day, warm, posts: posts.rows, raise };
     const rows = topicRows.rows.filter((r) => r.week === week);
     const kept = new Set(rows.filter((r) => r.merge_state === "kept").map((r) => r.key));
     const merges = new Map(rows.filter((r) => r.merge_state === "merged" && typeof r.parts?.into === "string").map((r) => [r.key, r.parts.into as string]));
     const all = applyMerges(buildTopics(findings, ctx, kept, settings.excluded), findings, merges, ctx);
     return { ...selectDigest(all, settings.priority, settings.penalties), all };
-  }, [findings, settings, warm, posts.rows, topicRows.rows, week, thisWeek, today]);
+  }, [findings, settings, warm, posts.rows, topicRows.rows, week, thisWeek, today, raise]);
 
   const d: Data = { findings, runs: runs.rows, lists: lists.rows, links: links.rows, topicRows: topicRows.rows, settings, warm, band, total, digest, engines, editable };
   const lastAi = runs.rows.find((r) => r.kind === "ai" && r.status !== "running") ?? null;
@@ -134,7 +142,7 @@ export default function DiscoveryStudio() {
   const [pickEngines, setPickEngines] = useState<Engine[] | null>(null);
   const chosen = (pickEngines ?? engines.filter((e) => e.ready).map((e) => e.id as Engine)).filter((e) => engines.find((x) => x.id === e)?.ready);
 
-  const runner = useRunner({ wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips], pillars, who: whoLine(ws), geos: settings.geo, region }, toast);
+  const runner = useRunner({ wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips], pillars, who: whoLine(ws), geos: settings.geo, region, buyers: buyersOf(ws.segments, ws.segment_weights) }, toast);
 
   async function saveSettings(patch: Partial<Settings>, note: string) {
     const prev = raw ?? {}, next = { ...settings, ...patch };

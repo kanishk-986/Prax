@@ -28,6 +28,8 @@ export type Brief = {
   objective: string; topic: string; keywords: string[]; segments: string[]; start: string; weeks: number; ppw: number; mix: string[];
   message: string; cta: string; measure: string; minutes: number; resource: { name: string; link: string }; colleagues: string[];
   event?: { name: string; start: string; end: string }; link?: string;
+  /** Weekdays to post on (0 is Monday), from the Strategy Content system node (content_settings.plan). */
+  days?: number[];
 };
 
 // ---------- dates ----------
@@ -44,15 +46,24 @@ export function defaultBrief(todayYmd: string, objKey = "authority", pillars: st
   return { objective: o.key, topic: pillars[0] ?? "", keywords: [], segments: [], start: nextMonday(todayYmd), weeks: o.weeks, ppw: o.ppw, mix: [...o.mix], message: "", cta: o.cta, measure: MEASURES[0], minutes: 45, resource: { name: "", link: "" }, colleagues: [] };
 }
 
+/** The profile's content plan (Strategy, Content system) over a brief: its days set how many posts a week and
+ *  when, its formats set the mix. An empty plan changes nothing. */
+export function withPlan(b: Brief, plan?: { ppw?: number; days?: number[]; formats?: string[] } | null): Brief {
+  if (!plan) return b;
+  const days = (plan.days ?? []).filter((d) => d >= 0 && d <= 4);
+  return { ...b, ...(days.length ? { days, ppw: days.length } : plan.ppw ? { ppw: Math.max(1, Math.min(5, plan.ppw)) } : {}), ...(plan.formats?.length ? { mix: plan.formats.filter((f) => FORMATS.includes(f)) } : {}) };
+}
+
 /** Choosing an objective resets the parts it owns (mix, cadence, length, ask) and keeps the rest. */
 export function applyObjective(b: Brief, objKey: string): Brief {
   const o = objective(objKey);
   return { ...b, objective: o.key, mix: [...o.mix], ppw: o.ppw, weeks: o.weeks, cta: o.cta };
 }
 
-/** Weekday slots: Mon, Wed, Fri first, then Tue, Thu. Never before the start date. */
-export function slotDates(start: string, weeks: number, ppw: number): string[] {
-  const order = [0, 2, 4, 1, 3].slice(0, Math.max(1, Math.min(5, ppw))).sort();
+/** Weekday slots: Mon, Wed, Fri first, then Tue, Thu; or the plan's own days (0 is Monday). Never before the start date. */
+export function slotDates(start: string, weeks: number, ppw: number, days?: number[]): string[] {
+  const own = [...new Set((days ?? []).filter((d) => d >= 0 && d <= 4))].sort();
+  const order = (own.length ? own : [0, 2, 4, 1, 3]).slice(0, Math.max(1, Math.min(5, ppw))).sort();
   const ws = weekStart(start), out: string[] = [];
   for (let w = 0; w < weeks + 1 && out.length < weeks * ppw; w++)
     for (const s of order) { const d = addDays(ws, w * 7 + s); if (d >= start && out.length < weeks * ppw) out.push(d); }
@@ -77,7 +88,7 @@ export type PlanItem = { title: string; format: string; pillar: string; phase: P
 
 /** The deterministic plan used when no AI key is set, and as the date and phase skeleton for the AI plan. */
 export function proposePlan(b: Brief, max = 24, pillars: string[] = []): PlanItem[] {
-  const dates = slotDates(b.start, b.weeks, b.ppw).slice(0, max);
+  const dates = slotDates(b.start, b.weeks, b.ppw, b.days).slice(0, max);
   const o = objective(b.objective);
   const words = b.keywords.length ? b.keywords : [b.topic.toLowerCase() || "this topic"];
   const mix = b.mix.length ? b.mix : o.mix;

@@ -7,6 +7,8 @@ export type Role = "owner" | "editor" | "commenter" | "viewer";
 export type Workspace = {
   id: string; slug: string; name: string; headline: string; linkedin_url: string; start_date: string; quotas: Quotas; topics?: string[]; voice?: string;
   company?: string; pillars?: string[]; regions?: string[]; segments?: Record<string, string>; archived_at?: string | null;
+  /** db/021: Audience weights per segment letter, written by the Strategy canvas. */
+  segment_weights?: Record<string, number>;
   /** db/019: the sample demo profile, shown with a quiet Demo tag. */
   is_demo?: boolean;
 };

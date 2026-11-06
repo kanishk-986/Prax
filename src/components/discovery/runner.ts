@@ -11,7 +11,7 @@ import { type Finding, type PlannedSearch, searchPrompt, parseSearchItems, ruleS
 import type { Link, LogRow } from "./shared";
 
 // pillars, who ("Name, Role at Company"), geos and region come from the profile, see src/lib/persona.ts.
-type Ctx = { wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[]; pillars: string[]; who: string; geos: string[]; region: string };
+type Ctx = { wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[]; pillars: string[]; who: string; geos: string[]; region: string; buyers?: string[] };
 const mentions = (text: string, names: string[]) => names.find((n) => n.length > 2 && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) ?? "";
 
 export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => void) {
@@ -31,7 +31,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
     try {
       for (let i = 0; i < todo.length; i += 8) {
         const batch = todo.slice(i, i + 8);
-        const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You score news for a business leader's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), c.pillars, c.who, c.geos) }, 120000);
+        const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You score news for a business leader's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), c.pillars, c.who, c.geos, c.buyers) }, 120000);
         const got = parseScores(parseJSON(out), c.geos);
         for (const f of batch) {
           const s = got[f.id]; if (!s) continue;
@@ -75,7 +75,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
           }
           const title = (page.title || it.title || it.url).slice(0, 300), excerpt = [it.summary, page.excerpt].filter(Boolean).join("\n\n").slice(0, 1800);
           const published = page.published || it.date || null, confirmed = !!page.confirmed;
-          const st = sourceTypeOf(it.url), rs = ruleScore({ url: it.url, title, excerpt, published, confirmed, source_type: st }, c.today, c.pillars), opp = opportunityOf(title, excerpt, c.today);
+          const st = sourceTypeOf(it.url), rs = ruleScore({ url: it.url, title, excerpt, published, confirmed, source_type: st }, c.today, c.pillars, c.buyers), opp = opportunityOf(title, excerpt, c.today);
           const orgs = it.orgs;
           const { data, error } = await supabase().from("discovery_findings").insert({
             workspace_id: c.wsId, run_id: run?.id ?? null, url: it.url, title, publisher: it.publisher || page.publisher || "", source_type: st, published, confirmed, excerpt,

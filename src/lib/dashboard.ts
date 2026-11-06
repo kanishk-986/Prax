@@ -161,7 +161,8 @@ export const weeklyCommentTarget = (dailyQuota: number) => Math.max(0, dailyQuot
 export type PrefillLead = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; linkedin: string };
 export type PrefillFinding = { id: string; title: string; url: string; source_type: string; status: string; comment_target: boolean; found_at: string; found?: { linkedin?: { author?: string } } };
 export type PrefillPost = { id: string; title: string; status: string; publish_date: string | null; url: string };
-export type Suggestion = { title: string; href: string; external: boolean; prospect_id: string | null };
+/** why: the strategy rule behind the suggestion ("From strategy: <rule>" on the row), when one shaped it. */
+export type Suggestion = { title: string; href: string; external: boolean; prospect_id: string | null; why?: string };
 
 const STAGE_KINDS: Record<string, string[]> = {
   comment: ["Target", "Warming"],
@@ -169,6 +170,7 @@ const STAGE_KINDS: Record<string, string[]> = {
   dm: ["Connected", "In conversation", "Resource sent", "Call booked"],
   inmail: ["Target", "Warming"],
 };
+const withWhy = (w: string | undefined) => (w ? { why: w } : {});
 const posessive = (n: string) => (n.endsWith("s") ? `${n}'` : `${n}'s`);
 const profileActivity = (url: string) => (url ? `${url.replace(/\/+$/, "")}/recent-activity/all/` : "https://www.linkedin.com/feed/");
 
@@ -179,11 +181,16 @@ const profileActivity = (url: string) => (url ? `${url.replace(/\/+$/, "")}/rece
  *  rows without one keep the "who or what" placeholder. Nothing here posts or sends. */
 export function prefillToday(
   items: { id: string; kind: string; idx: number; title: string; done: boolean; note?: string | null; prospect_id?: string | null }[],
-  src: { leads: PrefillLead[]; findings?: PrefillFinding[]; posts?: PrefillPost[]; slug: string; today: string; closed?: string[] },
+  src: { leads: PrefillLead[]; findings?: PrefillFinding[]; posts?: PrefillPost[]; slug: string; today: string; closed?: string[];
+    /** The strategy (src/lib/strategy.ts): a lead's rank (rule-raised and segment weight, higher first) breaks date ties
+     *  and orders leads without a date; advice gives the connection note template a rule picked for a lead. */
+    rank?: (l: PrefillLead) => number; advice?: (l: PrefillLead) => { template?: { name: string; rule: string }; priority?: { rule: string } } | null },
 ): Record<string, Suggestion> {
   const closed = new Set(src.closed ?? ["Won", "Parked"]);
-  const order = (a: PrefillLead, b: PrefillLead) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999") || a.name.localeCompare(b.name);
+  const rank = src.rank ?? (() => 0);
+  const order = (a: PrefillLead, b: PrefillLead) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999") || rank(b) - rank(a) || a.name.localeCompare(b.name);
   const open = src.leads.filter((l) => !closed.has(l.stage) && l.name.trim()).sort(order);
+  const why = (l: PrefillLead, kind: string) => { const a = src.advice?.(l); return kind === "request" && a?.template ? a.template.rule : a?.priority?.rule; };
   const used = new Set(items.map((i) => i.prospect_id).filter(Boolean) as string[]);
   const usedFindings = new Set<string>();
   const out: Record<string, Suggestion> = {};
@@ -200,15 +207,16 @@ export function prefillToday(
     if (it.done || isSkipped(it.note) || it.title.trim() || it.prospect_id) continue;
     if (it.kind === "comment") {
       const l = pick("comment");
-      if (l) { out[it.id] = { title: l.next_action && /comment/i.test(l.next_action) ? `${l.name}: ${l.next_action}` : `Comment on ${posessive(l.name)} latest post`, href: profileActivity(l.linkedin), external: true, prospect_id: l.id }; continue; }
+      if (l) { out[it.id] = { title: l.next_action && /comment/i.test(l.next_action) ? `${l.name}: ${l.next_action}` : `Comment on ${posessive(l.name)} latest post`, href: profileActivity(l.linkedin), external: true, prospect_id: l.id, ...withWhy(why(l, "comment")) }; continue; }
       const f = findings.find((x) => !usedFindings.has(x.id));
       if (f) { usedFindings.add(f.id); const a = f.found?.linkedin?.author; out[it.id] = { title: a ? `Comment on ${posessive(a)} post: ${f.title}` : `Comment on: ${f.title}`, href: f.url, external: true, prospect_id: null }; }
     } else if (it.kind === "request") {
       const l = pick("request");
-      if (l) out[it.id] = { title: `Send ${l.name}${l.company ? `, ${l.company},` : ""} a connection request`, href: l.linkedin || `/w/${src.slug}/pipeline?p=${l.id}`, external: !!l.linkedin, prospect_id: l.id };
+      const tpl = l ? src.advice?.(l)?.template : undefined;
+      if (l) out[it.id] = { title: `Send ${l.name}${l.company ? `, ${l.company},` : ""} a connection request${tpl ? ` with the "${tpl.name}" note` : ""}`, href: l.linkedin || `/w/${src.slug}/pipeline?p=${l.id}`, external: !!l.linkedin, prospect_id: l.id, ...withWhy(why(l, "request")) };
     } else if (it.kind === "dm" || it.kind === "inmail") {
       const l = pick(it.kind);
-      if (l) out[it.id] = { title: `${it.kind === "inmail" ? "InMail" : "Message"} ${l.name}${l.next_action ? `: ${l.next_action}` : ""}`, href: `/w/${src.slug}/pipeline?p=${l.id}`, external: false, prospect_id: l.id };
+      if (l) out[it.id] = { title: `${it.kind === "inmail" ? "InMail" : "Message"} ${l.name}${l.next_action ? `: ${l.next_action}` : ""}`, href: `/w/${src.slug}/pipeline?p=${l.id}`, external: false, prospect_id: l.id, ...withWhy(why(l, it.kind)) };
     } else if (it.kind === "reply") {
       const p = replies[reply++];
       if (p) out[it.id] = { title: `Reply to the comments on "${p.title}"`, href: p.url || `/w/${src.slug}/studio-content?tab=library`, external: !!p.url, prospect_id: null };

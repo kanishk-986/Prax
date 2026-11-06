@@ -32,6 +32,7 @@ export function DigestTab({ d, week, weeks, setWeek, opps, act }: { d: Data; wee
     if (t.gap) out.push(["AI citations gap", "dark"]);
     if (t.due != null) out.push([`Deadline in ${t.due} days`, "red"]);
     if (t.warm >= 2) out.push([`Warm: you know ${t.warm} people here · comment first`, "dark"]);
+    if (t.liftBy) out.push([`From strategy: ${t.liftBy}`, "dark"]);
     if (t.competitor) out.push([`Competitor move: ${t.competitor}`, "white"]);
     if (t.service) out.push([t.service, "white"]);
     return out;
@@ -124,6 +125,7 @@ function reasonOf(t: Ranked, d: Data) {
   if (t.gap) r.push("matches an AI citations gap");
   if (t.warm) r.push(`you know ${t.warm} ${t.warm === 1 ? "person" : "people"} there`);
   if (t.due != null) r.push(`deadline in ${t.due} days`);
+  if (t.liftBy) r.push(`raised by the strategy rule ${t.liftBy}`);
   void d;
   return r.join(", ") + ".";
 }
