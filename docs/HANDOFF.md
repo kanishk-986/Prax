@@ -337,3 +337,24 @@ Tested: `node scripts/test-extension.ts` (fixtures written by hand to match Link
 - Q114: existing users set their first password through Forgot password.
 - Q115: keep a small "Email me a sign-in link instead".
 - Q116: at least 8 characters; Supabase rate limits; sessions last 30 days on the user's device.
+
+## Login, built (6 Nov 2026, branch `password-login`, not deployed)
+
+- `/login`: email and password, both required (asterisk and `aria-required`), show/hide on the password, Forgot password?, and "Email me a sign-in link instead" (the magic link, now with `shouldCreateUser: false`, so a link never creates an account). Wrong credentials say "That email and password do not match" and never which part was wrong. No sign-up link: "Access is by invitation."
+- `/login/forgot`: `resetPasswordForEmail`, redirect `/auth/callback?next=/login/reset`. Same reply whether or not the email has an account.
+- `/login/reset`: new password and confirm, at least 8 characters, then `updateUser` and on to `/`. `?mode=invite` reads "Set your password". It accepts a session from the callback (reset) or from the tokens after `#` that Supabase adds on an invite redirect. No session: "This link has expired" with a button to request a new one.
+- `/auth/callback`: handles `?code=` (PKCE, magic link and reset) and `?token_hash=&type=` (recovery, invite, magiclink) if the email templates are ever switched to that form. `next` is now checked with `safeNext` (no `//evil.com` redirects).
+- Invites: Settings, Team, Invite now calls `POST /api/invite`. The route checks the caller is an owner (`has_role`), writes the `invites` row as that owner, then sends `auth.admin.inviteUserByEmail` with the service role key (server only) and redirect `/login/reset?mode=invite`. Someone who already has an account just gets the row and access at next sign-in.
+- Sign out: `POST /auth/signout` clears the Supabase cookies; a Sign out button sits under the email in the sidebar and on the Profiles page.
+- Middleware unchanged: `/login*` and `/auth*` stay public, everything else is protected.
+- Helpers in `src/lib/auth.ts`, tested by `node scripts/test-auth.ts`.
+
+### Supabase dashboard settings to check before deploying (not changed by Claude)
+
+1. Authentication, Sign In / Providers, Email: enabled, with email and password sign-in allowed.
+2. Authentication, Sign In / Providers: "Allow new users to sign up" OFF. Admin invites still work with it off.
+3. Authentication, Sign In / Providers, Email: minimum password length 8 (optionally password requirements).
+4. Authentication, URL Configuration: Site URL `https://prax-gamma.vercel.app`; Redirect URLs include `https://prax-gamma.vercel.app/**` (and `http://localhost:3000/**` for local work). Without this, reset and invite links fall back to the Site URL root and fail.
+5. Authentication, Sessions: JWT expiry (default 3600 seconds is fine; it refreshes itself) and, for Q116, time-box user sessions to 30 days and/or an inactivity timeout (a paid plan feature). Refresh token rotation on.
+6. Authentication, Emails: the built-in mailer sends only a few emails an hour. For invites and resets to arrive reliably, set custom SMTP. The Invite user and Reset password templates can stay on `{{ .ConfirmationURL }}`.
+7. Vercel: `SUPABASE_SERVICE_ROLE_KEY` must be set for production (it already is for the Monday crawl).

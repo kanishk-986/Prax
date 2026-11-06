@@ -289,3 +289,11 @@ body.touring .anim-rise, body.touring .anim-pop { animation: none; }
 .pl-rise { animation: rise .25s cubic-bezier(.2,.8,.2,1) both; }
 body.touring .pl-rise { animation: none; }
 @media (prefers-reduced-motion: reduce) { .pl-slide, .pl-pop, .pl-rise { animation: none; } .pl-chev, .pl-seg, .pl-row { transition: none; } }
+
+/* Sign-in card (src/components/auth-card.tsx): the Corners mark drawn at the card's own corners, ink top left and red bottom right. */
+.auth-card { position: relative; border-radius: 14px; }
+.auth-card::before, .auth-card::after { content: ""; position: absolute; width: 26px; height: 26px; pointer-events: none; }
+.auth-card::before { top: -1px; left: -1px; border-top: 2px solid var(--ink); border-left: 2px solid var(--ink); border-top-left-radius: 14px; }
+.auth-card::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); border-bottom-right-radius: 14px; }
+.auth-field { transition: border-color .12s ease; }
+.auth-field:not([aria-invalid]):hover { border-color: var(--stroke); }
