@@ -14,6 +14,10 @@ import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf, logActivit
 import { usePostImage } from "./media";
 import { usePostVideo } from "./video";
 import type { ContentSettings } from "./settings";
+import { humanScore } from "@/lib/studio";
+import { useHumanize, useHumanizeSettings } from "@/components/humanize/use-humanize";
+import { VerdictCard, VerdictBadge, gateText } from "@/components/humanize/verdict";
+import { kindOfFormat, levelFor, gate, gateLabel, textHash, type Verdict } from "@/lib/humanize";
 
 const when = (p: Post) => (p.publish_date ? `${fmtDay(p.publish_date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned");
 const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -27,10 +31,13 @@ export function PostView({ post, campaigns, members, posts = [], onClose, onEdit
   const img = usePostImage(post.image_path);
   const vid = usePostVideo(post.video_path);
   const from = post.repurposed_from ? posts.find((p) => p.id === post.repurposed_from) : null;
+  const hzLevel = levelFor(useHumanizeSettings().settings, kindOfFormat(post.format));
+  const hzSaved = (post.humanize?.checked_at ? post.humanize : null) as Verdict | null;
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-body last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
     <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && st === "Posted" && onRepurpose && <button className="btn" onClick={() => onRepurpose(post)}><Repeat2 size={14} /> Repurpose</button>}{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
       {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body font-semibold text-ink">Company content, not for {possessive(first)} profile</p>}
+      {(hzLevel > 0 || hzSaved) && st !== "Posted" && <VerdictBadge v={hzSaved} level={hzLevel || hzSaved?.level} className="mb-4" />}
       <div className="grid gap-5 md:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="label mb-2">Draft, as it reads on LinkedIn</div>
@@ -89,6 +96,9 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
   const st = statusOf(f.status);
   const [ack, setAck] = useState(!!post.claims_ack);
   const flags = useMemo(() => claimsCheck(f.draft, { companies, permitted: settings?.pov.clients ?? [] }), [f.draft, companies, settings?.pov.clients]);
+  const hzKind = kindOfFormat(f.format);
+  const local = humanScore(f.draft).score;
+  const hz = useHumanize(hzKind, f.draft, (t) => setF((x) => ({ ...x, draft: t })), { local, section: "content_editor", initial: (post.humanize?.checked_at ? post.humanize : null) as Verdict | null });
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   const set = <K extends keyof Post>(k: K, v: Post[K]) => setF((x) => ({ ...x, [k]: v }));
 
@@ -96,7 +106,9 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     const next = { ...f, ...patch };
     const body = { title: next.title, format: next.format, pillar: next.pillar, campaign_id: next.campaign_id, draft: next.draft, publish_date: next.publish_date || null, planned_time: next.planned_time, status: next.status,
       requested_by: next.requested_by, requested_at: next.requested_at, decided_by: next.decided_by, decided_at: next.decided_at, decision: next.decision, decision_note: next.decision_note, phase: next.phase,
-      channel: next.channel ?? PROFILE_CHANNEL, newsletter: next.format === "Article" && !!next.newsletter, claims_ack: ack };
+      channel: next.channel ?? PROFILE_CHANNEL, newsletter: next.format === "Article" && !!next.newsletter, claims_ack: ack,
+      // db/031: the badge goes with the post; a badge for older text is cleared when the text changed.
+      ...(patch.humanize ? { humanize: patch.humanize } : post.humanize?.hash && hz.hash && post.humanize.hash !== hz.hash ? { humanize: {} } : {}) };
     const { error } = await supabase().from("posts").update(body).eq("id", post.id);
     if (error) { toast(error.message); return false; }
     setF(next); haptic();
@@ -122,8 +134,15 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
   async function sendForApproval() {
     if (!f.draft.trim()) { toast("Write the draft first"); return; }
     if (flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
+    // The gate (Q131): posts and articles go for approval only at or above the profile's level.
+    let v: Verdict | null = null;
+    if (hz.level > 0) {
+      v = await hz.ensure();
+      const g = gate(hzKind, hz.level, v, await textHash(f.draft));
+      if (!g.ok) { toast(g.why === "below" ? `${gateLabel(hz.level)}. Use Fix it in the Pangram card.` : "Check it with Pangram first, in the Pangram card. Long pieces check on click."); return; }
+    }
     const undo = { status: f.status, requested_by: f.requested_by, requested_at: f.requested_at, decision: f.decision, decision_note: f.decision_note };
-    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "" }, `Sent to ${first}. It is in the weekly approval session on Today.`, undo))
+    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "", ...(v ? { humanize: v } : {}) }, `Sent to ${first}. It is in the weekly approval session on Today.`, undo))
       logActivity(ws.id, "approval", `Sent for approval: ${f.title}`, post.id);
   }
   async function decide(approved: boolean) {
@@ -187,6 +206,7 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
             <div className="mb-2 flex items-center justify-between"><span className="label">Approval</span><StatusPill s={f.status} /></div>
             {st === "In review" ? (owner ? (
               <div className="flex flex-col gap-2">
+                {hz.level > 0 && <VerdictBadge v={(post.humanize?.checked_at ? post.humanize : null) as Verdict | null} level={hz.level} />}
                 <p className="m-0 text-body">Waiting for your decision.</p>
                 <textarea className="field text-body" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for the team (needed when asking for changes)" />
                 <div className="flex gap-2"><button className="btn btn-primary" onClick={() => decide(true)}>Approve</button><button className="btn" onClick={() => decide(false)}>Ask for changes</button></div>
@@ -200,7 +220,8 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
               <div className="flex flex-col gap-2">
                 {f.decision === "changes" && f.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-body">{cap(first)} asked for changes: &ldquo;{f.decision_note}&rdquo;</p>}
                 <p className="m-0 text-body text-muted">{cap(first)} approves team drafts in one weekly session on Today.</p>
-                {editable && <div><button className="btn btn-primary" onClick={sendForApproval}>Send to {first}</button>{owner && <button className="btn btn-ghost ml-1" onClick={() => decide(true)}>Approve it myself</button>}</div>}
+                {editable && hz.level > 0 && f.draft.trim() && <VerdictCard h={hz} local={local} />}
+                {editable && <div><button className={`btn ${hz.level > 0 && hz.gate.why === "below" ? "" : "btn-primary"}`} disabled={hz.busy === "check"} onClick={sendForApproval}>{hz.level > 0 && hz.gate.why === "below" ? gateText(hz) : `Send to ${first}`}</button>{owner && <button className="btn btn-ghost ml-1" onClick={() => decide(true)}>Approve it myself</button>}</div>}
               </div>
             )}
           </section>

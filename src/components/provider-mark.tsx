@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useLive } from "@/lib/live";
 import { useExtension } from "@/lib/bridge";
 import { useWorkspace, ymd, addDays, today } from "@/lib/workspace";
-import { MARKS, PROVIDERS, KEY_STATE, SAVED_KEY, providerOf, usageFor, usageLine, lastUsedLabel, type ProviderId, type ProviderUsage, type UsageRow } from "@/lib/providers";
+import { MARKS, PROVIDERS, KEY_STATE, SAVED_KEY, CHECKERS, providerOf, usageFor, usageLine, lastUsedLabel, type ProviderId, type ProviderUsage, type UsageRow, type CheckerId } from "@/lib/providers";
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
 
@@ -30,6 +30,28 @@ export function ProviderMark({ id, short = false, size, onDark = false, classNam
     <span className={cx("inline-flex min-w-0 items-center gap-2 whitespace-nowrap align-middle", bold && "font-semibold", className)}>
       <ProviderLogo id={id} size={s} onDark={onDark} />
       <span className="truncate">{p ? (short ? p.short : p.name) : id}</span>
+    </span>
+  );
+}
+
+/** Pangram's or Walter's own mark, unaltered (sources in src/lib/providers.ts). */
+export function CheckerLogo({ id, size = 16 }: { id: CheckerId; size?: number }) {
+  const m = CHECKERS[id].mark;
+  if ("image" in m) {
+    // eslint-disable-next-line @next/next/no-img-element -- a 64px brand icon from /public, not worth next/image
+    return <img src={m.image} width={size} height={size} alt="" aria-hidden="true" className="shrink-0 rounded-[3px]" style={{ width: size, height: size }} />;
+  }
+  return (
+    <svg viewBox={m.viewBox} width={size} height={size} aria-hidden="true" focusable="false" className="shrink-0">
+      {m.paths.map((p, i) => <path key={i} d={p.d} fill={p.fill} fillRule={p.evenodd ? "evenodd" : undefined} clipRule={p.evenodd ? "evenodd" : undefined} />)}
+    </svg>
+  );
+}
+/** Logo and name: "Pangram", "Walter (beta)". */
+export function CheckerName({ id, size = 16, className, bold = true }: { id: CheckerId; size?: number; className?: string; bold?: boolean }) {
+  return (
+    <span className={cx("inline-flex min-w-0 items-center gap-2 whitespace-nowrap align-middle", bold && "font-semibold", className)}>
+      <CheckerLogo id={id} size={size} /><span className="truncate">{CHECKERS[id].label}</span>
     </span>
   );
 }

@@ -19,14 +19,18 @@
     const searchKeys = Object.fromEntries(["claude", "openai", "gemini", "perplexity"].map((p) => [p, !!((c.keys && c.keys[p]) || (main === p && c.apiKey))]));
     // Google AI answers and Microsoft Copilot are read through SerpApi: one SerpApi key (keys.serpapi) serves both.
     searchKeys.google_ai = searchKeys.copilot = !!(c.keys && c.keys.serpapi);
-    return { installed: true, version: VERSION, connected: !!c.praxToken, provider: main, model: c.model || "", hasKey: !!c.apiKey, quiet: !!c.quiet, searchKeys, extraKeys: Object.keys(c.keys || {}).filter((p) => c.keys[p]) };
+    return { installed: true, version: VERSION, connected: !!c.praxToken, provider: main, model: c.model || "", hasKey: !!c.apiKey, quiet: !!c.quiet, searchKeys, extraKeys: Object.keys(c.keys || {}).filter((p) => c.keys[p]),
+      // Humanization keys (Pangram, Walter): only whether one is saved, never the key.
+      checkerKeys: { pangram: !!(c.checkers && c.checkers.pangram), walter: !!(c.checkers && c.checkers.walter) } };
   }
 
   // Comment Studio on the Prax site asks for AI work and the local draft history through here.
   // The request goes to the extension's background, which calls the AI with the key kept in this browser.
   const ASK = { ai: (d) => ({ type: "draft", rules: d.rules || "", user: String(d.user || ""), kind: d.kind || "studio", plain: !!d.plain }), history: () => ({ type: "history" }), clearHistory: () => ({ type: "clearHistory" }),
     search: (d) => ({ type: "search", engine: String(d.engine || ""), prompt: String(d.prompt || ""), country: String(d.country || "") }),
-    image: (d) => ({ type: "image", provider: String(d.provider || "openai"), prompt: String(d.prompt || "").slice(0, 4000), size: String(d.size || "") }) };
+    image: (d) => ({ type: "image", provider: String(d.provider || "openai"), prompt: String(d.prompt || "").slice(0, 4000), size: String(d.size || "") }),
+    // Humanization (db/031): plan, check with Pangram, or rewrite with Walter (beta). The keys stay in the background.
+    humanize: (d) => ({ type: "humanize", op: ["plan", "check", "walter"].includes(d.op) ? d.op : "plan", kind: String(d.kind || "post"), texts: (Array.isArray(d.texts) ? d.texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 60000)), local: Number(d.local) || 0, confirm: !!d.confirm, rounds: Number(d.rounds) || 0, failing: !!d.failing, section: String(d.section || "") }) };
 
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.origin !== location.origin || !e.data?.praxWeb) return;
@@ -55,6 +59,9 @@
       // Extra keys for AI citations, one per provider. Saved here only, never read back to the page.
       if (data.searchKey && data.searchKey.provider && data.searchKey.key) c.keys = { ...(c.keys || {}), [data.searchKey.provider]: String(data.searchKey.key).trim() };
       if (data.clearSearchKey && c.keys) delete c.keys[data.clearSearchKey];
+      // Pangram and Walter keys for humanization, saved here only and never read back to the page.
+      if (data.checkerKey && ["pangram", "walter"].includes(data.checkerKey.service) && data.checkerKey.key) c.checkers = { ...(c.checkers || {}), [data.checkerKey.service]: String(data.checkerKey.key).trim() };
+      if (data.clearCheckerKey && c.checkers) delete c.checkers[data.clearCheckerKey];
     }
     if (type === "disconnect") { delete c.praxToken; }
     if (type !== "status") await chrome.storage.local.set({ cfg: c });

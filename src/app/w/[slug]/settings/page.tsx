@@ -9,6 +9,7 @@ import { pillarsOf, regionsOf, splitList, SEGMENT_BASE } from "@/lib/persona";
 import { PageHeader } from "@/components/page-header";
 import { useToast, haptic } from "@/components/toaster";
 import { ProfileStatus } from "@/components/profile-status";
+import { HumanizeSettings } from "@/components/humanize/settings-card";
 
 type Member = { user_id: string; email: string; role: Role };
 type Invite = { email: string; role: Role };
@@ -93,6 +94,7 @@ export default function Settings() {
         {owner && <div className="mt-4 flex items-center gap-3"><button className="btn btn-primary" onClick={save}>Save</button><span className="text-body text-good">{saved}</span></div>}
       </section>
 
+      <div className="flex min-w-0 flex-col gap-4">
       <section className="card min-w-0 p-5">
         <h2 className="text-body font-semibold">Team</h2>
         <ul className="mt-3 divide-y divide-line">
@@ -123,6 +125,8 @@ export default function Settings() {
         )}
         <dl className="mt-5 grid gap-1 text-meta text-muted">{ROLES.map((x) => <div key={x.r}><span className="font-medium capitalize text-ink-2">{x.r}</span>: {x.d}</div>)}</dl>
       </section>
+      <HumanizeSettings />
+      </div>
       </div>
       {owner && <ProfileStatus />}
     </div>

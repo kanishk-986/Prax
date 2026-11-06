@@ -9,6 +9,9 @@ import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import { humanScore } from "@/lib/studio";
+import { useHumanize } from "@/components/humanize/use-humanize";
+import { VerdictCard, VerdictBadge, gateText } from "@/components/humanize/verdict";
+import { kindOfFormat, gate, gateLabel, textHash, type Verdict } from "@/lib/humanize";
 import { cap, fullNameOf, firstNameOf, companyOf, pillarsOf, regionText, possessive, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS,
   REPURPOSE_KINDS, parseRepurpose, repurposeFormat, repurposeLabel, hasResults, type RepurposeKey, type Piece } from "@/lib/content";
@@ -334,6 +337,11 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const body = video ? [script.caption].filter(Boolean).join("\n\n") : type === "Poll" ? text.split("\n").filter((l) => !l.startsWith("Option: ")).join("\n").trim() : text;
   const flags = useMemo(() => claimsCheck(video ? `${script.hook} ${script.beats.map((b) => b.say).join(" ")} ${script.close} ${script.caption}` : text, { companies, permitted: settings.pov.clients }), [text, script, video, companies, settings.pov.clients]);
   const human = humanScore(body || hook);
+  // Humanization (db/031): Pangram checks the final text on Save draft, Send for approval or Check; posts and
+  // articles go for approval only at or above the profile's level. Fixes write back into the draft (or the caption).
+  const hzKind = kindOfFormat(type);
+  const setBody = (t: string) => { if (video) setScript((s) => ({ ...s, caption: t })); else if (type === "Poll") setText([t, ...text.split("\n").filter((l) => l.startsWith("Option: "))].join("\n")); else setText(t); };
+  const hz = useHumanize(hzKind, body, setBody, { local: human.score, section: "content_write", initial: (live?.humanize?.checked_at ? live.humanize : null) as Verdict | null });
   const draft = drafts[dIdx];
   const spoken = [script.hook || hook, ...script.beats.map((b) => b.say), script.close].join(" ").trim().split(/\s+/).filter(Boolean).length;
 
@@ -342,17 +350,30 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
       workspace_id: ws.id, title: idea?.title || hook || "Untitled post", format: type, pillar, draft: video ? [script.hook || hook, ...script.beats.map((b) => b.say), script.close].join("\n\n") : text,
       channel, newsletter: type === "Article" && newsletter, source_kind: live?.source_kind === "discovery" || live?.source_kind === "repurpose" ? live.source_kind : src, source_ref: live?.source_kind === "repurpose" ? live.source_ref ?? "" : src === "link" ? url : src === "pdf" ? pdf?.name ?? "" : live?.source_ref ?? "", hook, campaign_id: campaignId,
       script: video ? { ...script, hook: script.hook || hook } : {}, visual: { mode: type === "Carousel" ? "carousel" : image || imgPath ? "image" : "", layout, prompt: imgPrompt, slides: type === "Carousel" ? slides : undefined, poll: type === "Poll" ? pollOpts.filter(Boolean) : undefined },
-      claims_ack: ack, angle: angleText, ...extra,
+      claims_ack: ack, angle: angleText,
+      // A badge for older text is cleared when the text changes, so Library and the approver never see a stale pass.
+      ...(live?.humanize?.hash && hz.hash && live.humanize.hash !== hz.hash ? { humanize: {} } : {}), ...extra,
     };
     const q = postId ? supabase().from("posts").update(row).eq("id", postId).select().single() : supabase().from("posts").insert({ ...row, status: "Drafting" }).select().single();
     const { data, error } = await q;
     if (error) { toast(error.message); return null; }
     setPostId((data as Post).id); return data as Post;
   }
-  async function saveDraft() { const p = await save(postId ? {} : { status: "Drafting" }); if (p) { haptic(); toast("Saved to Library as a draft"); } }
+  async function saveDraft() {
+    const v = hz.level > 0 ? await hz.check() : null;
+    const p = await save({ ...(postId ? {} : { status: "Drafting" }), ...(v ? { humanize: v } : {}) });
+    if (p) { haptic(); toast("Saved to Library as a draft"); }
+  }
   async function sendForApproval() {
     if (flags.length && !ack) { toast("Read the flags below and tick that you checked them"); return; }
-    const p = await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "" });
+    // The gate (Q131): at or above the level per Pangram, or the free score when Pangram cannot be used.
+    let v: Verdict | null = null;
+    if (hz.level > 0) {
+      v = await hz.ensure();
+      const g = gate(hzKind, hz.level, v, await textHash(body));
+      if (!g.ok) { toast(g.why === "below" ? `${gateLabel(hz.level)}. Use Fix it in the Pangram card.` : "Check it with Pangram first, in the Pangram card. Long pieces check on click."); return; }
+    }
+    const p = await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "", ...(v ? { humanize: v } : {}) });
     if (!p) return;
     await syncApprovalSession(ws.id, ws.slug, posts.map((x) => (x.id === p.id ? p : x)).concat(posts.some((x) => x.id === p.id) ? [] : [p]));
     logActivity(ws.id, "approval", `Sent for approval: ${p.title}`, p.id); haptic();
@@ -627,6 +648,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
           </div>}
 
           {step === S.plan && <div className="flex flex-col gap-3.5" data-tour="handoff">
+            {st === "In review" && owner && hz.level > 0 && <VerdictBadge v={(live?.humanize?.checked_at ? live.humanize : null) as Verdict | null} level={hz.level} />}
             {angleText && <AngleBar />}
             <H t="Plan and hand off" sub={`Prax never posts. It copies the post, opens LinkedIn and reminds ${first} at the planned time.`} right={live && <span className="flex items-center gap-2"><StatusPill s={live.status} /><button className="btn btn-ghost h-8" onClick={() => openPost(live)}>Open</button></span>} />
             {type === "Article" && settings.newsletter.name && <SwitchRow className="rounded-xl border border-line bg-white px-3.5 py-3" on={newsletter} onChange={setNewsletter} label={<>Part of the <b className="font-semibold">{settings.newsletter.name}</b> newsletter</>} />}
@@ -645,7 +667,8 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
                 : <>
                   {live?.decision === "changes" && live.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-body">{first} asked for changes: &ldquo;{live.decision_note}&rdquo;</p>}
                   <p className="m-0 text-body leading-relaxed">{cap(first)} owns this profile, so team drafts need a yes before they are planned. They arrive in one weekly approval session on Today.</p>
-                  {editable && <div className="flex flex-wrap gap-2"><button className="btn" onClick={saveDraft}>Save draft</button><button className="btn btn-primary" onClick={sendForApproval}>Send to {first} for approval</button>{owner && <button className="btn btn-ghost" onClick={() => decide(true)}>Approve it myself</button>}</div>}
+                  {editable && hz.level > 0 && body.trim() && <VerdictCard h={hz} local={human.score} />}
+                  {editable && <div className="flex flex-wrap gap-2"><button className="btn" onClick={saveDraft}>Save draft</button><button className={`btn ${hz.level > 0 && hz.gate.why === "below" ? "" : "btn-primary"}`} disabled={hz.busy === "check"} onClick={sendForApproval}>{hz.level > 0 && hz.gate.why === "below" ? gateText(hz) : `Send to ${first} for approval`}</button>{owner && <button className="btn btn-ghost" onClick={() => decide(true)}>Approve it myself</button>}</div>}
                 </>}
             </div>
             <div className="grid grid-cols-2 gap-2.5">
@@ -667,6 +690,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
         </section>
 
         <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
+          {hz.level > 0 && !!body.trim() && step >= S.draft && !(step === 0 && src === "repurpose") && step !== S.plan && <VerdictCard h={hz} local={human.score} sticky />}
           <LinkedInPreview text={step === 0 && src === "repurpose" ? rpSrc?.draft ?? "" : body || hook} image={step === 0 && src === "repurpose" ? null : shownImg} company={step === 0 && src === "repurpose" ? rpSrc?.channel === "company" : channel === "company"} device={device} setDevice={setDevice}
             video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-meta font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-title font-semibold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-body font-semibold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
             footer={!video && <>{(body || hook).trim() ? ` · Human ${human.score}` : ""}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />

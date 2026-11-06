@@ -4,11 +4,50 @@ import { parseProfile, auditProfile } from "@/lib/profile";
 import { mergeStudio, tuningRules, voiceText, LOCKED_RULES, LENGTHS } from "@/lib/studio";
 import { parseCount } from "@/lib/content";
 import { normUrl } from "@/lib/network";
+import { KINDS, DETECTORS, detection, sectionOf, decide, levelFor, mergeSettings, textHash, wordCount, costOf, walterAllowed, type Kind } from "@/lib/humanize";
 
 // The Chrome extension's only door into Prax. Every call carries the user's extension token,
 // which the database checks before it reads or writes anything.
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: cors });
+
+type Rpc = (fn: string, args: Record<string, unknown>) => Promise<any>;
+
+/** plan: settings, this month's use, the cache and the decision for the texts (one, or an article's paragraphs).
+ *  record: one paid call; a Pangram reply is mapped here (src/lib/humanize.ts) and cached by its text hash. */
+async function humanizeOp(body: Record<string, unknown>, rpc: Rpc) {
+  const kind: Kind = KINDS.includes(body.kind as Kind) ? (body.kind as Kind) : "post";
+  const service = body.service === "walter" ? "walter" : "pangram";
+  const section = sectionOf(body.section);
+  if (body.op === "record") {
+    const text = String(body.text ?? "").slice(0, 60000);
+    const hash = await textHash(text);
+    if (service === "walter") {
+      const words = wordCount(text);
+      return { words, job: "humanize_rewrite", ...(await rpc("ext_humanize_record", { p: { service, kind, hash, words, section } })) };
+    }
+    // The detector's reply is mapped by its own adapter (Pangram today; GPTZero or Originality.ai plug in the same way).
+    const det = DETECTORS[service]!;
+    const result = det.map(body.raw);
+    const rec = await rpc("ext_humanize_record", { p: { service, kind, hash, words: result.words || wordCount(text), score: result.score, result, section } });
+    return { result, detection: detection(det.id, result), hash, job: "humanize_check", ...rec };
+  }
+  const texts = (Array.isArray(body.texts) ? body.texts : []).slice(0, 60).map((t) => String(t ?? "").slice(0, 60000));
+  const hashes = await Promise.all(texts.map(textHash));
+  const st = await rpc("ext_humanize_state", { p: { hashes } });
+  const settings = mergeSettings(st?.settings);
+  const used = { pangram: Number(st?.usage?.pangram) || 0, walter: Number(st?.usage?.walter) || 0 };
+  const results = hashes.map((h) => (st?.results?.[h]?.result && typeof st.results[h].result === "object" && "score" in st.results[h].result ? st.results[h].result : null));
+  const words = texts.reduce((s, t, i) => s + (results[i] ? 0 : wordCount(t)), 0);
+  const level = levelFor(settings, kind);
+  const caps = { pangram: settings.pangram_cap, walter: settings.walter_cap };
+  if (service === "walter") {
+    const w = walterAllowed({ hasKey: !!body.has_key, ready: !!body.ready, cap: caps.walter, used: used.walter, words: texts.reduce((s, t) => s + wordCount(t), 0), rounds: Number(body.rounds) || 0, failing: !!body.failing });
+    return { walter: w, level, used, caps, cost: costOf(texts.reduce((s, t) => s + wordCount(t), 0), settings.walter_cost_100) };
+  }
+  const decision = decide({ kind, level, local: Number(body.local) || 0, words, cached: results.some(Boolean), hasKey: !!body.has_key, cap: caps.pangram, used: used.pangram, confirmed: !!body.confirm, costPer100: settings.pangram_cost_100 });
+  return { decision, level, hashes, results, used, caps, rate: settings.pangram_cost_100, walter_cap: caps.walter };
+}
 
 export function OPTIONS() { return new Response(null, { headers: cors }); }
 
@@ -65,6 +104,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       }
       // A LinkedIn message the user sent to the Inbox from a conversation they have open (user click only; db/026_step4.sql).
       case "inbox": return json(await rpc("ext_inbox_add", { p: { name: String(body.name ?? "").slice(0, 200), company: String(body.company ?? "").slice(0, 200), url: String(body.url ?? "").slice(0, 500), thread_url: String(body.thread_url ?? "").slice(0, 500), text: String(body.text ?? "").slice(0, 4000), received_at: String(body.received_at ?? "").slice(0, 40) } }));
+      // Humanization (db/031). The extension's background calls "plan" before any paid check and "record" after one;
+      // the Pangram and Walter keys never come here. Text is hashed here for the cache and is not stored.
+      case "humanize": return json(await humanizeOp(body, rpc));
       case "snapshot":return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
       case "capture": {
         const me = await rpc("ext_me", {});

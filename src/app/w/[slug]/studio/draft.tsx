@@ -11,6 +11,9 @@ import { firstNameOf, possessive } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { isSkipped } from "@/lib/dashboard";
+import { useHumanize } from "@/components/humanize/use-humanize";
+import { VerdictCard, VerdictChip } from "@/components/humanize/verdict";
+import type { Verdict } from "@/lib/humanize";
 import { mergeStudio, humanScore, LENGTHS, LOCKED_RULES, tuningRules, commentAsk, readDrafts, panelDrafts, linkIn, onlyLink, type Studio, type Draft } from "@/lib/studio";
 
 /** Where the panel was opened from. A Today row passes its id so Log as done ticks that row. */
@@ -83,7 +86,7 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
           (fix?.drafts ?? []).forEach((d) => { if (out.drafts[d.i] && d.text?.trim()) out.drafts[d.i] = { ...out.drafts[d.i], text: d.text.trim() }; });
         } catch { /* the unrepaired drafts are still shown, with their flags */ }
       }
-      setRes({ ...out, mode: style || out.mode });
+      setRes({ ...out, mode: style || out.mode }); setChosen(0);
       haptic();
       setTimeout(() => results.current?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }), 30);
     } catch (e) { setErr((e as Error).message); }
@@ -93,6 +96,8 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
   // Opened from the Home paste box: start at once.
   useEffect(() => { if (auto.current && studio && text.length >= 40) { auto.current = false; write(); } }, [studio, text, write]);
 
+  // The draft being used is the chosen one: its Pangram verdict sits right above its buttons; the others show a chip.
+  const [chosen, setChosen] = useState(0);
   const setDraft = (i: number, p: Partial<Row>) => setRes((r) => (r ? { ...r, drafts: r.drafts.map((d, k) => (k === i ? { ...d, ...p } : d)) } : r));
   const styleName = res?.mode || style || "";
 
@@ -100,8 +105,11 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
     try { await navigator.clipboard.writeText(d.text); haptic(); toast("Copied. Paste it on LinkedIn and press Post yourself."); }
     catch { toast("Could not copy. Select the text and copy it."); }
   }
-  async function save(i: number, d: Row) {
-    const { data, error } = await supabase().from("saved_drafts").insert({ workspace_id: ws.id, kind: "comment", text: d.text, author: author.trim(), post_url: link, style: styleName, post_type: res?.type ?? "", human: humanScore(d.text, range).score, impact: d.impact ? d.impact * 10 : null, source: "app" }).select("id").single();
+  async function save(i: number, d: Row, v: Verdict | null) {
+    const row = { workspace_id: ws.id, kind: "comment", text: d.text, author: author.trim(), post_url: link, style: styleName, post_type: res?.type ?? "", human: humanScore(d.text, range).score, impact: d.impact ? d.impact * 10 : null, source: "app" };
+    // The badge is saved with the draft (db/031); before 031 runs the column is missing, so the draft is saved without it.
+    let { data, error } = await supabase().from("saved_drafts").insert(v ? { ...row, humanize: v } : row).select("id").single();
+    if (error && v && /humanize/.test(error.message)) ({ data, error } = await supabase().from("saved_drafts").insert(row).select("id").single());
     if (error) { toast(error.message); return; }
     setDraft(i, { saved: true }); haptic();
     toast("Saved to the Library", async () => { await supabase().from("saved_drafts").delete().eq("id", (data as { id: string }).id); setDraft(i, { saved: false }); });
@@ -193,26 +201,10 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
             [0, 1, 2].slice(0, studio ? panelDrafts(studio.tuning) : 3).map((k) => <div key={k} className="h-[132px] animate-pulse rounded-xl bg-[#ececec]" />)
           ) : res ? (<>
             <p className="text-meta text-muted">{[res.type && `Read as ${res.type}`, styleName && `Style: ${styleName}`].filter(Boolean).join(" · ")}</p>
-            {res.drafts.map((d, i) => {
-              const h = humanScore(d.text, range);
-              const okH = h.score >= (studio?.tuning.minHuman ?? 85);
-              return (
-                <article key={i} className="panel anim-rise flex flex-col gap-2.5 p-4">
-                  <textarea aria-label={`Draft ${i + 1}`} value={d.text} onChange={(e) => setDraft(i, { text: e.target.value })} className="w-full resize-none bg-transparent text-body leading-relaxed text-ink outline-none [field-sizing:content] focus-visible:rounded-md focus-visible:bg-[#f6f6f6]" />
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta">
-                    <span className={`num whitespace-nowrap font-semibold ${okH ? "text-ink" : "text-warn"}`}>Human {h.score}</span>
-                    <span className="num whitespace-nowrap font-semibold text-ink" title="How likely the author is to reply">{d.impact ? `Impact ${d.impact * 10}` : "Impact not scored"}</span>
-                    {d.angle && <span className="min-w-0 text-muted">{d.angle}</span>}
-                  </div>
-                  {h.flags.length > 0 && <p className="text-meta text-warn">{h.flags.join(" · ")}</p>}
-                  <div className="flex flex-wrap gap-1.5 pt-0.5">
-                    <button type="button" className="btn h-8 px-2.5 text-meta" onClick={() => copy(d)}><Copy size={13} /> Copy</button>
-                    {editor && <button type="button" className="btn h-8 px-2.5 text-meta" disabled={d.saved} onClick={() => save(i, d)}>{d.saved ? <><Check size={13} /> Saved</> : <><Bookmark size={13} /> Save to Library</>}</button>}
-                    {editor && <button type="button" className="btn h-8 px-2.5 text-meta" disabled={d.logged} onClick={() => logDone(i, d)}>{d.logged ? <><Check size={13} /> Logged</> : <><CheckCheck size={13} /> Log as done on Today</>}</button>}
-                  </div>
-                </article>
-              );
-            })}
+            {res.drafts.map((d, i) => (
+              <DraftCard key={i} i={i} d={d} range={range} minHuman={studio?.tuning.minHuman ?? 85} chosen={chosen === i} editor={editor}
+                onText={(t) => setDraft(i, { text: t })} onChoose={() => setChosen(i)} onCopy={() => copy(d)} onSave={(v) => save(i, d, v)} onLog={() => logDone(i, d)} />
+            ))}
             <p className="text-meta text-muted">Copy a draft, paste it under the post on LinkedIn and press Post yourself. Then log it here, so Today and Engagement count it.</p>
           </>) : (
             <p className="text-body text-muted">Drafts appear here with their Human and Impact scores. Each one takes a different angle; the strongest is first.</p>
@@ -220,5 +212,35 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
         </div>
       </aside>
     </>
+  );
+}
+
+/** One draft with its scores and actions. Copy, Save and Log run the Pangram check on this draft (when the plan says so);
+ *  the chosen draft shows the verdict card right above the buttons, so the score is seen at the moment of using it. */
+function DraftCard({ i, d, range, minHuman, chosen, editor, onText, onChoose, onCopy, onSave, onLog }: {
+  i: number; d: Row; range: { lo: number; hi: number }; minHuman: number; chosen: boolean; editor: boolean;
+  onText: (t: string) => void; onChoose: () => void; onCopy: () => void; onSave: (v: Verdict | null) => void; onLog: () => void;
+}) {
+  const hs = humanScore(d.text, range);
+  const hz = useHumanize("comment", d.text, onText, { local: hs.score, section: "comment_studio" });
+  const okH = hs.score >= minHuman;
+  const use = (fn: () => void) => { onChoose(); fn(); };
+  return (
+    <article className="panel anim-rise flex flex-col gap-2.5 p-4">
+      <textarea aria-label={`Draft ${i + 1}`} value={d.text} onChange={(e) => onText(e.target.value)} onFocus={onChoose} className="w-full resize-none bg-transparent text-body leading-relaxed text-ink outline-none [field-sizing:content] focus-visible:rounded-md focus-visible:bg-[#f6f6f6]" />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta">
+        <span className={`num whitespace-nowrap font-semibold ${okH ? "text-ink" : "text-warn"}`}>Human {hs.score}</span>
+        <span className="num whitespace-nowrap font-semibold text-ink" title="How likely the author is to reply">{d.impact ? `Impact ${d.impact * 10}` : "Impact not scored"}</span>
+        {!chosen && hz.level > 0 && <VerdictChip v={hz.verdict} />}
+        {d.angle && <span className="min-w-0 text-muted">{d.angle}</span>}
+      </div>
+      {hs.flags.length > 0 && <p className="text-meta text-warn">{hs.flags.join(" · ")}</p>}
+      {chosen && <VerdictCard h={hz} local={hs.score} />}
+      <div className="flex flex-wrap gap-1.5 pt-0.5">
+        <button type="button" className="btn h-8 px-2.5 text-meta" onClick={() => use(() => { onCopy(); hz.check(); })}><Copy size={13} /> Copy</button>
+        {editor && <button type="button" className="btn h-8 px-2.5 text-meta" disabled={d.saved || hz.busy === "check"} onClick={() => use(async () => onSave(await hz.check()))}>{d.saved ? <><Check size={13} /> Saved</> : <><Bookmark size={13} /> Save to Library</>}</button>}
+        {editor && <button type="button" className="btn h-8 px-2.5 text-meta" disabled={d.logged} onClick={() => use(() => { onLog(); hz.check(); })}>{d.logged ? <><Check size={13} /> Logged</> : <><CheckCheck size={13} /> Log as done on Today</>}</button>}
+      </div>
+    </article>
   );
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prax for LinkedIn",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "Draft comments, replies and connection notes in your profile's voice right on LinkedIn, and log what you post to Prax. Acts only when you click.",
   "permissions": [
     "sidePanel",
@@ -17,7 +17,8 @@
     "https://api.x.ai/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.perplexity.ai/*",
-    "https://serpapi.com/*"
+    "https://serpapi.com/*",
+    "https://text.external-api.pangram.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -40,6 +41,7 @@
       ],
       "js": [
         "dom.js",
+        "marks.js",
         "content.js"
       ],
       "css": [
@@ -62,5 +64,18 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "optional_host_permissions": [
+    "https://api.walterwrites.ai/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/walter.png"
+      ],
+      "matches": [
+        "https://www.linkedin.com/*"
+      ]
+    }
+  ]
 }
