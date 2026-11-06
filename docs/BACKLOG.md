@@ -382,3 +382,4 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | T6 | In-app searchable Guide, one page per section, screenshots, PDF download | 7 Nov Q147 | Not started |
 | T7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
 | T8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
+| T9 | Premium invite and auth emails (Resend on a Prax domain), Join Prax page, welcome email | 7 Nov Q150 to Q153 | Not started (domain needs owner action) |

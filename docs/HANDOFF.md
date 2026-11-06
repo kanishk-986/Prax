@@ -671,3 +671,12 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Q147: an in-app, searchable Guide section (Set up group), one page per section: purpose, step by step, every button and menu, settings, the logic behind it, common problems, real screenshots. "?" links to its page. The whole guide downloads as a PDF.
 - Q148: a "Send feedback" button saves page, note and an optional screenshot to a list only the owner sees.
 - Q149: order: Connections and humanize deploy first; Agent A does access, demo copy and setup (Q143 to Q145); Agent B does tours and guide (Q146, Q147), written last; then a brand-new-user walkthrough. A QA supervisor agent checks every stage to done. Deploys still need the owner's "deploy".
+
+## Invite emails, agreed 7 Nov 2026 (Q150 to Q153, corrected)
+
+- Prax is its own product. The product owner today is Kanishk, and it is not dedicated to Antier (any handover is undecided). Emails and invite pages say "Prax", never Antier, and never hardcode a person: the inviter's name comes from their own profile ("Kanishk invited you to try Prax").
+- Q150: send from a Prax-owned domain through Resend (not an Antier subdomain). The domain is not chosen yet (needs owner action).
+- Q151: invite email: Corners logo, "<inviter> invited you to try Prax", optional personal note, one line on Prax, one red Accept invite button, 7-day expiry, quiet footer; works in Gmail, Outlook, Apple Mail, phone, dark mode, images off.
+- Q152: same design for reset, email change, plus one welcome email (three first steps, Guide link). Nothing else.
+- Q153: the invite link opens a login-style "Join Prax" page showing the inviter, with password and confirm, then lands in the tester's demo copy with the first tour. Expired or used links get a clear page, not an error.
+- Before live: test invites screenshotted in Gmail web and phone, Outlook, dark mode.
