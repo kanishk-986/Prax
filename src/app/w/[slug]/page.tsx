@@ -1,6 +1,7 @@
 "use client";
 // Dashboard: the command centre. Greeting and one sentence on the week, four headline numbers, what needs
 // doing now (ranked by urgency), the week across every section, LinkedIn reach and recent activity.
+import { LinkedInMcp } from "@/components/linkedin-mcp";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
@@ -168,6 +169,7 @@ export default function Dashboard() {
     <Section id="dashboard" title={greeting(hour, firstName(name, email))} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
       entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
       primary={<Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link>}
+      actions={<LinkedInMcp />}
       steps={dashTour(first)}>
 
       {loading ? <Skeleton /> : (<>
