@@ -3,20 +3,29 @@
 // so the page and scripts/test-citations.ts share it. Detection runs on the stored answer and sources at
 // display time, so editing an alias list re-scores every past run.
 
-export type Engine = "claude" | "openai" | "gemini" | "perplexity";
-// Names match PROVIDERS in src/lib/providers.ts (scripts/test-providers.ts checks it).
-export const ENGINES: { id: Engine; name: string; model: string; live: boolean }[] = [
+export type Engine = "claude" | "openai" | "gemini" | "perplexity" | "google_ai" | "copilot";
+// Names match PROVIDERS in src/lib/providers.ts (scripts/test-providers.ts checks it). Google AI answers and Microsoft
+// Copilot have no answer API of their own; they are read from search result pages through SerpApi (`via`), with one
+// SerpApi key for both. Their "model" is the SerpApi engine name.
+export const ENGINES: { id: Engine; name: string; model: string; live: boolean; via?: "serpapi" }[] = [
   { id: "openai", name: "OpenAI ChatGPT", model: "gpt-5", live: true },
   { id: "gemini", name: "Google Gemini", model: "gemini-3.8-flash", live: true },
   { id: "claude", name: "Anthropic Claude", model: "claude-opus-5-5", live: true },
   { id: "perplexity", name: "Perplexity", model: "sonar", live: true },
+  { id: "google_ai", name: "Google AI answers", model: "google_ai_overview", live: true, via: "serpapi" },
+  { id: "copilot", name: "Microsoft Copilot", model: "bing_copilot", live: true, via: "serpapi" },
 ];
+/** Engines read through SerpApi share one key, saved in the extension as `keys.serpapi`. */
+export const SERP_ENGINES: Engine[] = ENGINES.filter((e) => e.via === "serpapi").map((e) => e.id);
+export const isSerp = (e: string) => (SERP_ENGINES as string[]).includes(e);
+/** The name the extension stores an engine's search key under (`cfg.keys[...]`). */
+export const keySlot = (e: string) => (isSerp(e) ? "serpapi" : e);
 
 export type Source = { url: string; title: string; domain: string; cited: boolean };
-export type Parsed = { answer: string; sources: Source[]; model: string; input_tokens: number; output_tokens: number; refused: boolean };
+export type Parsed = { answer: string; sources: Source[]; model: string; input_tokens: number; output_tokens: number; refused: boolean; noAnswer?: boolean; note?: string };
 export type Entity = { id: string; kind: "self" | "competitor"; name: string; aliases: string[]; domains: string[]; subject?: "person" | "company"; status?: "active" | "suggested" };
 export type Run = {
-  id: string; question_id: string; engine: Engine; model: string; status: "ok" | "failed" | "no_sources";
+  id: string; question_id: string; engine: Engine; model: string; status: "ok" | "failed" | "no_sources" | "no_answer";
   answer: string; run_at: string; sources: Source[];
   repeat_index?: number; sentiment?: string; fact_issues?: FactIssue[] | null; person_review?: string;
 };
@@ -119,18 +128,125 @@ export function parsePerplexity(j: J): Parsed {
   return { answer: answer.trim(), sources, model: j.model ?? "", input_tokens: j.usage?.prompt_tokens ?? 0, output_tokens: j.usage?.completion_tokens ?? 0, refused: false };
 }
 
+// ---------- SerpApi: Google AI Overviews and Bing Copilot ----------
+// Shapes from serpapi.com/ai-overview, serpapi.com/google-ai-overview-api and serpapi.com/bing-copilot-api. Both put
+// the answer in `text_blocks` (paragraph, heading, list with nested lists, table, code_block, expandable, comparison)
+// and the sources in `references` ({index, title, link, snippet, source}); a block points at its sources through
+// `reference_indexes`. A reference that some block points at is cited; the rest were only shown beside the answer.
+
+/** The answer as plain text: headings and paragraphs as lines, list items as "- " lines (nested ones indented), tables as rows. */
+export function serpText(blocks: J[] | undefined): string {
+  const out: string[] = [];
+  const items = (list: J[] | undefined, d: number) => {
+    for (const it of list ?? []) {
+      const line = [it.title, it.snippet].filter(Boolean).join(" ").trim();
+      if (line) out.push(`${"  ".repeat(d)}- ${line}`);
+      // A list item can hold its own blocks (a heading, a paragraph, a list), as in Google's longer overviews.
+      if (Array.isArray(it.text_blocks)) { const inner = serpText(it.text_blocks); if (inner) out.push(inner); }
+      if (Array.isArray(it.list)) items(it.list, d + 1);
+    }
+  };
+  for (const b of blocks ?? []) {
+    if (b.type === "list") { items(b.list, 0); continue; }
+    if (b.type === "table") {
+      const rows: unknown[] = [...(Array.isArray(b.headers) ? [b.headers] : []), ...(Array.isArray(b.table) ? b.table : [])];
+      for (const r of rows) if (Array.isArray(r)) out.push(r.map(String).join(" | "));
+      continue;
+    }
+    if (b.type === "code_block") { if (b.code) out.push(String(b.code)); continue; }
+    if (b.type === "expandable") {
+      if (b.title) out.push(String(b.title));
+      const inner = serpText(b.text_blocks);
+      if (inner) out.push(inner);
+      continue;
+    }
+    if (b.type === "comparison") {
+      if (Array.isArray(b.product_labels)) out.push(b.product_labels.join(" | "));
+      for (const c of b.comparison ?? []) out.push([c.feature, ...(c.values ?? [])].join(" | "));
+      continue;
+    }
+    if (b.snippet) out.push(String(b.snippet));
+  }
+  return out.join("\n").trim();
+}
+
+/** Every reference index a block (or a list item, at any depth) points at, and every link written into the text. */
+function serpCites(blocks: J[] | undefined) {
+  const idx = new Set<number>(), links: { url: string; text: string }[] = [];
+  const visit = (x: J) => {
+    for (const i of x.reference_indexes ?? []) if (typeof i === "number") idx.add(i);
+    for (const l of x.snippet_links ?? []) if (l?.link) links.push({ url: l.link, text: l.text ?? "" });
+    for (const it of x.list ?? []) visit(it);
+    for (const b of x.text_blocks ?? []) visit(b);
+  };
+  for (const b of blocks ?? []) visit(b);
+  return { idx, links };
+}
+
+// Links that lead back to the search engine itself (Google's "search for this term" links) are not sources.
+const SEARCH_HOST = /(^|\.)(google\.[a-z.]+|bing\.com)$/;
+const cleanLink = (u: string) => u.replace(/#:~:text=.*$/, "");
+
+function serpParsed(blocks: J[] | undefined, refs: J[] | undefined, header: string, model: string): Parsed {
+  const sources: Source[] = [];
+  const { idx, links } = serpCites(blocks);
+  for (const r of refs ?? []) {
+    const url = cleanLink(String(r.link ?? ""));
+    if (!url) continue;
+    addSource(sources, url, String(r.title ?? ""), typeof r.index === "number" && idx.has(r.index));
+    // Bing can hand back its own redirect links; the source name then carries the real site when it is a host name.
+    const s = sources.find((x) => x.url === url);
+    const name = typeof r.source === "string" ? r.source.trim().toLowerCase() : "";
+    if (s && SEARCH_HOST.test(s.domain) && /^[\w-]+(\.[\w-]+)+$/.test(name)) s.domain = name.replace(/^www\./, "");
+  }
+  for (const l of links) if (!SEARCH_HOST.test(domainOf(l.url))) addSource(sources, cleanLink(l.url), l.text, true);
+  const answer = [header, serpText(blocks)].filter(Boolean).join("\n\n").trim();
+  return { answer, sources, model, input_tokens: 0, output_tokens: 0, refused: false, noAnswer: !answer };
+}
+
+/**
+ * Google AI Overview through SerpApi. `raws` is the Google Search response (engine=google) and, when Google sent the
+ * overview separately, the Google AI Overview API response (engine=google_ai_overview) fetched with its page_token.
+ * No ai_overview, an empty one, or ai_overview.error means Google showed no AI answer for this search: noAnswer, not a failure.
+ */
+export function parseGoogleAi(raws: J[]): Parsed {
+  const withText = [...raws].reverse().find((j) => Array.isArray(j?.ai_overview?.text_blocks) && j.ai_overview.text_blocks.length);
+  if (withText) {
+    const p = serpParsed(withText.ai_overview.text_blocks, withText.ai_overview.references, "", "google_ai_overview");
+    return p.noAnswer ? { ...p, note: "Google showed no AI Overview for this search." } : p;
+  }
+  const err = raws.map((j) => j?.ai_overview?.error).find(Boolean);
+  return { answer: "", sources: [], model: "google_ai_overview", input_tokens: 0, output_tokens: 0, refused: false, noAnswer: true, note: err ? `Google said: ${err}` : "Google showed no AI Overview for this search." };
+}
+
+/** Bing Copilot through SerpApi (engine=bing_copilot): `header` is the short answer, `text_blocks` the rest. */
+export function parseCopilot(j: J): Parsed {
+  const p = serpParsed(j?.text_blocks, j?.references, String(j?.header ?? "").trim(), "bing_copilot");
+  return p.noAnswer ? { ...p, note: "Copilot gave no answer for this search." } : p;
+}
+
 export function parseEngine(engine: Engine, raws: J[]): Parsed {
+  if (engine === "google_ai") return parseGoogleAi(raws);
+  if (engine === "copilot") return parseCopilot(raws[raws.length - 1] ?? {});
   if (engine === "claude") return parseClaude(raws);
   if (engine === "perplexity") return parsePerplexity(raws[raws.length - 1] ?? {});
   if (engine === "openai") return parseOpenAI(raws[raws.length - 1] ?? {});
   return parseGemini(raws[raws.length - 1] ?? {});
 }
 
-/** Run status: failed when nothing usable came back; no_sources when the answer cites nothing (then "linked" is unknown, not false). */
+/**
+ * Run status: failed when nothing usable came back; no_sources when the answer cites nothing (then "linked" is unknown,
+ * not false); no_answer when a search engine showed no AI answer for the search (Google AI answers, Copilot). A no_answer
+ * run is a finding, not a failure, and it is not scored: neither named nor not named.
+ */
 export function statusOf(p: Parsed): Run["status"] {
+  if (p.noAnswer && !p.refused) return "no_answer";
   if (p.refused || !p.answer) return "failed";
   return p.sources.length ? "ok" : "no_sources";
 }
+
+/** Runs that count in the scores: an answer came back. Failed and no-AI-answer runs are left out. */
+export const scored = (r: Pick<Run, "status">) => r.status === "ok" || r.status === "no_sources";
 
 // ---------- detection ----------
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -202,7 +318,7 @@ export function latestBatches(runs: Run[]) {
 export type Agg = { named: boolean; linked: boolean | null; position: number | null; k: number; n: number; mixed: boolean };
 /** One verdict per batch: named when more than half of the usable repeats name the entity; "mixed" when the repeats disagree. */
 export function aggregate(batch: Run[], e: Pick<Entity, "aliases" | "domains">): Agg | null {
-  const usable = batch.filter((r) => r.status !== "failed");
+  const usable = batch.filter(scored);
   if (!usable.length) return null;
   const ds = usable.map((r) => detect(r, e));
   const k = ds.filter((d) => d.named).length, n = ds.length;
@@ -230,7 +346,7 @@ export function shareOfVoice(runs: Run[], questions: Question[], e: Entity, self
 export type Change = { question_id: string; engine: Engine; kind: "dropped" | "new"; at: string };
 /** Compares each question and engine with its previous usable batch. */
 export function changes(runs: Run[], e: Entity): Change[] {
-  const usable = runs.filter((r) => r.status !== "failed");
+  const usable = runs.filter(scored);
   const out: Change[] = [];
   latestBatches(usable).forEach(({ now, prev }) => {
     if (!prev.length) return;
@@ -246,7 +362,7 @@ export function citationGaps(runs: Run[], self: Entity, competitors: Entity[]) {
   const mine = new Set<string>(), theirs = new Map<string, { runs: number; names: Set<string> }>();
   const ownedHosts = [...self.domains, ...competitors.flatMap((c) => c.domains)];
   for (const r of runs) {
-    if (r.status === "failed") continue;
+    if (!scored(r)) continue;
     const selfNamed = detect(r, self).named;
     const rivals = competitors.filter((c) => detect(r, c).named).map((c) => c.name);
     for (const s of r.sources) {
@@ -275,11 +391,15 @@ export function promptFor(q: Pick<Question, "question" | "region">, engine: Engi
 }
 
 /** Rough per-run cost on list prices. Web search pulls in result pages, so input dwarfs output. */
-export const ESTIMATE: Record<Engine, { inTok: number; outTok: number; usd: number; note: string }> = {
+// SerpApi sells monthly plans of searches and publishes no single per-search price, so its engines show a search
+// count only (`searches`, the most one run uses: Google may need a second request for the overview), never a cost.
+export const ESTIMATE: Record<Engine, { inTok: number; outTok: number; usd: number; note: string; searches?: number }> = {
   claude: { inTok: 20000, outTok: 1200, usd: 0.12, note: "Opus 5.5 at $4/$20 per million tokens plus web search at $10 per 1,000 searches" },
   openai: { inTok: 9000, outTok: 1000, usd: 0.05, note: "depends on your model; web search calls are billed per call" },
   gemini: { inTok: 6000, outTok: 900, usd: 0.04, note: "depends on your model; grounded searches are billed per query" },
   perplexity: { inTok: 4000, outTok: 800, usd: 0.01, note: "Sonar with search; Perplexity bills tokens and a per-request search fee" },
+  google_ai: { inTok: 0, outTok: 0, usd: 0, searches: 2, note: "Google AI Overviews through SerpApi, 1 or 2 searches from your plan" },
+  copilot: { inTok: 0, outTok: 0, usd: 0, searches: 1, note: "Bing Copilot through SerpApi, 1 search from your plan" },
 };
 
 // ---------- tone and facts ----------
@@ -483,7 +603,7 @@ export function subjectShare(runs: Run[], questions: Question[], subject: "perso
   latestBatches(runs).forEach(({ now }, key) => {
     const [qid, eng] = key.split("|");
     if (!qs.has(qid) || (engine && eng !== engine)) return;
-    const usable = now.filter((r) => r.status !== "failed");
+    const usable = now.filter(scored);
     if (!usable.length) return;
     out.total++;
     if (subject === "person") {
@@ -515,7 +635,7 @@ function namedOnPrompt(q: Question, batches: ReturnType<typeof latestBatches>, p
   let hit = false;
   batches.forEach(({ now }, key) => {
     if (hit || !key.startsWith(q.id + "|")) return;
-    const usable = now.filter((r) => r.status !== "failed");
+    const usable = now.filter(scored);
     if (!usable.length) return;
     if (aud !== "vendor" && person && usable.some((r) => detectPerson(r, person, company, ctx).named)) hit = true;
     if (aud !== "expert" && company && aggregate(usable, company)?.named) hit = true;
@@ -595,7 +715,7 @@ export function suggestPeerExperts(runs: Run[], questions: Question[], tracked: 
   latestBatches(runs).forEach(({ now }, k) => {
     const q = qs.get(k.split("|")[0]);
     if (!q) return;
-    const usable = now.filter((r) => r.status !== "failed");
+    const usable = now.filter(scored);
     if (!usable.length) return;
     const tally = new Map<string, { name: string; n: number }>();
     for (const r of usable) for (const name of new Set(peopleIn(r.answer))) { const t = tally.get(key(name)) ?? { name, n: 0 }; t.n++; tally.set(key(name), t); }
@@ -665,7 +785,7 @@ export function promptGaps(runs: Run[], questions: Question[], person: Entity | 
     const rv = new Set<string>(), engines: Engine[] = [];
     batches.forEach(({ now }, key) => {
       if (!key.startsWith(q.id + "|")) return;
-      const usable = now.filter((r) => r.status !== "failed");
+      const usable = now.filter(scored);
       if (!usable.length) return;
       const mine = channel === "shashi" ? usable.some((r) => detectPerson(r, subj, company, ctx).named) : !!aggregate(usable, subj)?.named;
       if (mine) return;

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { useToast, haptic } from "@/components/toaster";
 import { type ExtStatus } from "@/lib/bridge";
-import { ENGINES } from "@/lib/citations";
+import { ENGINES, keySlot } from "@/lib/citations";
 import { PROVIDERS, DRAFT_PROVIDERS, SAVED_KEY, usageLine, lastUsedLabel, type ProviderId, type ProviderUsage } from "@/lib/providers";
 import { ProviderMark, KeyRow, KeyRowHead, KeyState, ModelId } from "./provider-mark";
 
@@ -85,26 +85,28 @@ export function DraftModel({ status, send, usage }: { status: ExtStatus | null; 
 export function SearchKeys({ status, send, usage }: { status: ExtStatus | null; send: Send; usage: (id: string) => ProviderUsage }) {
   const toast = useToast();
   const main = status?.provider || "claude";
+  // Google AI answers and Copilot share one SerpApi key, stored as keys.serpapi.
+  const label = (e: ProviderId) => PROVIDERS[e].via ?? PROVIDERS[e].name;
   async function save(e: ProviderId, key: string) {
-    try { await send("settings", { searchKey: { provider: e, key } }); haptic(); toast(`${PROVIDERS[e].name} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
+    try { await send("settings", { searchKey: { provider: keySlot(e), key } }); haptic(); toast(`${label(e)} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
   async function remove(e: ProviderId) {
-    try { await send("settings", { clearSearchKey: e }); haptic(); toast(`${PROVIDERS[e].name} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
+    try { await send("settings", { clearSearchKey: keySlot(e) }); haptic(); toast(`${label(e)} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
   return (
     <section id="search-keys" className="card md:col-span-2">
       <div className="p-5 pb-3">
         <h2 className="flex items-center gap-2 text-body font-semibold"><KeyRound size={15} /> Keys for AI search</h2>
-        <p className="mt-1 text-meta text-muted">AI citations and Discovery Studio ask each question, with web search on, on every provider that has a key here. Your drafting key counts for its own provider. Image making in Content Studio uses the OpenAI or Google key.</p>
+        <p className="mt-1 text-meta text-muted">AI citations and Discovery Studio ask each question, with web search on, on every provider that has a key here. Your drafting key counts for its own provider. Image making in Content Studio uses the OpenAI or Google key. Google AI answers and Microsoft Copilot are read from search results through one SerpApi key, for AI citations only.</p>
       </div>
       <div className="@container">
         <KeyRowHead />
         {ENGINES.map((e) => {
-          const ready = !!status?.searchKeys?.[e.id], extra = !!status?.extraKeys?.includes(e.id);
+          const ready = !!status?.searchKeys?.[e.id], extra = !!status?.extraKeys?.includes(keySlot(e.id));
           const u = usage(e.id);
           return (
             <KeyRow key={e.id} id={e.id} connected={ready} model={u.lastModel || e.model} usage={u} disabled={!status?.installed}
-              note={ready && !extra && main === e.id ? "Uses your drafting key" : undefined} removable={extra}
+              note={e.via ? "Through SerpApi" : ready && !extra && main === e.id ? "Uses your drafting key" : undefined} removable={extra}
               onSave={(k) => save(e.id, k)} onRemove={() => remove(e.id)} />
           );
         })}

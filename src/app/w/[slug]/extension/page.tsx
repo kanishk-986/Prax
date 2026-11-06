@@ -153,7 +153,9 @@ export default function ExtensionPage() {
           <div className="mt-1 flex justify-between text-meta text-faint"><span>{fmtDay(stats.days[0].d, { day: "numeric", month: "short" })}</span><span>today</span></div>
           {Object.keys(stats.by).length > 0 && (
             <table className="mt-3 w-full text-meta"><tbody>{Object.entries(stats.by).map(([k, r]) => (
-              <tr key={k} className="border-t border-line"><td className="py-1.5"><span className="flex min-w-0 items-center gap-2"><ProviderMark id={stats.prov[k] || k} short bold={false} className="w-[86px] shrink-0" /><ModelId model={k} className="truncate text-muted" /></span></td><td className="num text-right text-muted">{r.n} {r.n === 1 ? "call" : "calls"}</td><td className="num text-right">{r.cost != null ? `$${r.cost.toFixed(2)}` : `${((r.i + r.o) / 1000).toFixed(1)}k tokens`}</td></tr>
+              <tr key={k} className="border-t border-line"><td className="py-1.5"><span className="flex min-w-0 items-center gap-2"><ProviderMark id={stats.prov[k] || k} short bold={false} className="w-[86px] shrink-0" /><ModelId model={k} className="truncate text-muted" /></span></td>{providerOf(stats.prov[k] || k)?.via
+                ? <><td className="num whitespace-nowrap text-right text-muted">{r.n} {r.n === 1 ? "search" : "searches"}</td><td /></>
+                : <><td className="num text-right text-muted">{r.n} {r.n === 1 ? "call" : "calls"}</td><td className="num text-right">{r.cost != null ? `$${r.cost.toFixed(2)}` : `${((r.i + r.o) / 1000).toFixed(1)}k tokens`}</td></>}</tr>
             ))}</tbody></table>
           )}
           <p className="mt-3 text-meta text-muted">{stats.logged} comments logged from LinkedIn in 30 days. You pay the provider directly; the estimate uses list prices.{" "}

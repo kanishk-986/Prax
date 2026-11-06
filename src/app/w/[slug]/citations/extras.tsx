@@ -24,6 +24,8 @@ import s from "./citations.module.css";
 export { Side };
 
 const LIVE = ENGINES.filter((e) => e.live);
+// The draft test sends the draft inside the prompt, which only an AI model can read; search engines (through SerpApi) are left out.
+const DRAFT_LIVE = LIVE.filter((e) => !e.via);
 const hex = (b: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (t: string) => hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)));
 
@@ -281,7 +283,7 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
   const active = qs.filter((q) => q.status === "active" && !findBrand(q, self));
   const [draft, setDraft] = useState(initial ?? "");
   const [pickQ, setPickQ] = useState<string[]>([]);
-  const ready = LIVE.filter((e) => status?.searchKeys?.[e.id]).map((e) => e.id);
+  const ready = DRAFT_LIVE.filter((e) => status?.searchKeys?.[e.id]).map((e) => e.id);
   const [pickE, setPickE] = useState<Engine[] | null>(null);
   const engines = (pickE ?? ready.slice(0, 2)) as Engine[];
   const [res, setRes] = useState<{ q: string; engine: Engine; named: boolean; answer: string }[] | null>(null);
@@ -324,7 +326,7 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
           <label key={q.id} className="flex items-start gap-2 text-[13px]"><input type="checkbox" checked={pickQ.includes(q.id)} onChange={(e) => setPickQ(e.target.checked ? [...pickQ, q.id].slice(-5) : pickQ.filter((x) => x !== q.id))} /> {q.question}</label>
         ))}{!active.length && <span className={s.small}>Approve prompts first.</span>}</div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center gap-3"><span className={s.label}>AI tools</span>{LIVE.map((e) => (
+      <div className="mt-4 flex flex-wrap items-center gap-3"><span className={s.label}>AI tools</span>{DRAFT_LIVE.map((e) => (
         <label key={e.id} className={cx("flex items-center gap-1.5 text-[13px]", !ready.includes(e.id) && "opacity-50")}><input type="checkbox" disabled={!ready.includes(e.id)} checked={engines.includes(e.id)} onChange={(ev) => setPickE(ev.target.checked ? [...engines, e.id] : engines.filter((x) => x !== e.id))} /><ProviderMark id={e.id} bold={false} /></label>
       ))}{!ready.length && <Link href={`/w/${ws.slug}/extension#search-keys`} className={cx(s.btn, s.sm)}>Add a key</Link>}</div>
       {res && res.length > 0 && (

@@ -1,0 +1,6 @@
+{
+  "_source": "https://serpapi.com/ai-overview, 'Example with error message' (engine=google)",
+  "search_metadata": { "status": "Success" },
+  "search_parameters": { "engine": "google", "q": "stablecoin settlement providers uae", "hl": "en", "gl": "ae" },
+  "ai_overview": { "error": "Can't generate an AI overview right now. Try again later." }
+}

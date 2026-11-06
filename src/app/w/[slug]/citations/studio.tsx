@@ -16,7 +16,7 @@ import { ProviderMark, ProviderLogo, KeyRow, useProviderUsage } from "@/componen
 import { providerName, providerOf, MARKS } from "@/lib/providers";
 import { buildPdf, downloadFile, type PdfDoc, type PdfMark, type PdfSection } from "@/lib/pdf";
 import {
-  ENGINES, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
+  ENGINES, isSerp, keySlot, scored, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
   subjectShare, detectPerson, weeklyTrend, sameDirection, promptGaps, gapTopic, keywordStats, runWeeks, runsInWeek, shiftWeek, audienceOf, AUDIENCE_LABEL, postProfile,
   type Engine, type Entity, type Run, type Question, type Facts, type PromptGap,
 } from "@/lib/citations";
@@ -26,6 +26,7 @@ import s from "./citations.module.css";
 const shortDate = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const when = (t: string) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const engineLabel = (e: string) => providerName(e, true);
+const keyName = (e: string) => (isSerp(e) ? "SerpApi" : providerName(e));
 export type Ctx = { runs: Run[]; qs: Question[]; person?: Entity; company?: Entity; selfAll: Entity; rivals: Entity[]; experts: Entity[]; firms: Entity[]; ctx: string[] };
 const names = (c: Pick<Ctx, "person" | "company">) => who(c.person, c.company);
 
@@ -36,23 +37,23 @@ export function KeysModal({ onClose }: { onClose: () => void }) {
   const usage = useProviderUsage();
   useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   async function save(e: Engine, key: string) {
-    try { await send("settings", { searchKey: { provider: e, key } }); haptic(); toast(`${providerName(e)} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
+    try { await send("settings", { searchKey: { provider: keySlot(e), key } }); haptic(); toast(`${keyName(e)} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
   async function remove(e: Engine) {
-    try { await send("settings", { clearSearchKey: e }); haptic(); toast(`${providerName(e)} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
+    try { await send("settings", { clearSearchKey: keySlot(e) }); haptic(); toast(`${keyName(e)} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
   return (
     <div className={s.center} onMouseDown={onClose}>
       <div className={cx(s.dialog, "max-h-[calc(100dvh-32px)] max-w-[640px] overflow-y-auto p-0")} role="dialog" aria-modal="true" aria-label="AI keys" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-6 pb-4 pt-5">
-          <div><h2 className="text-[17px] font-semibold">AI keys</h2><p className={cx(s.small, "mt-0.5")}>Saved only in this browser. Sent only to that provider.</p></div>
+          <div><h2 className="text-[17px] font-semibold">AI keys</h2><p className={cx(s.small, "mt-0.5")}>Saved only in this browser. Sent only to that provider, or to SerpApi for Google AI answers and Copilot.</p></div>
           <button className={cx(s.btn, s.ghost, s.sm, "w-7 px-0")} onClick={onClose} aria-label="Close"><X size={15} /></button>
         </div>
         {status && !status.installed ? <p className="border-t border-[#ececec] px-6 py-4 text-[13.5px] text-[#9e1c1c]">Install the Prax extension from the Extension page first.</p> : (
           <div className="@container border-t border-[#ececec]">{ENGINES.map((e) => {
-            const u = usage.of(e.id), extra = !!status?.extraKeys?.includes(e.id);
+            const u = usage.of(e.id), extra = !!status?.extraKeys?.includes(keySlot(e.id));
             return <KeyRow key={e.id} id={e.id} connected={!!status?.searchKeys?.[e.id]} model={u.lastModel || e.model} usage={u} disabled={!status?.installed}
-              note={status?.searchKeys?.[e.id] && !extra ? "Uses your drafting key" : undefined} removable={extra} onSave={(k) => save(e.id, k)} onRemove={() => remove(e.id)} />;
+              note={e.via ? "Through SerpApi" : status?.searchKeys?.[e.id] && !extra ? "Uses your drafting key" : undefined} removable={extra} onSave={(k) => save(e.id, k)} onRemove={() => remove(e.id)} />;
           })}</div>
         )}
         <div className="flex justify-end gap-2 border-t border-[#ececec] px-6 py-4"><button className={s.btn} onClick={onClose}>Done</button></div>
@@ -140,7 +141,7 @@ export function FirstRun({ c, keys, editable, onKeys, onRun, onTab }: { c: Ctx; 
 }
 
 // ---------------- home ----------------
-const ENGINE_COLOR: Record<string, string> = { openai: "#141414", gemini: "#9a9a9a", claude: "#d64545", perplexity: "#9e1c1c" };
+const ENGINE_COLOR: Record<string, string> = { openai: "#141414", gemini: "#9a9a9a", claude: "#d64545", perplexity: "#9e1c1c", google_ai: "#5f5f5f", copilot: "#c9c9c9" };
 export function Home({ c, keys, onTab, onOpenRun, onKeys, slots }: { c: Ctx; keys: Record<string, boolean>; onTab: (t: string) => void; onOpenRun: (id: string) => void; onKeys: () => void; slots: { alerts: React.ReactNode; moves: React.ReactNode; profile: React.ReactNode } }) {
   const { runs, qs, person, company, selfAll, rivals, ctx } = c;
   const w = names(c);
@@ -164,6 +165,7 @@ export function Home({ c, keys, onTab, onOpenRun, onKeys, slots }: { c: Ctx; key
   }, [runs, rivals, person, company, w.company, w.first]);
   const outcome = (r: Run): [string, "red" | "ink" | "ring" | "grey"] => {
     if (r.status === "failed") return ["Failed", "grey"];
+    if (r.status === "no_answer") return ["No AI answer", "grey"];
     const p = person ? detectPerson(r, person, company, ctx) : null;
     if (p?.named) return [`${w.first} named`, "red"];
     if (company && aggregate([r], company)?.named) return [`${w.company} named`, "ink"];
@@ -194,10 +196,13 @@ export function Home({ c, keys, onTab, onOpenRun, onKeys, slots }: { c: Ctx; key
               <thead><tr><th>AI tool</th><th className={s.r}>{w.first}</th><th className={s.r}>{w.company}</th><th>Key</th></tr></thead>
               <tbody>{ENGINES.map((e) => {
                 const p = subjectShare(runs, qs, "person", person, company, ctx, ["expert", "leadership"], e.id), co = subjectShare(runs, qs, "company", company, company, ctx, ["vendor", "leadership"], e.id);
+                // Asked, but the search engine showed no AI answer on any of these prompts: say so instead of "Not run".
+                const empty = (aud: string[]) => runs.some((r) => r.engine === e.id && r.status === "no_answer" && aud.includes(audienceOf(qs.find((q) => q.id === r.question_id) ?? { question: "" })))
+                  ? <span className={cx(s.none, "whitespace-nowrap")}>No AI answer</span> : <span className={cx(s.none, "whitespace-nowrap")}>Not run</span>;
                 return <tr key={e.id}>
                   <td><ProviderMark id={e.id} short /></td>
-                  <td className={cx(s.r, s.tnum)}>{p.total ? `${p.named} of ${p.total}` : <span className={s.none}>Not run</span>}</td>
-                  <td className={cx(s.r, s.tnum)}>{co.total ? `${co.named} of ${co.total}` : <span className={s.none}>Not run</span>}</td>
+                  <td className={cx(s.r, s.tnum)}>{p.total ? `${p.named} of ${p.total}` : empty(["expert", "leadership"])}</td>
+                  <td className={cx(s.r, s.tnum)}>{co.total ? `${co.named} of ${co.total}` : empty(["vendor", "leadership"])}</td>
                   <td>{keys[e.id] ? <Status tone="ink">Connected</Status> : <Status tone="grey"><span className={s.none}>No key</span></Status>}</td>
                 </tr>;
               })}</tbody>
@@ -314,7 +319,7 @@ export function Company({ c, ents, editable, facts, onFacts }: { c: Ctx; ents: E
   const trend = useMemo(() => weeklyTrend(runs, qs, person, company, c.rivals, ctx), [runs, qs, person, company, c.rivals, ctx]);
   const gaps = useMemo(() => promptGaps(runs, qs, person, company, c.experts, c.firms, ctx).filter((g) => g.channel === "company"), [runs, qs, person, company, c.experts, c.firms, ctx]);
   const firmRank = useMemo(() => !company ? 0 : [{ me: true, n: C.named }, ...c.firms.map((f) => ({ me: false, n: shareOfVoice(runs, qs, f, company).named }))].sort((a, b) => b.n - a.n).findIndex((x) => x.me) + 1, [runs, qs, company, c.firms, C.named]);
-  const attributed = useMemo(() => person ? runs.filter((r) => r.status !== "failed" && detectPerson(r, person, company, ctx).attributed).length : 0, [runs, person, company, ctx]);
+  const attributed = useMemo(() => person ? runs.filter((r) => scored(r) && detectPerson(r, person, company, ctx).attributed).length : 0, [runs, person, company, ctx]);
   const pages = useMemo(() => { const m = new Map<string, number>(); runs.forEach((r) => r.sources.forEach((x) => { if (company && owns(x.url, company.domains)) m.set(x.url, (m.get(x.url) ?? 0) + 1); })); return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5); }, [runs, company]);
   const wrongFacts = useMemo(() => company ? runs.flatMap((r) => factIssues(r.answer, facts, company.aliases)).slice(0, 3) : [], [runs, facts, company]);
   const dir = sameDirection(trend.map((t) => t.person), trend.map((t) => t.company));
@@ -401,7 +406,7 @@ export function buildWeekReport(c: Ctx, week: string, profile: string, facts: Pa
   const ch = (a: number, b: number) => (a - b > 0 ? `+${a - b}` : String(a - b));
   const failed = now.filter((r) => r.status === "failed").length;
   const qName = (q: Question) => (/[^\x00-\xFF]/.test(q.question) ? `${q.topic || "Prompt"} (${q.language})` : q.question);
-  const cell = (q: Question, e: Engine) => { const b = latestBatches(now).get(`${q.id}|${e}`); if (!b) return "Not run"; const u = b.now.filter((r) => r.status !== "failed"); if (!u.length) return "Failed"; if (person && audienceOf(q) !== "vendor" && u.some((r) => detectPerson(r, person, company, ctx).named)) return w.first; if (company && aggregate(u, company)?.named) return w.company; return "Not named"; };
+  const cell = (q: Question, e: Engine) => { const b = latestBatches(now).get(`${q.id}|${e}`); if (!b) return "Not run"; const u = b.now.filter(scored); if (!u.length) return b.now.some((r) => r.status === "no_answer") ? "No AI answer" : "Failed"; if (person && audienceOf(q) !== "vendor" && u.some((r) => detectPerson(r, person, company, ctx).named)) return w.first; if (company && aggregate(u, company)?.named) return w.company; return "Not named"; };
   const usedEngines = ENGINES.filter((e) => now.some((r) => r.engine === e.id));
   const both = `${w.first} and ${w.company}`;
   const board = [{ name: both, n: shareOfVoice(now, qs, selfAll, selfAll).named, p: shareOfVoice(prev, qs, selfAll, selfAll).named }, ...rivals.map((r) => ({ name: r.name, n: shareOfVoice(now, qs, r, selfAll).named, p: shareOfVoice(prev, qs, r, selfAll).named }))].sort((a, b) => b.n - a.n);

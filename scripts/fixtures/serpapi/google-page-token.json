@@ -1,0 +1,9 @@
+{
+  "_source": "https://serpapi.com/ai-overview, 'Example with an extra request required' (engine=google); page_token shortened",
+  "search_metadata": { "status": "Success" },
+  "search_parameters": { "engine": "google", "q": "how does art work in android", "hl": "en", "gl": "us" },
+  "ai_overview": {
+    "page_token": "rWmjgXictZPdkqI4FMcv90nWvWBUtO0e7SpqKiBqHL8ifuENhRADgnwFjHo377JPtU",
+    "serpapi_link": "https://serpapi.com/search.json?engine=google_ai_overview&page_token=rWmjgXictZPdkqI4FMcv90nWvWBUtO0e7SpqKiBqHL8ifuENhRADgnwFjHo377JPtU"
+  }
+}

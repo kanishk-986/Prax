@@ -1,0 +1,42 @@
+{
+  "_source": "https://serpapi.com/bing-copilot-api, 'Example for table in text_blocks' (engine=bing_copilot); table rows after the second and the header_video left out",
+  "search_metadata": { "id": "...", "status": "Success", "bing_copilot_url": "https://www.bing.com/copilotsearch?q=GDP+by+country%2C+table&FORM=CSSCOP", "total_time_taken": 12.55 },
+  "search_parameters": { "engine": "bing_copilot", "q": "GDP by country, table" },
+  "header": "The United States has the largest nominal GDP at $27.72 trillion, followed by China at $17.79 trillion, with Germany, Japan, and India rounding out the top five.",
+  "text_blocks": [
+    {
+      "type": "heading",
+      "snippet": "Top 20 Countries by Nominal GDP Worldometer+1",
+      "level": 2,
+      "snippet_links": [{ "text": "Top 20 Countries by Nominal GDP", "link": "https://www.worldometers.info/gdp/gdp-by-country/" }],
+      "reference_indexes": [1, 2]
+    },
+    {
+      "type": "table",
+      "headers": ["Rank", "Country", "GDP (USD)", "GDP Growth", "Population", "GDP per Capita", "Share of World GDP"],
+      "table": [
+        ["1", "United States", "$27,720,700,000,000", "2.89%", "343,477,335", "$80,706", "26.11%"],
+        ["2", "China", "$17,794,800,000,000", "5.25%", "1,422,584,933", "$12,509", "16.76%"]
+      ]
+    },
+    {
+      "type": "list",
+      "list": [
+        { "snippet": "Nominal GDP values represent the total market value of goods and services produced, calculated at official exchange rates.", "snippet_highlighted_words": ["Nominal GDP", "calculated at official exchange rates"] },
+        { "snippet": "These figures are compiled from World Bank, UN, and other statistical agencies 2.", "snippet_links": [{ "text": "These figures are compiled from World Bank, UN, and other statistical agencies", "link": "https://www.worldometers.info/gdp/gdp-by-country/" }], "reference_indexes": [1, 2] }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "snippet": "You can access a full global table of countries ranked by GDP here: Wikipedia: List of countries by GDP (nominal)Wikipedia .",
+      "snippet_links": [{ "text": "You can access a full global table of countries ranked by GDP here: Wikipedia: List of countries by GDP (nominal)", "link": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_%28nominal%29" }],
+      "snippet_highlighted_words": ["full global table of countries ranked by GDP"],
+      "reference_indexes": [0]
+    }
+  ],
+  "references": [
+    { "index": 0, "title": "wikipedia.org", "link": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_%28nominal%29", "source": "Wikipedia" },
+    { "index": 1, "title": "GDP by Country - Worldometer", "link": "https://www.worldometers.info/gdp/gdp-by-country/", "snippet": "Countries in the world ranked by Gross Domestic Product (GDP). ...", "source": "Worldometer" },
+    { "index": 2, "title": "GDP - Countries - List - TRADING ECONOMICS", "link": "https://tradingeconomics.com/country-list/gdp", "snippet": "This page provides values for GDP reported in several countries. ...", "source": "TRADING ECONOMICS" }
+  ]
+}

@@ -2,6 +2,7 @@
 // Run: node scripts/test-citations.ts
 import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, detectPerson, personContext, audienceOf, subjectShare, keywordStats, weeklyTrend, sameDirection, promptGaps, gapTopic, runWeeks, parsePerplexity,
   peopleIn, suggestPeerExperts, liveProfiles, archivedProfiles, currentProfile, profileScope, scoped, withProfile, postProfile, inProfile, profileName, nextSort, deleteConfirmed, migrateRows, NO_PROFILE,
+  parseGoogleAi, parseCopilot, serpText, scored, isSerp, keySlot, SERP_ENGINES, ESTIMATE, ENGINES, parseEngine,
   type Entity, type Run, type Question, type Profile } from "../src/lib/citations.ts";
 import { readFileSync } from "node:fs";
 import { buildPdf, svgPathToPdf, pdfRgb } from "../src/lib/pdf.ts";
@@ -351,6 +352,83 @@ eq("a suggested row already stored is not offered twice", suggestPeerExperts(sr,
 eq("majority of repeats: one of two repeats is not enough", suggestPeerExperts([run("m1", "x1", "openai", s0, "Ana Ruiz, CEO of Coinrail."), run("m2", "x1", "openai", s1, "No one."), run("m3", "x2", "openai", s0, "Ana Ruiz, CEO of Coinrail.")], sq, []).map((x) => x.name), []);
 const sql25 = readFileSync(new URL("../db/025_citations_backlog.sql", import.meta.url), "utf8");
 eq("025 adds dismissed_peers, re-runnable, deletes nothing", [/add column if not exists dismissed_peers text\[\]/.test(sql25), /\b(delete|drop table|truncate)\b/i.test(sql25)], [true, false]);
+
+// ---------- Google AI answers and Microsoft Copilot through SerpApi ----------
+// Sample JSON saved from the SerpApi docs (each file names its page in "_source").
+const serp = (f: string) => JSON.parse(readFileSync(new URL(`./fixtures/serpapi/${f}.json`, import.meta.url), "utf8"));
+const gIn = parseGoogleAi([serp("google-ai-overview-inline")]);
+const gLines = gIn.answer.split("\n");
+eq("Google: paragraph, heading and list items as lines", gLines.slice(0, 4), [
+  "Drop shipping is a retail model where an online store doesn't keep products in stock. When a customer buys something, the store orders it from a third-party supplier who then ships it directly to the customer. This allows businesses to operate without managing inventory or warehouse space, reducing initial investment and overhead.",
+  "Here's a more detailed breakdown:",
+  "- No Inventory: Drop shippers sell products without holding any inventory themselves.",
+  "- Third-Party Fulfillment: They rely on a supplier (manufacturer, wholesaler, or another retailer) to handle warehousing, shipping, and fulfillment.",
+]);
+eq("Google: nested list items are indented", gLines.filter((l) => l.startsWith("  - ")).length, 2);
+eq("Google: a list item's own blocks are read", gLines.includes("1. Tax provisions"), true);
+eq("Google: model is the engine, usage has no tokens", [gIn.model, gIn.input_tokens, gIn.output_tokens, gIn.refused, !!gIn.noAnswer], ["google_ai_overview", 0, 0, false, false]);
+eq("Google: references become sources, text fragments cut", gIn.sources.map((x) => [x.domain, x.url.includes("#:~:text"), x.cited]), [["en.wikipedia.org", false, true], ["michigan.gov", false, true], ["fedex.com", false, true], ["shopify.com", false, true], ["shopify.com", false, true]]);
+eq("Google: its own search links are not sources", gIn.sources.some((x) => /google\./.test(x.domain)), false);
+eq("Google: status ok", statusOf(gIn), "ok");
+const gTok = parseGoogleAi([serp("google-page-token"), serp("google-ai-overview-api")]);
+eq("Google: page_token flow reads the second response", [gTok.answer.split("\n")[0], gTok.sources.length, statusOf(gTok)], ["Android Runtime (ART) is the virtual machine that runs apps and some system services on Android devices. ART works by:", 3, "ok"]);
+eq("Google: list titles kept", gTok.answer.includes("- Compiling code ahead of time ART uses Ahead of Time (AOT) compilation"), true);
+eq("Google: parseEngine routes google_ai", parseEngine("google_ai", [serp("google-page-token"), serp("google-ai-overview-api")]).answer, gTok.answer);
+const gErr = parseGoogleAi([serp("google-ai-overview-error")]);
+eq("Google: ai_overview.error is no AI answer, not a failure", [statusOf(gErr), gErr.note], ["no_answer", "Google said: Can't generate an AI overview right now. Try again later."]);
+const gNone = parseGoogleAi([serp("google-no-overview")]);
+eq("Google: no ai_overview at all is no AI answer", [statusOf(gNone), gNone.note, gNone.sources.length], ["no_answer", "Google showed no AI Overview for this search.", 0]);
+eq("Google: empty results (HTTP 200 with error) is no AI answer", statusOf(parseGoogleAi([serp("google-empty")])), "no_answer");
+eq("Google: a token that was never fetched is no AI answer", statusOf(parseGoogleAi([serp("google-page-token")])), "no_answer");
+
+const cTab = parseCopilot(serp("bing-copilot-table"));
+const cLines = cTab.answer.split("\n");
+eq("Copilot: header first, then the blocks", [cLines[0], cLines[2]], ["The United States has the largest nominal GDP at $27.72 trillion, followed by China at $17.79 trillion, with Germany, Japan, and India rounding out the top five.", "Top 20 Countries by Nominal GDP Worldometer+1"]);
+eq("Copilot: table rows with the header row", cLines.filter((l) => l.includes(" | ")).slice(0, 2), ["Rank | Country | GDP (USD) | GDP Growth | Population | GDP per Capita | Share of World GDP", "1 | United States | $27,720,700,000,000 | 2.89% | 343,477,335 | $80,706 | 26.11%"]);
+eq("Copilot: sources cited by reference_indexes, links in text not doubled", cTab.sources.map((x) => [x.domain, x.title, x.cited]), [["en.wikipedia.org", "wikipedia.org", true], ["worldometers.info", "GDP by Country - Worldometer", true], ["tradingeconomics.com", "GDP - Countries - List - TRADING ECONOMICS", true]]);
+eq("Copilot: model, no tokens, ok", [cTab.model, cTab.input_tokens, statusOf(cTab)], ["bing_copilot", 0, "ok"]);
+const cNest = parseCopilot(serp("bing-copilot-nested"));
+eq("Copilot: nested lists indented by depth", cNest.answer.split("\n").filter((l) => /^\s*- /.test(l)).map((l) => l.match(/^\s*/)![0].length), [0, 2, 2, 4, 0, 2, 4]);
+eq("Copilot: references no block points at are read, not cited", cNest.sources.map((x) => x.cited), [false, false, false]);
+eq("Copilot: Bing redirect links take the site from a host-name source", cNest.sources.map((x) => x.domain), ["learncbse.in", "bing.com", "bing.com"]);
+const cEmpty = parseCopilot({ search_metadata: { status: "Success" }, text_blocks: [], references: [] });
+eq("Copilot: no text is no AI answer", [statusOf(cEmpty), cEmpty.note], ["no_answer", "Copilot gave no answer for this search."]);
+eq("serpText: code and expandable blocks", serpText([{ type: "expandable", title: "Camera", text_blocks: [{ type: "paragraph", snippet: "Same lenses." }, { type: "comparison", product_labels: ["A", "B"], comparison: [{ feature: "Zoom", values: ["2x", "3x"] }] }] }, { type: "code_block", code: "x = 1" }]), "Camera\nSame lenses.\nA | B\nZoom | 2x | 3x\nx = 1");
+
+// Naming, linking and ranking work unchanged on a mapped answer.
+const serpSelf: Entity = { id: "w", kind: "self", name: "Worldometer", aliases: ["Worldometer"], domains: ["worldometers.info"] };
+const dCop = detect({ answer: cTab.answer, sources: cTab.sources, status: statusOf(cTab) }, serpSelf);
+eq("Copilot answer: named and linked", [dCop.named, dCop.linked], [true, true]);
+const rankAns = parseCopilot({ text_blocks: [{ type: "list", list: [{ snippet: "Ledgerline for rails" }, { snippet: "Antier for delivery" }] }], references: [] });
+eq("Copilot answer: list position ranks", positionOf(rankAns.answer, ["Antier"]), 2);
+
+// No AI answer runs are kept but not scored.
+const nq: Question = { id: "nq", question: "Best stablecoin vendors", topic: "", region: "", language: "English", status: "active" };
+const nRuns: Run[] = [run("n1", "nq", "google_ai", "2026-11-05T10:00:00Z", "", [], "no_answer"), run("n2", "nq", "copilot", "2026-11-05T10:00:00Z", "Antier leads.")];
+eq("no_answer is not scored; ok is", [scored(nRuns[0]), scored(nRuns[1]), scored({ status: "failed" }), scored({ status: "no_sources" })], [false, true, false, true]);
+eq("share of voice leaves no-answer runs out of the total", [shareOfVoice(nRuns, [nq], self, self).total, shareOfVoice(nRuns, [nq], self, self, "google_ai").total], [1, 0]);
+eq("aggregate of a no-answer batch is null", aggregate([nRuns[0]], self), null);
+
+// Engines, keys and cost display.
+eq("SerpApi engines and their names", ENGINES.filter((e) => e.via).map((e) => [e.id, e.name, e.model]), [["google_ai", "Google AI answers", "google_ai_overview"], ["copilot", "Microsoft Copilot", "bing_copilot"]]);
+eq("one SerpApi key for both", [SERP_ENGINES, keySlot("google_ai"), keySlot("copilot"), keySlot("openai"), isSerp("claude")], [["google_ai", "copilot"], "serpapi", "serpapi", "openai", false]);
+eq("SerpApi engines carry no dollar estimate, only searches", SERP_ENGINES.map((e) => [ESTIMATE[e].usd, ESTIMATE[e].inTok, ESTIMATE[e].searches]), [[0, 0, 2], [0, 0, 1]]);
+eq("promptFor sends search engines the question as written", promptFor({ question: "Who leads?", region: "UAE" }, "copilot"), "Who leads?");
+
+// The extension handler: SerpApi only, the key never leaves for Prax, and slim responses go back to the page.
+const bg = readFileSync(new URL("../extension/background.js", import.meta.url), "utf8");
+const handler = bg.slice(bg.indexOf("// ---------- AI citations through SerpApi"), bg.indexOf("// ---------- Content Studio images"));
+eq("handler calls only serpapi.com", [...new Set(handler.match(/https:\/\/[a-z0-9.-]+/g))], ["https://serpapi.com"]);
+eq("handler reads the key from keys.serpapi", /c\.keys && c\.keys\.serpapi/.test(handler), true);
+eq("the usage report to Prax carries no key", /prax\("usage", \{[^}]*key/.test(handler), false);
+eq("handler returns slim responses, never the request URL", [/raws\.push\(serpSlim\(/.test(handler), /json_endpoint|serpapi_link|api_key: /.test(handler.slice(handler.indexOf("const serpSlim"), handler.indexOf("async function serpSearch")))], [true, false]);
+eq("handler uses page_token only when the overview is not inline", /token && !\(first\.ai_overview\.text_blocks \|\| \[\]\)\.length/.test(handler), true);
+const manifest = JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8"));
+eq("manifest allows serpapi.com", manifest.host_permissions.includes("https://serpapi.com/*"), true);
+const bridgeJs = readFileSync(new URL("../extension/bridge.js", import.meta.url), "utf8");
+eq("bridge reports both engines from the one SerpApi key, as booleans", /searchKeys\.google_ai = searchKeys\.copilot = !!\(c\.keys && c\.keys\.serpapi\)/.test(bridgeJs), true);
+const sql28 = readFileSync(new URL("../db/028_citation_engines.sql", import.meta.url), "utf8");
+eq("028 widens engine and status, re-runnable, deletes nothing", [/'google_ai'/.test(sql28) && /'copilot'/.test(sql28), /'no_answer'/.test(sql28), /drop constraint if exists/.test(sql28), /\b(delete from|drop table|truncate)\b/i.test(sql28)], [true, true, true, false]);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

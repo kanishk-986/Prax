@@ -172,6 +172,7 @@ async function post(url, headers, body) {
 }
 
 async function search({ engine, prompt, country }) {
+  if (SERP_ENGINES[engine]) return serpSearch({ engine, prompt, country });
   const c = await cfg();
   const key = keyFor(c, engine);
   if (!key) throw new Error(`No ${KEY_NAME[engine] || engine} key in this browser. Add one on the AI citations page or the Extension page.`);
@@ -200,6 +201,62 @@ async function search({ engine, prompt, country }) {
   const tok = (k) => raws.reduce((s, j) => s + (j.usage?.[k] ?? 0), 0);
   prax("usage", { kind: "citation", provider: engine, model: raws[raws.length - 1]?.model || model, input_tokens: tok("input_tokens"), output_tokens: tok("output_tokens") }).catch(() => {});
   return { engine, model, raws };
+}
+
+// ---------- AI citations through SerpApi: Google AI answers and Microsoft Copilot ----------
+// Google AI Overviews and Bing Copilot have no answer API, so their answers are read from search results through
+// SerpApi with the user's own SerpApi key (cfg.keys.serpapi, one key for both). Docs: serpapi.com/ai-overview,
+// serpapi.com/google-ai-overview-api, serpapi.com/bing-copilot-api, serpapi.com/api-status-and-error-codes.
+// The key goes only to serpapi.com in the request; it is never sent to Prax, logged or returned to the page.
+// Only the parts the Prax page parses are returned (the page reads text_blocks and references).
+const SERP_ENGINES = { google_ai: "google_ai_overview", copilot: "bing_copilot" };
+// SerpApi's Bing Copilot takes a place name for `location`; country level, from the region's country code.
+const SERP_PLACE = { AE: "United Arab Emirates", SA: "Saudi Arabia", QA: "Qatar", BH: "Bahrain", KW: "Kuwait", OM: "Oman", IN: "India", US: "United States", GB: "United Kingdom", SG: "Singapore", HK: "Hong Kong", NG: "Nigeria", KE: "Kenya", ZA: "South Africa" };
+
+async function serpGet(params, key) {
+  const u = new URL("https://serpapi.com/search.json");
+  for (const [k, v] of Object.entries(params)) if (v) u.searchParams.set(k, v);
+  u.searchParams.set("api_key", key);
+  let r;
+  try { r = await fetch(u.toString(), { headers: { accept: "application/json" } }); } catch { throw new Error("SerpApi could not be reached. Check the internet connection and try again."); }
+  const j = await r.json().catch(() => ({}));
+  // Failed searches carry a top-level error with a non-200 status; empty results are 200 with Success and are not failures.
+  if (!r.ok || j.search_metadata?.status === "Error") throw new Error(j.error ? `SerpApi: ${String(j.error).slice(0, 300)}` : `SerpApi returned ${r.status}`);
+  return j;
+}
+const serpSlim = (j) => ({
+  search_metadata: { status: j.search_metadata?.status || "" },
+  search_parameters: { engine: j.search_parameters?.engine || "" },
+  ...(j.ai_overview ? { ai_overview: { text_blocks: j.ai_overview.text_blocks, references: j.ai_overview.references, error: j.ai_overview.error } } : {}),
+  ...(j.header || j.text_blocks ? { header: j.header, text_blocks: j.text_blocks, references: j.references } : {}),
+  ...(j.error ? { error: String(j.error).slice(0, 300) } : {}),
+});
+
+async function serpSearch({ engine, prompt, country }) {
+  const c = await cfg();
+  const key = (c.keys && c.keys.serpapi) || "";
+  if (!key) throw new Error("No SerpApi key in this browser. Add one on the Prax Extension page, Keys for AI search.");
+  const cc = String(country || "").toUpperCase();
+  const raws = [];
+  let searches = 0;
+  if (engine === "google_ai") {
+    // AI Overviews show for English searches (hl=en) in some countries. Sometimes Google sends the overview through a
+    // second request: then ai_overview.page_token comes back, valid for about a minute, and is used at once.
+    const first = await serpGet({ engine: "google", q: prompt, hl: "en", gl: cc.toLowerCase() }, key);
+    searches++;
+    raws.push(serpSlim(first));
+    const token = first.ai_overview?.page_token;
+    if (token && !(first.ai_overview.text_blocks || []).length) {
+      raws.push(serpSlim(await serpGet({ engine: "google_ai_overview", page_token: token }, key)));
+      searches++;
+    }
+  } else {
+    raws.push(serpSlim(await serpGet({ engine: "bing_copilot", q: prompt, location: SERP_PLACE[cc] || "" }, key)));
+    searches++;
+  }
+  // One usage row per SerpApi search, with no tokens: Prax shows a search count for these engines, never a cost.
+  for (let i = 0; i < searches; i++) prax("usage", { kind: "citation", provider: engine, model: SERP_ENGINES[engine], input_tokens: 0, output_tokens: 0 }).catch(() => {});
+  return { engine, model: SERP_ENGINES[engine], raws, searches };
 }
 
 // ---------- Content Studio images ----------

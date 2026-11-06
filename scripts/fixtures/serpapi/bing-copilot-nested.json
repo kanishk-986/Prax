@@ -1,0 +1,26 @@
+{
+  "_source": "https://serpapi.com/bing-copilot-api, 'Example for nested lists in text_blocks' (engine=bing_copilot); the references carry Bing redirect links as in the docs (the docs shorten them to 'https://www.bing.com/ck/a?!...')",
+  "search_metadata": { "id": "...", "status": "Success", "total_time_taken": 8.02 },
+  "search_parameters": { "engine": "bing_copilot", "q": "how do I calculate the velocity of a train if i know it's mass and acceleration and time" },
+  "text_blocks": [
+    { "type": "paragraph", "snippet": "To calculate the velocity of a train when you know its mass, acceleration, and time, follow these steps:" },
+    {
+      "type": "list",
+      "list": [
+        {
+          "snippet": "Understand the relationship between velocity, acceleration, and time",
+          "list": [
+            { "snippet": "Velocity is the rate at which an object changes its position." },
+            { "snippet": "The formula connecting velocity (v), initial velocity (v_0), acceleration (a), and time (t) is:", "list": [{ "snippet": "\\(v = v_0 + a \\cdot t\\)" }] }
+          ]
+        },
+        { "snippet": "Apply the velocity formula", "list": [{ "snippet": "Multiply the acceleration by the time:", "list": [{ "snippet": "a \\cdot t" }] }] }
+      ]
+    }
+  ],
+  "references": [
+    { "index": 0, "title": "Speed of Train | How to Calculate the Motion or Speed of a Train?", "link": "https://www.bing.com/ck/a?!&&p=speed-of-train", "source": "www.learncbse.in" },
+    { "index": 1, "title": "Velocity Calculator v = u + at", "link": "https://www.bing.com/ck/a?!&&p=velocity-calculator", "source": "Calculator Soup" },
+    { "index": 2, "title": "Kinematic Equations - The Physics Classroom", "link": "https://www.bing.com/ck/a?!&&p=kinematic", "source": "The Physics Classroom" }
+  ]
+}
