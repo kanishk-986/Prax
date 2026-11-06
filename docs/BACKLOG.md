@@ -370,3 +370,5 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | T20 | Templates section as animated, colour-accented cards: one-word purpose, click for a pop-up, View, Edit and Delete with icons | 7 Nov user request | Live (deployed 7 Nov) (animated accent cards, pop-up, view, edit, delete with Undo) |
 
 | QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Live (deployed 7 Nov) (fixes merged; db/030 turns on live updates for every table) |
+
+| H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | In progress |
