@@ -211,7 +211,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | S2 | Strategy drives the product: each node maps to real settings (Today quotas, post mix and pillars, target segments, Comment Studio rules) and shows what it affects | Q109 step 1 | Built not live (nodes write the real settings) |
 | S3 | If/else rules engine applied across Today, Pipeline and Content Studio | Q109 step 2; Q108 | Built not live (if/else rules in Today, Pipeline, Content Studio, Discovery) |
 | S4 | "Who does what" sections hidden from viewers and commenters | Audit item 10 | Live |
-| S5 | Merge Strategy and Notes into one Playbook | Step 4 list; Handoff "Next" item 3 | Not started (may be overtaken by S1) |
+| S5 | Merge Strategy and Notes into one Playbook | Step 4 list; Handoff "Next" item 3 | Built not live (Playbook: Strategy and Notes tabs; old links redirect) |
 
 ## Templates and Notes
 
