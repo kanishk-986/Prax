@@ -62,7 +62,7 @@ export default function Settings() {
           <label className="flex flex-col gap-1"><span className="label">Company</span><input id="s-co" className="field" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} placeholder="Company name" /></label>
         </fieldset>
         <h3 className="mt-6 text-body font-semibold">Strategy</h3>
-        <p className="text-meta text-muted">Drafts, campaigns, Discovery and AI citations use these. Separate items with commas. The <Link href={`/w/${ws.slug}/strategy`} className="underline underline-offset-2 hover:text-ink">Strategy canvas</Link> shows and edits the same values, with segment weights.</p>
+        <p className="text-meta text-muted">Drafts, campaigns, Discovery and AI citations use these. Separate items with commas. The <Link href={`/w/${ws.slug}/playbook`} className="underline underline-offset-2 hover:text-ink">Strategy canvas</Link> shows and edits the same values, with segment weights.</p>
         <fieldset disabled={!owner} className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Content pillars</span><textarea id="s-pillars" rows={2} className="field py-2 text-body" value={lists.pillars} onChange={(e) => setLists({ ...lists, pillars: e.target.value })} placeholder="Three to six themes this profile is known for" /></label>
           <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">Focus regions</span><input id="s-regions" className="field" value={lists.regions} onChange={(e) => setLists({ ...lists, regions: e.target.value })} placeholder="For example: UAE, India" /></label>

@@ -1,5 +1,6 @@
 // Checks the section shell rules: entry moment and tour gating, and tour step maths. Run: node scripts/test-shell.ts
-import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, tourPlace, type Store } from "../src/lib/shell.ts";
+import { readFileSync } from "node:fs";
+import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, tourPlace, playbookTab, playbookHref, type Store } from "../src/lib/shell.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -53,6 +54,16 @@ eq("dashboard only on the root", navActive(B, B, ""), true);
 eq("dashboard not on other pages", navActive(`${B}/today`, B, ""), false);
 eq("dashboard with a trailing slash", navActive(`${B}/`, B, ""), true);
 eq("a longer word that starts the same does not match", navActive(`${B}/notesx`, B, "/notes"), false);
+
+// The Playbook (S5): Strategy and Notes are tabs of one section, and the old addresses land on the right tab.
+const NAV_HREFS = [...readFileSync(new URL("../src/components/sidebar.tsx", import.meta.url), "utf8").matchAll(/\{ href: "([^"]*)"/g)].map((m) => m[1]);
+eq("playbook opens on Strategy by default", playbookTab(null), "strategy");
+eq("playbook ?tab=notes opens Notes", playbookTab("notes"), "notes");
+eq("an unknown tab opens Strategy", playbookTab("people"), "strategy");
+eq("the Strategy tab has no query", playbookHref("shashi"), "/w/shashi/playbook");
+eq("the Notes tab address", playbookHref("shashi", "notes"), "/w/shashi/playbook?tab=notes");
+eq("the playbook item is active on its page with a tab", navActive(`${B}/playbook`, B, "/playbook"), true);
+eq("the sidebar has one Playbook item and no Strategy or Notes", [NAV_HREFS.includes("/playbook"), NAV_HREFS.includes("/strategy"), NAV_HREFS.includes("/notes")], [true, false, false]);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -10,7 +10,7 @@ import { DraftPanelHost, openDraft } from "@/app/w/[slug]/studio/draft";
 type Item = { id: string; label: string; hint?: string; Icon: LucideIcon; kind: "action" | "page" | "person"; go: string };
 
 // Every page in the sidebar, in the same order and with the same icons (Settings is the last one).
-const PAGES: { href: string; label: string; icon: LucideIcon }[] = NAV;
+const PAGES: { href: string; label: string; icon: LucideIcon; words?: string }[] = NAV;
 // Things to do, listed before people and pages. "comment", "write" and "reply" find it too.
 const ACTIONS = [{ id: "a-draft", label: "Draft a comment", hint: "Paste a post, get drafts", Icon: PenLine, words: "draft a comment write reply" }];
 
@@ -41,7 +41,7 @@ export function CommandMenu() {
 
   const items: Item[] = useMemo(() => {
     const s = q.toLowerCase();
-    const pages = PAGES.filter((p) => p.label.toLowerCase().includes(s)).map((p) => ({ id: "p" + p.href, label: p.label, Icon: p.icon, kind: "page" as const, go: `/w/${ws.slug}${p.href}` }));
+    const pages = PAGES.filter((p) => `${p.label} ${p.words ?? ""}`.toLowerCase().includes(s)).map((p) => ({ id: "p" + p.href, label: p.label, Icon: p.icon, kind: "page" as const, go: `/w/${ws.slug}${p.href}` }));
     const ppl = s ? people.filter((p) => `${p.name} ${p.company}`.toLowerCase().includes(s)).slice(0, 6).map((p) => ({ id: p.id, label: p.name, hint: `${p.company} · ${p.stage}`, Icon: User, kind: "person" as const, go: `/w/${ws.slug}/pipeline?p=${p.id}` })) : [];
     const acts = ACTIONS.filter((a) => !s || a.words.includes(s)).map((a) => ({ id: a.id, label: a.label, hint: a.hint, Icon: a.Icon, kind: "action" as const, go: "" }));
     return [...acts, ...ppl, ...pages];

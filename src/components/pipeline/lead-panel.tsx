@@ -151,7 +151,7 @@ export function LeadPanel({ lead, pipe, info, advice, data, api, onMove, onClose
           {lostLine && <span className="text-body font-semibold">{lostLine}</span>}
           <span className={`text-meta ${tone === "overdue" ? "font-semibold text-[#d64545]" : tone === "today" ? "font-semibold" : "text-muted"}`}>{dueLong(lead.next_date, t)}</span>
           {sugg && <span className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-[#e6e6e6] pt-2.5 text-body">
-            <span className="min-w-0 flex-1"><b className="font-semibold">Suggested:</b> {sugg.text}<Link href={`/w/${ws.slug}/strategy`} className="block text-meta text-muted hover:text-ink">From strategy: {sugg.rule}</Link></span>
+            <span className="min-w-0 flex-1"><b className="font-semibold">Suggested:</b> {sugg.text}<Link href={`/w/${ws.slug}/playbook`} className="block text-meta text-muted hover:text-ink">From strategy: {sugg.rule}</Link></span>
             {editable && <button type="button" className="btn h-8! px-3! text-meta font-semibold" onClick={async () => { const prev = lead.next_action; const r = await api.update(lead.id, { next_action: sugg.text }); if (!r.ok) { toast(r.error); return; } haptic(); toast("Next action set", () => { api.update(lead.id, { next_action: prev }); }); }}>Use it</button>}
           </span>}
           {editable && <span className="mt-1 flex flex-wrap gap-2">

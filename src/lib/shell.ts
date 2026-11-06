@@ -65,3 +65,11 @@ export function navActive(path: string, base: string, href: string): boolean {
   const full = base + href;
   return path === full || path.startsWith(full + "/");
 }
+
+/** The Playbook (S5) holds Strategy and Notes as two tabs; ?tab= picks one, and anything else opens Strategy. */
+export type PlaybookTab = "strategy" | "notes";
+export const playbookTab = (param: string | null | undefined): PlaybookTab => (param === "notes" ? "notes" : "strategy");
+/** Where a Playbook tab lives. Strategy is the default, so its address has no query. The old /strategy and /notes
+ *  pages redirect here. */
+export const playbookQuery = (tab: PlaybookTab) => (tab === "notes" ? "?tab=notes" : "");
+export const playbookHref = (slug: string, tab: PlaybookTab = "strategy") => `/w/${slug}/playbook${playbookQuery(tab)}`;
