@@ -267,7 +267,9 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
     const { id: _id, created_at: _c, ...rest } = p; void _id; void _c;
     const copy = { ...rest, title: `${p.title} (copy)`, status: "Idea", publish_date: null, planned_time: "", requested_by: null, requested_at: null, decided_by: null, decided_at: null, decision: "", decision_note: "", url: "", impressions: null, reactions: null, comments: null,
       // db/022 columns, once it has run: the copy has no results or prep, and does not share the stored image file.
-      ...("reposts" in p ? { reposts: null, results_at: null, results_source: "", prep: {}, image_path: "" } : {}) };
+      ...("reposts" in p ? { reposts: null, results_at: null, results_source: "", prep: {}, image_path: "" } : {}),
+      // db/029: nor the stored video file.
+      ...("video_path" in p ? { video_path: "" } : {}) };
     const { data, error } = await supabase().from("posts").insert(copy).select().single();
     if (error) { toast(error.message); return; }
     setExtra((x) => [...x, data as Post]); haptic();

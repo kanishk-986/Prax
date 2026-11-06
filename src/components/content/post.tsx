@@ -11,6 +11,7 @@ import { cap, fullNameOf, firstNameOf, companyOf, roleOf, pillarsOf, possessive,
 import { claimsCheck, povText, parseCount, hasResults, engagementRate, linksOut, firstLink, parsePrep, repurposeLabel, type Prep } from "@/lib/content";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf, logActivity, syncApprovalSession, Modal } from "./shared";
 import { usePostImage } from "./media";
+import { usePostVideo } from "./video";
 import type { ContentSettings } from "./settings";
 
 const when = (p: Post) => (p.publish_date ? `${fmtDay(p.publish_date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned");
@@ -23,6 +24,7 @@ export function PostView({ post, campaigns, members, posts = [], onClose, onEdit
   const camp = campaigns.find((c) => c.id === post.campaign_id);
   const st = statusOf(post.status);
   const img = usePostImage(post.image_path);
+  const vid = usePostVideo(post.video_path);
   const from = post.repurposed_from ? posts.find((p) => p.id === post.repurposed_from) : null;
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-body last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
@@ -38,6 +40,7 @@ export function PostView({ post, campaigns, members, posts = [], onClose, onEdit
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element -- a signed Storage link, not a static asset */}
             {post.image_path && (img ? <img src={img} alt="Post visual" className="block w-full border-t border-line" /> : <div className="aspect-[4/3] w-full animate-pulse border-t border-line bg-surface-2" aria-label="Loading the image" />)}
+            {post.video_path && (vid ? <video src={vid} controls playsInline preload="metadata" className="block aspect-video w-full border-t border-line bg-[#141414]" aria-label="Post video" /> : <div className="aspect-video w-full animate-pulse border-t border-line bg-surface-2" aria-label="Loading the video" />)}
           </div>
           {(st === "Ready" || st === "Posted") && <PrepBlock post={post} />}
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
