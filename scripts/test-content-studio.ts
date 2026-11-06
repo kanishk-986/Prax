@@ -3,7 +3,8 @@
 // Run: node scripts/test-content-studio.ts
 import { foldCut, hookFits, sayableIn3s, plain, styled, styleRange, listLines, caseRange, markdownToLinkedIn, claimsCheck, urlProblem, isPrivateIp, readable, parseIdeas, parseHooks, parseDrafts, povText, EMPTY_POV, nextIssue, whatWorks, type ResultPost,
   parseCount, hasResults, engagementScore, engagementRate, resultsSummary, activityId, needsResults, parseRepurpose, repurposeFormat, repurposeLabel, linksOut, firstLink, parsePrep, imagePath, dataUrlBytes } from "../src/lib/content.ts";
-import { carouselPdf } from "../src/lib/carousel-pdf.ts";
+import { carouselPdf, logoOps as carouselLogo } from "../src/lib/carousel-pdf.ts";
+import { logoOps } from "../src/lib/pdf.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -173,6 +174,10 @@ eq("other URLs are not data URLs", [dataUrlBytes("https://example.com/a.png"), d
 const pdf = new TextDecoder("latin1").decode(carouselPdf([{ title: "One", body: "First" }, { title: "Two", body: "Second" }, { title: "Three", body: "Third" }]));
 eq("carousel is a PDF", pdf.startsWith("%PDF-"), true);
 eq("carousel has three pages", (pdf.match(/\/Type \/Page\b/g) ?? []).length, 3);
+
+eq("carousel has the Corners mark on every page", (pdf.match(/rg 4\.5 4\.5 m/g) ?? []).length, 3);
+eq("carousel mark inverts on the dark cover and close, not on the white slide", [(pdf.match(/1 1 1 rg 5\.5 0 m/g) ?? []).length, (pdf.match(/0\.078 0\.078 0\.078 rg 5\.5 0 m/g) ?? []).length], [2, 1]);
+eq("carousel mark is the same as the report PDF mark", [carouselLogo(48, 58, 16, true) === logoOps(48, 58, 16, true), carouselLogo(1, 2, 9) === logoOps(1, 2, 9)], [true, true]);
 
 console.log(fails ? `\n${fails} failed` : "\nAll Content Studio checks passed");
 process.exit(fails ? 1 : 0);

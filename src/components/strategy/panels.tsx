@@ -1,6 +1,7 @@
 "use client";
 // Side panels for the Strategy canvas: View (the full description and every value), Edit (typed fields per node
 // type), New strategy (templates), and the small confirm and rename dialogs.
+import { SwitchRow } from "@/components/switch";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { X, Plus, ArrowUpRight } from "lucide-react";
@@ -147,7 +148,7 @@ export function EditPanel({ node, nodes, values, active, ownerNeeded, templates,
         {node.type === "action" && <ActionFields c={c as ActionConfig} set={set} templates={templates} />}
         {node.type === "note" && <>
           <F label="Text"><textarea className="field h-auto py-2" rows={10} value={c.text} onChange={(e) => set("text", e.target.value)} /></F>
-          <label className="col-span-2 flex items-center gap-2 text-body"><input type="checkbox" checked={eo} onChange={(e) => setEo(e.target.checked)} /> Editors and owners only (hidden from viewers and commenters)</label>
+          <SwitchRow className="col-span-2" on={eo} onChange={setEo} label="Editors and owners only" hint="Hidden from viewers and commenters" />
         </>}
       </fieldset>
       {(node.type === "condition" || node.type === "action") && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2.5 text-meta leading-relaxed text-ink-2">{node.type === "condition" ? `${subtitleOf("condition", clean, segNames)}: the Yes lane runs, otherwise the No lane. Anything a rule adds shows "From strategy: ${title || "this rule"}".` : `${subtitleOf("action", clean)}. ${affectsLine(aff)}.`}</p>}

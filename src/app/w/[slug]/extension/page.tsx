@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useMemo, useState } from "react";
 import { Download, Check, Circle, Plug, Gauge, Moon, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -134,10 +135,8 @@ export default function ExtensionPage() {
         <section className="card p-5">
           <h2 className="flex items-center gap-2 text-body font-semibold"><Moon size={15} /> On LinkedIn</h2>
           <p className="mt-1 text-meta text-muted">Every post gets a Prax bar with the comment modes, or press Alt+P. Your own posts get Reply on comments, and the connection note box gets Prax note. Prax only suggests; you press Post or Send.</p>
-          <label className="mt-3 flex items-center gap-2 text-body">
-            <input id="x-quiet" type="checkbox" disabled={!installed} checked={!!status?.quiet} onChange={(e) => { const on = e.target.checked; send("settings", { quiet: on }).then(() => { haptic(); toast(on ? "Quiet mode on: no bars on LinkedIn" : "Prax bars are back on LinkedIn"); }, (err: Error) => toast(err.message)); }} />
-            Quiet mode: hide the Prax bars and use the side panel only
-          </label>
+          <SwitchRow className="mt-3" disabled={!installed} on={!!status?.quiet} onChange={(on) => { send("settings", { quiet: on }).then(() => { haptic(); toast(on ? "Quiet mode on: no bars on LinkedIn" : "Prax bars are back on LinkedIn"); }, (err: Error) => toast(err.message)); }}
+            label="Quiet mode" hint="Hide the Prax bars and use the side panel only" />
         </section>
 
         <section className="card p-5">

@@ -6,6 +6,7 @@ import { ESTIMATE, type Engine } from "@/lib/citations";
 import { type PlannedSearch, type Settings, type Finding, PACK_LABEL } from "@/lib/discovery";
 import { type Data, type LogRow, type Run, SidePanel, BandPill, Tag, engineName } from "./shared";
 import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
+import { SwitchRow } from "@/components/switch";
 
 export const PACKS: { id: keyof Settings["packs"]; label: string; sub: (n: number) => string }[] = [
   { id: "pillar", label: "By pillar", sub: () => "Six pillars with region" },
@@ -33,15 +34,11 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
       <div data-tour="ai" className="flex flex-wrap items-stretch gap-4 rounded-2xl">
         <section className="flex min-w-0 flex-[3_1_560px] flex-col gap-3 rounded-2xl border border-line bg-white px-5 py-[18px]">
           <span className="flex flex-wrap items-start justify-between gap-2.5"><span className="min-w-0"><span className="font-semibold">What the AI will search</span><span className="mt-0.5 block text-meta text-muted">Each search runs on every connected AI tool with web search on, over the last {s.window_days === 3 ? "72 hours" : "7 days"}. Only sources the AI actually cites are kept.</span></span><span className="num shrink-0 text-body">{plan.length} searches</span></span>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2">
             {PACKS.map((k) => {
-              const on = s.packs[k.id];
-              return (
-                <button key={k.id} type="button" aria-pressed={on} disabled={!d.editable} onClick={() => saveSettings({ packs: { ...s.packs, [k.id]: !on } }, on ? `${k.label} off` : `${k.label} on`)}
-                  className="flex min-w-0 flex-col items-start gap-0.5 rounded-xl bg-white px-3.5 py-3 text-left" style={{ border: on ? "1px solid #141414" : "1px solid #e8e8e8", boxShadow: on ? "inset 0 0 0 1px #141414" : undefined, color: on ? "#141414" : "#5f5f5f" }}>
-                  <span className="text-body font-semibold">{k.label}</span><span className="text-meta opacity-80">{k.sub(packCount[k.id] ?? 0)}</span><span className="num mt-auto pt-1 text-page">{on ? packCount[k.id] ?? 0 : 0}</span>
-                </button>
-              );
+              const on = s.packs[k.id], n = on ? packCount[k.id] ?? 0 : 0;
+              return <SwitchRow key={k.id} className="rounded-xl border border-line px-3.5 py-3" on={on} disabled={!d.editable} onChange={() => saveSettings({ packs: { ...s.packs, [k.id]: !on } }, on ? `${k.label} off` : `${k.label} on`)}
+                label={k.label} hint={<>{k.sub(packCount[k.id] ?? 0)}. <span className="num">{n}</span> {n === 1 ? "search" : "searches"}</>} />;
             })}
           </div>
           <span className="label text-ink">Your own searches</span>

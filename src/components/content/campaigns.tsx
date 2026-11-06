@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Printer, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -644,7 +645,7 @@ function RequestForm({ c, posts, targets, prospects, onClose }: { c: Campaign; p
         <label className="flex flex-col gap-1"><span className="label">Company</span><input className="field" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} /></label>
         <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">LinkedIn URL</span><input className="field" type="url" value={f.linkedin} onChange={(e) => setF({ ...f, linkedin: e.target.value })} placeholder="https://www.linkedin.com/in/" /></label>
         <label className="flex flex-col gap-1 sm:col-span-2"><span className="label">From which post</span><select className="field" value={f.post_id} onChange={(e) => setF({ ...f, post_id: e.target.value })}><option value="">Not sure</option>{posts.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
-        <label className="flex items-center gap-2 text-body sm:col-span-2"><input type="checkbox" className="accent-[#d64545]" checked={f.sent} onChange={(e) => setF({ ...f, sent: e.target.checked })} /> Already sent</label>
+        <SwitchRow className="sm:col-span-2" on={f.sent} onChange={(v) => setF({ ...f, sent: v })} label="Already sent" />
       </div>
     </Modal>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { SwitchRow } from "@/components/switch";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload, FileArchive, ExternalLink, Check, X, ChevronDown, Trash2, UserPlus, ArrowRight, Users } from "lucide-react";
@@ -500,7 +501,7 @@ function WarmTab({ people, idx, prospects, comments, segOf, onChange }: { people
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
           <span className="text-body font-semibold">Prospects, warmest first</span>
-          <label className="flex items-center gap-2 text-meta text-muted"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show prospects with no path ({list.length - withPath.length})</label>
+          <SwitchRow inline on={all} onChange={setAll} label={<>Show prospects with no path <span className="num text-muted">({list.length - withPath.length})</span></>} />
         </div>
         {shown.length === 0 ? <p className="p-6 text-center text-body text-muted">No warm paths found yet. They appear when a prospect is a connection, someone you have messaged, or works where one of your connections works.</p>
           : shown.map(({ p, w }) => <WarmRow key={p.id} p={p} w={w} people={people} segOf={segOf} onChange={onChange} />)}

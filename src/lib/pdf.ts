@@ -88,6 +88,18 @@ export function markOps(m: PdfMark, x: number, y: number, size: number, onDark =
   return `q ${rgb} rg ${s.toFixed(4)} 0 0 ${(-s).toFixed(4)} ${x.toFixed(1)} ${(y + size).toFixed(1)} cm ${svgPathToPdf(m.path)} f Q`;
 }
 
+/** The Prax mark, "Corners" (src/components/logo.tsx), as PDF operators: the 24 by 24 tile with rx 5.5, the white
+ *  corner M4.5 4.5H15V7.5H7.5V15H4.5Z and the red corner M19.5 19.5H9V16.5H16.5V9H19.5Z, drawn size points square
+ *  with its bottom left at (x, y). On a dark page it inverts as in the sidebar: white tile, ink corner, red corner.
+ *  src/lib/carousel-pdf.ts keeps the same function (the logic tests check they match). */
+const LOGO_TILE = "5.5 0 m 18.5 0 l 21.538 0 24 2.462 24 5.5 c 24 18.5 l 24 21.538 21.538 24 18.5 24 c 5.5 24 l 2.462 24 0 21.538 0 18.5 c 0 5.5 l 0 2.462 2.462 0 5.5 0 c h";
+const LOGO_YOU = "4.5 4.5 m 15 4.5 l 15 7.5 l 7.5 7.5 l 7.5 15 l 4.5 15 l h";
+const LOGO_THEM = "19.5 19.5 m 9 19.5 l 9 16.5 l 16.5 16.5 l 16.5 9 l 19.5 9 l h";
+export function logoOps(x: number, y: number, size: number, onDark = false) {
+  const s = +(size / 24).toFixed(4), ink = "0.078 0.078 0.078", white = "1 1 1";
+  return `q ${s} 0 0 ${-s} ${+x.toFixed(2)} ${+(y + size).toFixed(2)} cm ${onDark ? white : ink} rg ${LOGO_TILE} f ${onDark ? ink : white} rg ${LOGO_YOU} f 0.839 0.271 0.271 rg ${LOGO_THEM} f Q`;
+}
+
 export function clean(t: string) {
   return String(t).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/…/g, "...").replace(/·/g, "-").replace(/→/g, "->").replace(/[^\x20-\x7E\xA0-\xFF]/g, "?");
 }
@@ -112,6 +124,7 @@ export function buildPdf(doc: PdfDoc): Uint8Array {
 
   // Cover
   newPage(); rect(0, H - 8, W, 8, RED); rect(M, H - 250, 46, 4, RED);
+  cur.push(logoOps(M, H - M - 30, 22)); text(M + 30, H - M - 23.5, "Prax", 13, true);
   text(M, H - 200, doc.kicker, 10, true, RED); y = H - 280;
   for (const l of wrap(doc.title, 26, W - 2 * M)) { text(M, y, l, 26, true); y -= 32; }
   y -= 6; for (const l of wrap(doc.subtitle, 13, W - 2 * M)) { text(M, y, l, 13, false, GREY); y -= 18; }
@@ -173,7 +186,7 @@ export function buildPdf(doc: PdfDoc): Uint8Array {
     }
   });
   // Footers on every page after the cover
-  pages.forEach((pg, i) => { if (!i) return; cur = pg; rule(M, M - 6, W - M, "0.85 0.85 0.85"); text(M, M - 20, doc.footer, 8, false, FAINT); text(W - M - 40, M - 20, `Page ${i + 1} of ${pages.length}`, 8, false, FAINT); });
+  pages.forEach((pg, i) => { if (!i) return; cur = pg; rule(M, M - 6, W - M, "0.85 0.85 0.85"); cur.push(logoOps(M, M - 22, 9)); text(M + 14, M - 20, doc.footer, 8, false, FAINT); text(W - M - 40, M - 20, `Page ${i + 1} of ${pages.length}`, 8, false, FAINT); });
 
   // Assemble the file
   const objs: string[] = [], add = (o: string) => { objs.push(o); return objs.length; };
