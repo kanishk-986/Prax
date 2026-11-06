@@ -1,0 +1,85 @@
+{
+  "_source": "https://serpapi.com/google-ai-overview-api, 'Typical example' (engine=google_ai_overview); long URLs and the page_token shortened, the docs' '...' elisions left out (so indexes 3 and 4 have no reference here)",
+  "search_metadata": {
+    "id": "6704d8e815afff064f16921d",
+    "status": "Success",
+    "json_endpoint": "https://serpapi.com/searches/b71a9505c46d58cd/6704d8e815afff064f16921d.json",
+    "created_at": "2024-10-08 07:02:00 UTC",
+    "processed_at": "2024-10-08 07:02:00 UTC",
+    "total_time_taken": 1.37
+  },
+  "search_parameters": {
+    "engine": "google_ai_overview",
+    "page_token": "KIVu-nictZPdjrI4GMeTPdkrWU8cFXV0dBKyKbUgiigy6OgJQawFQapUBpmzvZe9qr2aLYzO6I5vsm"
+  },
+  "ai_overview": {
+    "text_blocks": [
+      {
+        "type": "paragraph",
+        "snippet": "Android Runtime (ART) is the virtual machine that runs apps and some system services on Android devices. ART works by:",
+        "reference_indexes": [
+          0,
+          2,
+          3
+        ]
+      },
+      {
+        "type": "list",
+        "list": [
+          {
+            "title": "Compiling code ahead of time",
+            "snippet": "ART uses Ahead of Time (AOT) compilation to compile code before the app is executed. This is different from Dalvik, the previous virtual machine, which used Just In Time (JIT) compilation. AOT compilation makes the machine code ready before the app runs, which significantly improves runtime performance.",
+            "reference_indexes": [
+              3,
+              4
+            ]
+          },
+          {
+            "title": "Generating a profile",
+            "snippet": "When an app is first run, ART interprets methods that aren't AOT-compiled. It then generates a local profile based on how the app is executed. If the app was installed with a dex metadata file, ART combines the local profile with the cloud profile.",
+            "reference_indexes": [
+              1
+            ]
+          },
+          {
+            "title": "Recompiling the app",
+            "snippet": "When the device is idle and charging, a compilation daemon re-compiles the app based on the profile generated during the first few runs.",
+            "reference_indexes": [
+              1
+            ]
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "snippet": "ART has been the default virtual machine for Android since Android 5.0 (Lollipop). However, some older devices may still use Dalvik if they haven't been updated to a newer version of Android.",
+        "reference_indexes": [
+          2
+        ]
+      }
+    ],
+    "references": [
+      {
+        "title": "Android runtime and Dalvik | Android Open Source Project",
+        "link": "https://source.android.com/docs/core/runtime#:~:text=Android%20runtime%20(ART)%20is%20the,major%20features%20implemented%20by%20ART.",
+        "snippet": "Aug 26, 2024 — Android runtime (ART) is the managed runtime used by apps and some system services on Android. ART and its predecessor...",
+        "source": "Android Open Source Project",
+        "index": 0
+      },
+      {
+        "title": "Configure ART - Android Open Source Project",
+        "link": "https://source.android.com/docs/core/runtime/configure",
+        "snippet": "How ART works * An application is initially installed with a dex metadata ( . dm ) file distributed by Play Store, which contains...",
+        "source": "Android Open Source Project",
+        "index": 1
+      },
+      {
+        "title": "Android Runtime 101: ART Component of Android Architecture",
+        "link": "https://medium.com/@acceldia/android-runtime-101-art-component-of-android-architecture-7b89d701c71e#:~:text=Summary,a%20newer%20version%20of%20Android.",
+        "snippet": "Mar 3, 2023 — Summary. In the mobile device domain, different operating systems (OS) exist. Android OS has become highly popular and ...",
+        "source": "Medium",
+        "index": 2
+      }
+    ]
+  }
+}

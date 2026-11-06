@@ -1,0 +1,6 @@
+{
+  "_source": "https://serpapi.com/api-status-and-error-codes, 'Status: Success with results_for in Google Search API' (engine=google): a successful search with no ai_overview key",
+  "search_metadata": { "id": "6540af0b66440aef3efcbdd0", "status": "Success", "json_endpoint": "https://serpapi.com/searches/268f774b7d0b7072/6540af0b66440aef3efcbdd0.json" },
+  "search_parameters": { "engine": "google", "q": "ny hurricane", "location_requested": "Austin, Texas, United States", "location_used": "Austin,Texas,United States", "google_domain": "google.com", "hl": "en", "gl": "us", "device": "desktop" },
+  "search_information": { "query_displayed": "ny hurricane", "total_results": 231000000, "time_taken_displayed": 0.3, "organic_results_state": "Results for exact spelling", "results_for": "New York, NY" }
+}

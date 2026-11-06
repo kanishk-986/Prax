@@ -18,8 +18,9 @@ import { companyOf, fullNameOf, possessive } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, useExtension } from "@/lib/bridge";
 import { ProviderMark, ProviderLogo, ModelId } from "@/components/provider-mark";
+import { providerName } from "@/lib/providers";
 import {
-  ENGINES, ESTIMATE, COUNTRY, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, citationGaps, linkedinCited, latestBatches, aggregate, promptFor, findMatches, recommend, sentimentOf,
+  ENGINES, ESTIMATE, COUNTRY, scored, isSerp, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, citationGaps, linkedinCited, latestBatches, aggregate, promptFor, findMatches, recommend, sentimentOf,
   detectPerson, personContext, promptGaps, audienceOf, AUDIENCE_LABEL, scoped, withProfile, postProfile, profileName, nextSort, archivedProfiles,
   type Profile, type Engine, type Entity, type Run, type Question, type Source, type Facts, type FactIssue, type Audience,
 } from "@/lib/citations";
@@ -298,22 +299,23 @@ function Answers({ runs, rows, qs, qById, self, rivals, manual, onOpen, w }: { r
       <Card title="Latest answer per AI tool" action={<span className="hidden text-[12px] font-normal md:block"><Legend3 /></span>}>
         <div className="overflow-x-auto">
           <table className={s.table}>
-            <thead><tr><th className="min-w-[200px] md:min-w-[280px]">Prompt</th>{LIVE.map((e) => <th key={e.id} className="w-[150px]"><span className="flex items-center gap-1.5"><ProviderLogo id={e.id} size={14} />{e.name.split(" ").pop()}</span></th>)}</tr></thead>
+            <thead><tr><th className="min-w-[200px] md:min-w-[280px]">Prompt</th>{LIVE.map((e) => <th key={e.id} className="w-[150px]"><span className="flex items-center gap-1.5"><ProviderLogo id={e.id} size={14} />{providerName(e.id, true)}</span></th>)}</tr></thead>
             <tbody>{active.map((q) => (
               <tr key={q.id}>
                 <td><div className="font-medium leading-snug">{q.question}</div><div className={s.small}>{[AUDIENCE_LABEL[audienceOf(q)], q.region, q.language !== "English" && q.language, isBranded(q, self) && "Branded, not scored"].filter(Boolean).join(" · ")}</div></td>
                 {LIVE.map((e) => {
                   const b = batches.get(`${q.id}|${e.id}`);
                   if (!b) return <td key={e.id}><span className={cx(s.cell, s.cEmpty)}>Not run</span></td>;
-                  const a = aggregate(b.now, self), first = b.now.find((r) => r.status !== "failed") ?? b.now[0];
+                  const a = aggregate(b.now, self), first = b.now.find(scored) ?? b.now.find((r) => r.status === "no_answer") ?? b.now[0];
+                  const none = !a && first.status === "no_answer";
                   const rivalsNamed = rivals.filter((r) => aggregate(b.now, r)?.named).length;
                   const wrong = b.now.some((r) => (r.fact_issues ?? []).length);
                   const tone = first.sentiment || (a?.named ? sentimentOf(first.answer, self.aliases) : null);
-                  const label = !a ? "Failed" : a.named ? `Named${a.position ? ` #${a.position}` : ""}` : "Not named";
+                  const label = none ? "No AI answer" : !a ? "Failed" : a.named ? `Named${a.position ? ` #${a.position}` : ""}` : "Not named";
                   const extra = [a && a.n > 1 ? `${a.k} of ${a.n} repeats` : "", a?.named && tone === "negative" ? "Negative tone" : "", rivalsNamed ? `${rivalsNamed} peer${rivalsNamed > 1 ? "s" : ""}` : "", wrong ? "Wrong fact" : ""].filter(Boolean).join(" · ");
                   return (
                     <td key={e.id}>
-                      <button className={cx(s.cell, !a && s.cFailed, a?.named && (a.linked ? s.cNamed : s.cNamedNoLink), "flex-col items-start gap-0")} onClick={() => { const r = byId.get(first.id); if (r) onOpen(r); }} aria-label={`${q.question} on ${e.name}: ${label}${a?.named ? (a.linked ? ", linked" : ", not linked") : ""}`}>
+                      <button className={cx(s.cell, !a && !none && s.cFailed, a?.named && (a.linked ? s.cNamed : s.cNamedNoLink), "flex-col items-start gap-0")} onClick={() => { const r = byId.get(first.id); if (r) onOpen(r); }} aria-label={`${q.question} on ${e.name}: ${label}${a?.named ? (a.linked ? ", linked" : ", not linked") : ""}`}>
                         <Status tone={!a ? "grey" : a.named ? (a.linked ? "red" : "ring") : "grey"}><span className={!a || !a.named ? s.none : undefined}>{label}</span></Status>
                         {extra && <span className={cx(s.small, "pl-[13px] text-[11.5px]", wrong && "text-[#9e1c1c]")}>{extra}</span>}
                       </button>
@@ -340,33 +342,35 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
   const toast = useToast();
   const ready = (e: Engine) => !!status?.searchKeys?.[e];
   const [pick, setPick] = useState<Engine[] | null>(null);
-  const [prog, setProg] = useState<{ done: number; total: number; failed: number; stopped: boolean } | null>(null);
+  const [prog, setProg] = useState<{ done: number; total: number; failed: number; none: number; stopped: boolean } | null>(null);
   const stop = useRef(false);
   const [check, setCheck] = useState(true);
   const reps = (q: Question) => Math.max(1, Math.min(3, q.repeats ?? 1));
   const nRuns = qs.reduce((a, q) => a + reps(q), 0);
   const chosen = pick ?? LIVE.map((e) => e.id).filter((e) => status?.searchKeys?.[e]);
   const total = nRuns * chosen.length;
-  const est = chosen.reduce((a, e) => ({ inTok: a.inTok + ESTIMATE[e].inTok * nRuns, outTok: a.outTok + ESTIMATE[e].outTok * nRuns, usd: a.usd + ESTIMATE[e].usd * nRuns }), { inTok: 0, outTok: 0, usd: 0 });
+  const est = chosen.reduce((a, e) => ({ inTok: a.inTok + ESTIMATE[e].inTok * nRuns, outTok: a.outTok + ESTIMATE[e].outTok * nRuns, usd: a.usd + ESTIMATE[e].usd * nRuns, searches: a.searches + (ESTIMATE[e].searches ?? 0) * nRuns }), { inTok: 0, outTok: 0, usd: 0, searches: 0 });
+  // SerpApi has no per-search list price, so its engines add searches, never dollars.
+  const serpChosen = chosen.some(isSerp), modelChosen = chosen.some((e) => !isSerp(e));
   const missing = LIVE.filter((e) => !ready(e.id)).length;
 
-  async function one(q: Question, engine: Engine, rep: number) {
+  async function one(q: Question, engine: Engine, rep: number): Promise<"ok" | "failed" | "none"> {
     const prompt = promptFor(q, engine), country = engine === "gemini" ? "" : COUNTRY[q.region] ?? "";
     const base = withProfile({ workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language, repeat_index: rep }, scope);
     try {
       const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country }, 240000);
       const p = parseEngine(engine, res.raws);
       const st = statusOf(p);
-      const { data, error } = await supabase().from("citation_runs").insert({ ...base, model: p.model || res.model, status: st, answer: p.answer, input_tokens: p.input_tokens, output_tokens: p.output_tokens, error: p.refused ? "The model declined to answer" : "" }).select("id").single();
+      const { data, error } = await supabase().from("citation_runs").insert({ ...base, model: p.model || res.model, status: st, answer: p.answer, input_tokens: p.input_tokens, output_tokens: p.output_tokens, error: p.refused ? "The model declined to answer" : st === "no_answer" ? (p.note ?? "No AI answer for this search") : "" }).select("id").single();
       if (error) throw error;
       if (p.sources.length) await supabase().from("citation_sources").insert(p.sources.map((x, i) => ({ workspace_id: ws.id, run_id: data.id, url: x.url, title: x.title, domain: x.domain, cited: x.cited, sort: i })));
       // Tone and facts only matter when the tracked names appear; one small call on the main AI key.
       if (check && st !== "failed" && detect({ answer: p.answer, sources: p.sources, status: st }, self).named) await judgeRun({ id: data.id, answer: p.answer }, facts, self);
-      return st !== "failed";
+      return st === "failed" ? "failed" : st === "no_answer" ? "none" : "ok";
     } catch (e) {
       // A failed run is stored so it shows on the Runs tab; it never counts as "not named".
       await supabase().from("citation_runs").insert({ ...base, model: "", status: "failed", error: (e as Error).message.slice(0, 500) });
-      return false;
+      return "failed";
     }
   }
 
@@ -374,18 +378,20 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
     stop.current = false;
     const queue = qs.flatMap((q) => chosen.flatMap((e) => Array.from({ length: reps(q) }, (_, i) => [q, e, i] as const)));
     const n = queue.length;
-    let done = 0, failed = 0;
-    setProg({ done, total: n, failed, stopped: false });
+    let done = 0, failed = 0, none = 0;
+    setProg({ done, total: n, failed, none, stopped: false });
     // Three at a time, so no provider is hit in a burst.
     await Promise.all([0, 1, 2].map(async () => {
       while (queue.length && !stop.current) {
         const [q, e, i] = queue.shift()!;
-        if (!(await one(q, e, i))) failed++;
+        const r = await one(q, e, i);
+        if (r === "failed") failed++;
+        if (r === "none") none++;
         done++;
-        setProg({ done, total: n, failed, stopped: stop.current });
+        setProg({ done, total: n, failed, none, stopped: stop.current });
       }
     }));
-    setProg({ done, total: n, failed, stopped: stop.current });
+    setProg({ done, total: n, failed, none, stopped: stop.current });
     haptic(); onDone();
     if (failed) toast(`${failed} of ${done} runs failed. Answers shows why.`);
   }
@@ -406,16 +412,17 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
         ))}</div>
       </Card>
       <SwitchRow className="mt-3 rounded-xl border border-[#e8e8e8] p-3.5" on={check} disabled={!!prog} onChange={setCheck} label="Check tone and facts" hint="One small call on your main AI key when a tracked name appears." />
-      <dl className="mt-3 grid grid-cols-3 gap-3 rounded-xl bg-[#fafafa] p-3.5 text-[13px]">
+      <dl className={cx("mt-3 grid gap-3 rounded-xl bg-[#fafafa] p-3.5 text-[13px]", serpChosen ? "grid-cols-2" : "grid-cols-3")}>
         <div><dt className={s.small}>Runs</dt><dd className={cx(s.tnum, "font-semibold")}>{total}</dd></div>
-        <div><dt className={s.small}>Tokens, about</dt><dd className={cx(s.tnum, "font-semibold")}>{Math.round(est.inTok / 1000)}k in, {Math.round(est.outTok / 1000)}k out</dd></div>
-        <div><dt className={s.small}>List price, about</dt><dd className={cx(s.tnum, "font-semibold")}>${est.usd.toFixed(2)}</dd></div>
+        {modelChosen && <div><dt className={s.small}>Tokens, about</dt><dd className={cx(s.tnum, "font-semibold")}>{Math.round(est.inTok / 1000)}k in, {Math.round(est.outTok / 1000)}k out</dd></div>}
+        {modelChosen && <div><dt className={s.small}>List price, about</dt><dd className={cx(s.tnum, "font-semibold")}>${est.usd.toFixed(2)}</dd></div>}
+        {serpChosen && <div><dt className={s.small}>SerpApi searches, up to</dt><dd className={cx(s.tnum, "font-semibold")}>{est.searches}</dd></div>}
       </dl>
-      <p className={cx(s.small, "mt-2")}>An estimate. You pay each provider directly.</p>
+      <p className={cx(s.small, "mt-2")}>An estimate. You pay each provider directly.{serpChosen ? " SerpApi searches come out of your SerpApi plan, which has no per-search list price." : ""}</p>
       {prog && (
         <div className="mt-4" role="status">
           <div className={s.bar}><div className={cx(s.barFill, s.barMe)} style={{ width: `${Math.round((prog.done / Math.max(1, prog.total)) * 100)}%` }} /></div>
-          <p className={cx(s.small, s.tnum, "mt-1.5")}>{prog.done} of {prog.total} done{prog.failed ? `, ${prog.failed} failed` : ""}{prog.stopped ? ", stopped" : ""}</p>
+          <p className={cx(s.small, s.tnum, "mt-1.5")}>{prog.done} of {prog.total} done{prog.failed ? `, ${prog.failed} failed` : ""}{prog.none ? `, ${prog.none} with no AI answer` : ""}{prog.stopped ? ", stopped" : ""}</p>
         </div>
       )}
     </Side>
@@ -460,9 +467,10 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose,
     <Side title={q?.question ?? run.question_text} onClose={onClose}>
       <div className={cx(s.small, "-mt-2 flex flex-wrap items-center gap-x-1.5")}><ProviderMark id={run.engine} short className="text-[#141414]" /> · {run.model ? <ModelId model={run.model} /> : "Model unknown"} · <span className={s.tnum}>{when(run.run_at)}</span>{q && <> · {AUDIENCE_LABEL[audienceOf(q)]} prompt</>}</div>
       {run.status === "failed" && <p className="mt-3 text-[13px] font-semibold text-[#9e1c1c]">This run failed and is not counted.</p>}
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-[#e8e8e8] p-4 text-[13px]">
+      {run.status === "no_answer" && <p className="mt-3 text-[13px] font-semibold">No AI answer for this search. This is a result, not a failure, and it is not counted as named or not named.</p>}
+      {run.status !== "no_answer" && <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-[#e8e8e8] p-4 text-[13px]">
         {facts2.map(([k, v]) => <div key={k} className="min-w-0"><dt className={s.small}>{k}</dt><dd className="mt-0.5 truncate">{v}</dd></div>)}
-      </dl>
+      </dl>}
       {p && (p.review || review) && (
         <div className="mt-3 rounded-xl bg-[#fafafa] p-4">
           <div className="text-[13.5px] font-semibold">Is this {w.person} of {w.company}?</div>
@@ -472,17 +480,17 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose,
       )}
       {d.named && (
         <div className="mt-3 rounded-xl border border-[#e8e8e8] p-4">
-          <div className="flex items-center justify-between gap-2"><span className="text-[13.5px] font-semibold">Facts</span>{editable && run.status !== "failed" && <button className={cx(s.btn, s.sm)} disabled={busy} onClick={async () => { setBusy(true); setJudged(await judgeRun({ id: run.id, answer: run.answer }, facts, self)); setBusy(false); onJudged(); }}>{busy ? "Checking" : judged ? "Check again" : "Check tone and facts"}</button>}</div>
+          <div className="flex items-center justify-between gap-2"><span className="text-[13.5px] font-semibold">Facts</span>{editable && scored(run) && <button className={cx(s.btn, s.sm)} disabled={busy} onClick={async () => { setBusy(true); setJudged(await judgeRun({ id: run.id, answer: run.answer }, facts, self)); setBusy(false); onJudged(); }}>{busy ? "Checking" : judged ? "Check again" : "Check tone and facts"}</button>}</div>
           {!judged ? <p className={cx(s.small, "mt-1")}>Not checked yet.</p>
             : judged.issues.length ? <ul className="mt-2 grid gap-2">{judged.issues.map((i, k) => <li key={k} className="text-[13px]"><Status tone="ring"><b>{i.fact}</b></Status><span className={cx(s.small, "block pl-[13px]")}>Said: {i.said}</span></li>)}</ul>
             : <p className="mt-1 text-[13px]">Nothing contradicts the facts sheet.</p>}
         </div>
       )}
       {q && run.question_text && run.question_text !== q.question && <p className={cx(s.small, "mt-3")}>Sent as: {run.question_text}</p>}
-      <div className="mt-5"><div className="mb-2 text-[13.5px] font-semibold">Answer</div>{run.status === "failed" && !run.answer ? <p className={s.small}>{run.error || "No answer came back."}</p> : <Highlight text={run.answer} self={self} rivals={rivals} />}</div>
+      <div className="mt-5"><div className="mb-2 text-[13.5px] font-semibold">Answer</div>{(run.status === "failed" || run.status === "no_answer") && !run.answer ? <p className={s.small}>{run.error || (run.status === "no_answer" ? "No AI answer for this search." : "No answer came back.")}</p> : <Highlight text={run.answer} self={self} rivals={rivals} />}</div>
       <div className="mt-6">
         <div className="mb-2 text-[13.5px] font-semibold">Sources <span className={cx(s.faint, "font-normal")}>{r.sources.length}</span></div>
-        {r.sources.length === 0 ? <p className={s.small}>No sources cited, so linking is unknown.</p> : (
+        {r.sources.length === 0 ? <p className={s.small}>{run.status === "no_answer" ? "None, as there was no AI answer." : "No sources cited, so linking is unknown."}</p> : (
           <ul className="grid">{r.sources.map((x) => (
             <li key={x.url} className="flex items-start gap-3 border-t border-[#efefef] py-2 text-[13px]">
               <span className="w-12 shrink-0 pt-px text-[12px] text-[#5f5f5f]">{x.cited ? "Cited" : "Read"}</span>
@@ -601,7 +609,7 @@ function Runs({ rows, qById, self, manual, onOpen }: { rows: RunRow[]; qById: Ma
                   <td className={cx(s.tnum, "whitespace-nowrap text-[12.5px] text-[#5f5f5f]")}>{when(r.run_at)}</td>
                   <td className="max-w-[380px]"><button className="text-left font-medium hover:underline" onClick={() => onOpen(r)}>{qById.get(r.question_id)?.question ?? r.question_text}</button></td>
                   <td className="whitespace-nowrap"><ProviderMark id={r.engine} short className="text-[#141414]" /></td>
-                  <td>{r.status === "failed" ? <span title={r.error}><Status tone="grey"><span className={s.none}>Failed</span></Status></span> : <Status tone={d.named ? "red" : "grey"}>{d.named ? `Named${d.position ? ` #${d.position}` : ""}` : <span className={s.none}>Not named</span>}</Status>}</td>
+                  <td>{r.status === "no_answer" ? <span title={r.error}><Status tone="grey"><span className={s.none}>No AI answer</span></Status></span> : r.status === "failed" ? <span title={r.error}><Status tone="grey"><span className={s.none}>Failed</span></Status></span> : <Status tone={d.named ? "red" : "grey"}>{d.named ? `Named${d.position ? ` #${d.position}` : ""}` : <span className={s.none}>Not named</span>}</Status>}</td>
                   <td className={cx(s.r, s.tnum)}>{r.citation_sources?.length ?? 0}</td>
                   <td className={cx(s.r, s.tnum, "whitespace-nowrap text-[12.5px]")}>{r.input_tokens ? `${(r.input_tokens / 1000).toFixed(1)}k / ${(r.output_tokens / 1000).toFixed(1)}k` : <span className={s.none}>None</span>}</td>
                 </tr>
@@ -629,7 +637,7 @@ function Sources({ runs, self, person, rivals, editable, w }: { runs: Run[]; sel
   const domains = useMemo(() => {
     const m = new Map<string, { cited: number; read: number; selfNamed: number }>();
     for (const r of runs) {
-      if (r.status === "failed") continue;
+      if (!scored(r)) continue;
       const named = detect(r, self).named;
       for (const x of r.sources) { const e = m.get(x.domain) ?? { cited: 0, read: 0, selfNamed: 0 }; if (x.cited) e.cited++; else e.read++; if (named) e.selfNamed++; m.set(x.domain, e); }
     }

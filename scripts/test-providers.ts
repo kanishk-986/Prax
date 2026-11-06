@@ -12,15 +12,18 @@ const eq = (name: string, got: unknown, want: unknown) => {
 };
 
 // ---------- names ----------
-eq("full names", Object.values(PROVIDERS).map((p) => p.name), ["Anthropic Claude", "OpenAI ChatGPT", "Google Gemini", "Perplexity", "xAI Grok"]);
-eq("short names", Object.values(PROVIDERS).map((p) => p.short), ["Claude", "ChatGPT", "Gemini", "Perplexity", "Grok"]);
+eq("full names", Object.values(PROVIDERS).map((p) => p.name), ["Anthropic Claude", "OpenAI ChatGPT", "Google Gemini", "Perplexity", "xAI Grok", "Google AI answers", "Microsoft Copilot"]);
+eq("short names", Object.values(PROVIDERS).map((p) => p.short), ["Claude", "ChatGPT", "Gemini", "Perplexity", "Grok", "Google AI", "Copilot"]);
 eq("citation engines use the full names", ENGINES.map((e) => e.name), ENGINES.map((e) => PROVIDERS[e.id].name));
 eq("older stored names still resolve", ["ChatGPT (OpenAI)", "Gemini", "Claude", "Perplexity", "Gemini (Google)", "openai"].map((n) => providerOf(n)?.id), ["openai", "gemini", "claude", "perplexity", "gemini", "openai"]);
 eq("unknown names stay as they are", providerName("mistral"), "mistral");
 eq("short name by id", providerName("openai", true), "ChatGPT");
 
 // ---------- logos ----------
-eq("every provider but Grok has a mark", Object.entries(MARKS).filter(([, m]) => m).map(([k]) => k), ["claude", "openai", "gemini", "perplexity"]);
+eq("every provider but Grok and Copilot has a mark (neither has a CC0 or downloadable official mark)", Object.entries(MARKS).filter(([, m]) => m).map(([k]) => k), ["claude", "openai", "gemini", "perplexity", "google_ai"]);
+eq("no drawn stand-in for Grok or Copilot, in the app or the extension", [MARKS.grok, MARKS.copilot, /grok: \{[^}]*path: ""/.test(readFileSync(new URL("../extension/marks.js", import.meta.url), "utf8")), /copilot: \{[^}]*path: ""/.test(readFileSync(new URL("../extension/marks.js", import.meta.url), "utf8"))], [null, null, true, true]);
+eq("Google AI answers uses the simple-icons Google G", MARKS.google_ai?.source, "simple-icons 16.36.0 google (CC0)");
+eq("SerpApi engines name SerpApi as where the key goes", [PROVIDERS.google_ai.via, PROVIDERS.copilot.via, PROVIDERS.google_ai.keyHint], ["SerpApi", "SerpApi", ""]);
 eq("every mark names its source", Object.values(MARKS).every((m) => !m || /simple-icons \d+\.\d+\.\d+ \w+ \(CC0\)/.test(m.source)), true);
 eq("every path is a 24 by 24 path", Object.values(MARKS).every((m) => !m || /^[Mm][\d.\s,a-zA-Z-]+$/.test(m.path)), true);
 const ext = readFileSync(new URL("../extension/marks.js", import.meta.url), "utf8");
@@ -51,6 +54,7 @@ eq("cost on list prices", c.cost?.toFixed(2), "0.60");
 eq("claude line", usageLine(c), "1 call · 110k tokens · about $0.60");
 const o = usageFor(rows, "openai", "2026-11");
 eq("no list price means no cost", [o.cost, usageLine(o)], [null, "1 call · 1.0k tokens"]);
+eq("SerpApi usage is a search count, never tokens or cost", usageLine(usageFor([{ at: "2026-11-05T10:00:00Z", kind: "citation", provider: "copilot", model: "bing_copilot", input_tokens: 0, output_tokens: 0 }, { at: "2026-11-05T11:00:00Z", kind: "citation", provider: "copilot", model: "bing_copilot", input_tokens: 0, output_tokens: 0 }], "copilot", "2026-11"), true), "2 searches");
 eq("nothing used shows None", usageLine(usageFor(rows, "perplexity", "2026-11")), "None");
 eq("last model", o.lastModel, "gpt-5");
 const now = new Date("2026-11-06T12:00:00");

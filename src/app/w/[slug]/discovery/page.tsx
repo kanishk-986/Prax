@@ -56,7 +56,8 @@ const STEPS: TourStep[] = [
   { target: "linkedin", tab: "sources", title: "The LinkedIn rule", body: "Nothing is read from LinkedIn in the background. Only posts and profiles you send from the Prax bar while reading them." },
   { target: "weights", tab: "criteria", title: "Criteria", body: "Weights must add up to 100. Prax suggests changes from what you send and dismiss; nothing changes until you accept." },
 ];
-const LIVE_ENGINES = ENGINES.filter((e) => e.live);
+// Google AI answers and Copilot come from search results through SerpApi; Discovery keeps to the AI model engines.
+const LIVE_ENGINES = ENGINES.filter((e) => e.live && !e.via);
 const hash = (s: string) => Math.abs([...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0));
 
 export default function DiscoveryStudio() {

@@ -293,9 +293,9 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | In progress (agreed 7 Nov) |
 | I3 | Team roles and approvals, including the owner's approval queue on a phone (mobile approval was declined as Q63) | Same list | Not started (not agreed) |
 | I4 | Results by pillar and format feeding Strategy (overlaps CS28 and S2) | Same list | Not started (not agreed) |
-| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | In progress (agreed 7 Nov) |
+| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | Built not live (Google AI answers and Microsoft Copilot through SerpApi; needs db/028 and a SerpApi key) |
 | I6 | Record or upload video inside Prax (today Prax writes the script, cover and captions; the person records outside Prax) | 5 Nov 18:26 Claude's reply to "what about videos" | Built not live (record with teleprompter, trim, upload, captions; needs db/029; screen picture-in-picture left out) |
-| I7 | xAI Grok logo (no CC0 or official asset) | Handoff providers | In progress (agreed 7 Nov) |
+| I7 | xAI Grok logo (no CC0 or official asset) | Handoff providers | Declined: no legitimate Grok mark exists (xAI forbids altered files; simple-icons refused it); name shown |
 
 ---
 

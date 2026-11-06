@@ -1,0 +1,6 @@
+{
+  "_source": "https://serpapi.com/api-status-and-error-codes, 'Status: Success with empty organic results in Google Search API' (HTTP 200)",
+  "search_metadata": { "id": "6540ac26b68f8b2910019dd5", "status": "Success", "json_endpoint": "https://serpapi.com/searches/d1add70d119063c8/6540ac26b68f8b2910019dd5.json" },
+  "search_information": { "organic_results_state": "Fully empty" },
+  "error": "Google hasn't returned any results for this query."
+}

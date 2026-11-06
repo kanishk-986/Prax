@@ -17,6 +17,8 @@
     // Which engines AI citations can use: an extra search key, or the main key when it is for that provider.
     const main = c.provider || "claude";
     const searchKeys = Object.fromEntries(["claude", "openai", "gemini", "perplexity"].map((p) => [p, !!((c.keys && c.keys[p]) || (main === p && c.apiKey))]));
+    // Google AI answers and Microsoft Copilot are read through SerpApi: one SerpApi key (keys.serpapi) serves both.
+    searchKeys.google_ai = searchKeys.copilot = !!(c.keys && c.keys.serpapi);
     return { installed: true, version: VERSION, connected: !!c.praxToken, provider: main, model: c.model || "", hasKey: !!c.apiKey, quiet: !!c.quiet, searchKeys, extraKeys: Object.keys(c.keys || {}).filter((p) => c.keys[p]) };
   }
 

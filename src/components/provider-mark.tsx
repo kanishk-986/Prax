@@ -11,7 +11,7 @@ import { MARKS, PROVIDERS, KEY_STATE, SAVED_KEY, providerOf, usageFor, usageLine
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
 
-/** The provider's logo alone. Brand colour on light surfaces, white on dark ones. Grok has no mark, so it keeps the space. */
+/** The provider's logo alone. Brand colour on light surfaces, white on dark ones. Grok and Copilot have no mark, so they keep the space. */
 export function ProviderLogo({ id, size = 16, onDark = false }: { id: string; size?: number; onDark?: boolean }) {
   const p = providerOf(id), m = p ? MARKS[p.id] : null;
   if (!m) return <span aria-hidden="true" className="inline-block shrink-0" style={{ width: size, height: size }} />;
@@ -152,16 +152,19 @@ export function KeyRow({ id, connected, model, usage, note, removable, disabled,
         {cell("Key", <KeyState on={connected} />, false, true)}
         {cell("Model", <ModelId model={model} />)}
         {cell("Last used", <span className="num text-meta">{usage ? lastUsedLabel(usage.last) : "None"}</span>)}
-        {cell("This month", <span className="num text-meta">{usage ? usageLine(usage) : "None"}</span>, true, true)}
+        {cell("This month", <span className="num text-meta">{usage ? usageLine(usage, !!p.via) : "None"}</span>, true, true)}
       </div>
       {open && (
         <form className="anim-rise flex flex-wrap items-center gap-2 px-4 pb-3.5" onSubmit={(e) => { e.preventDefault(); save(); }}>
-          <label htmlFor={`key-${id}`} className="sr-only">{p.name} key</label>
+          <label htmlFor={`key-${id}`} className="sr-only">{p.via ?? p.name} key</label>
           <input id={`key-${id}`} autoFocus type="password" autoComplete="off" spellCheck={false} className="field h-9 min-w-0 flex-[1_1_240px] font-mono text-meta"
-            placeholder={connected ? `${SAVED_KEY}  Paste a new key` : `Paste a key, it starts ${p.keyHint}`} value={key} onChange={(e) => setKey(e.target.value)} />
+            placeholder={connected ? `${SAVED_KEY}  Paste a new key` : p.keyHint ? `Paste a key, it starts ${p.keyHint}` : `Paste your ${p.via ?? p.name} key`} value={key} onChange={(e) => setKey(e.target.value)} />
           <button type="submit" className="btn btn-primary h-9" disabled={busy || !key.trim()}>{busy ? "Saving" : "Save to this browser"}</button>
           {removable && onRemove && <button type="button" className="btn btn-ghost h-9 hover:text-bad" disabled={busy} onClick={remove}>Remove key</button>}
-          <span className="basis-full text-meta text-muted">Saved only inside the Prax extension in this browser and sent only to {p.name.split(" ")[0]}. Prax never sees it.</span>
+          <span className="basis-full text-meta text-muted">
+            Saved only inside the Prax extension in this browser and sent only to {p.via ?? p.name.split(" ")[0]}. Prax never sees it.
+            {p.via && <> One {p.via} key serves Google AI answers and Microsoft Copilot. <a className="underline underline-offset-2 hover:text-ink" href={p.console} target="_blank" rel="noreferrer">Get a {p.via} key</a></>}
+          </span>
         </form>
       )}
     </div>
