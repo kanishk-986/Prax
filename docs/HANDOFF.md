@@ -740,3 +740,21 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Q158: the choice is remembered per browser (localStorage, with try/catch).
 - Q159: below 1280 px wide it starts collapsed, but a saved choice wins; phones keep the slide-in drawer.
 - Q160: built right after Connections merges (both touch sidebar.tsx), shipped in the same deploy.
+
+## Where we are (session state, 7 Nov 2026), read this first in a new session
+
+**Merged on main, not deployed:** humanization (H1) with all 9 QA fixes; the QA plan (`docs/QA_PLAN.md`); the sidebar "Do" group renamed "Daily work"; the empty-draft Human score fix; decisions Q135 to Q160.
+
+**In flight:**
+- Connections (C1): a builder agent was working on branch `connections` in a worktree under `~/claude.md/.claude/worktrees/` (clone named `prax-work`). If that agent is gone, check that worktree for commits (`git -C <path> log --oneline connections`); merge what's there, or restart C1 from the spec "Connections section, agreed 7 Nov 2026".
+- QA retest of humanize at 4401bbc was running. If there's no verdict, re-run the gate from `docs/QA_PLAN.md`.
+
+**Next, in order:**
+1. QA PASS on humanize, then Connections built, merged and QA PASS.
+2. Build the collapsible sidebar (SB1, Q156 to Q160) after the Connections merge.
+3. The owner runs `db/031_humanize.sql`, then `db/032_connections.sql`, in the Supabase SQL editor: one saved query, and the owner clicks Run. Then deploy, only when the owner says "deploy" (`npx vercel deploy --prod --yes`), then push.
+4. Agent A: tester access (TS1 to TS4, TS9, TS10), settling the QA risks section first (P0: tester invites must grant only a private demo copy).
+5. Agent B: tours, Guide, feedback, "?" menu (TS5 to TS7, TS11), written last.
+6. QA new-tester walkthrough (TS8).
+
+**Rules:** free tier only (no domain or paid services); Prax branding (owner Kanishk; no Antier or person names hardcoded); no LinkedIn automation; keys stay in the extension; deploy only on the owner's word; push after every deploy; every agreed item lives in `docs/BACKLOG.md`.
