@@ -10,6 +10,14 @@
     <div class="brand"><span class="mark"><i></i><i></i></span>Prax</div>
     <div id="who" class="muted small">Not connected</div>
   </header>
+  <div id="barstatus" class="card status" aria-live="polite">
+    <div class="label">Prax bar status</div>
+    <dl id="bs-list" class="kv"><dt>This tab</dt><dd>Checking…</dd></dl>
+    <div class="row">
+      <button id="bs-refresh" class="btn small">Refresh</button>
+      <button id="bs-fix" class="btn small" title="Adds the Prax bar to this tab again if it is missing. Reads nothing and clicks nothing on LinkedIn.">Fix bars on this tab</button>
+    </div>
+  </div>
   <nav class="tabs" role="tablist">
     <button data-tab="capture" class="on">Capture</button>
     <button data-tab="draft">Comment</button>
@@ -52,6 +60,7 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
+  <script src="dom.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

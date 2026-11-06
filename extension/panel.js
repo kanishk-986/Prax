@@ -1,7 +1,8 @@
-// Prax side panel: settings, capture, and the comment drafter for Quiet mode. Everything starts
+// Prax side panel: Prax bar status, capture, and the comment drafter for Quiet mode. Everything starts
 // from a click. It never posts, likes, connects or browses on LinkedIn.
 
 const $ = (id) => document.getElementById(id);
+const D = globalThis.PraxDOM; // dom.js, loaded before this file
 
 const MODES = {
   "Short": "35 to 50 words, two or three complete sentences. Still one real insight, never a one-liner.",
@@ -18,56 +19,68 @@ const MODES = {
 const BANNED = ["just", "must", "now", "sit", "sits", "delve", "pivotal", "crucial", "testament", "tapestry", "landscape", "underscore", "showcase", "vibrant", "fostering", "key", "vital", "leverage", "robust", "seamless", "game-changer", "great post", "thanks for sharing", "my read is"];
 
 let cfg = {};
-let me = null;
+let me = null, meErr = "";
 let post = null;
 let sources = [];
 let mode = "Agree and add";
 
 // ---------- small helpers ----------
-function toast(text) {
-  const t = $("toast"); t.textContent = text; t.classList.remove("hidden");
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), 2600);
+// Errors stay up longer and look different, so a failed click is never missed.
+function toast(text, err) {
+  const t = $("toast"); t.textContent = text; t.classList.remove("hidden"); t.classList.toggle("err", !!err);
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), err ? 7000 : 2600);
 }
+const fail = (e) => toast(e?.message || String(e), true);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 async function activeTab() { const [t] = await chrome.tabs.query({ active: true, currentWindow: true }); return t; }
-async function run(fn, args = []) {
+
+// Runs a reader in the active tab, only when the user pressed a button. dom.js goes in first so the
+// readers share the Prax bar's post detection.
+async function run(fn, args = [], { anyPage = false } = {}) {
   const tab = await activeTab();
-  if (!tab?.url?.startsWith("https://www.linkedin.com/") && fn !== readPage) throw new Error("Open a LinkedIn page first.");
-  const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fn, args });
-  return res?.result;
+  if (!tab) throw new Error("No tab is open in this window.");
+  if (!anyPage && !D.isLinkedIn(tab.url)) throw new Error("Open a LinkedIn page in this window first.");
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dom.js"] });
+    const [res] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: fn, args });
+    return res?.result;
+  } catch (e) {
+    throw new Error(/cannot access|cannot be scripted|chrome:|extensions gallery|permission/i.test(e.message) ? "Prax cannot read this page. Open a LinkedIn tab or a normal web page." : e.message);
+  }
 }
-const send = (msg) => new Promise((res, rej) => chrome.runtime.sendMessage(msg, (r) => (r?.ok ? res(r.data) : rej(new Error(r?.error || "Prax is not responding")))));
+
+// The background can be asleep or restarting; a message that finds no listener is retried twice.
+function sendOnce(msg) {
+  return new Promise((res, rej) => chrome.runtime.sendMessage(msg, (r) => {
+    const le = chrome.runtime.lastError?.message;
+    if (r?.ok) return res(r.data);
+    const err = new Error(r?.error || le || "Prax is not responding. Try again.");
+    err.transient = !r;
+    rej(err);
+  }));
+}
+async function send(msg) {
+  for (let i = 0; ; i++) {
+    try { return await sendOnce(msg); }
+    catch (e) { if (!e.transient || i >= 2) throw e; await new Promise((r) => setTimeout(r, 300 * (i + 1))); }
+  }
+}
 const prax = (action, body = {}) => (action === "me" ? send({ type: "me", fresh: true }) : send({ type: "prax", action, body }));
 function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = label; }
 
-// ---------- page readers (run inside the LinkedIn tab) ----------
+// ---------- page readers (run inside the tab, on a click) ----------
 function readPost() {
-  const clean = (s) => (s || "").replace(/\s+\n/g, "\n").replace(/[ \t]+/g, " ").trim();
+  const P = globalThis.PraxDOM;
   const sel = String(window.getSelection() || "").trim();
-  const posts = [...document.querySelectorAll("div.feed-shared-update-v2, div[data-urn*='activity'], article[data-urn]")];
   // The post nearest the middle of the screen is the one being read.
-  const mid = innerHeight / 2;
-  const el = posts.sort((a, b) => {
-    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-    return Math.abs((ra.top + ra.bottom) / 2 - mid) - Math.abs((rb.top + rb.bottom) / 2 - mid);
-  })[0];
-  const q = (root, s) => root?.querySelector(s);
-  const author = clean(q(el, ".update-components-actor__title span[aria-hidden='true']")?.textContent || q(el, ".update-components-actor__name")?.textContent || "");
-  const authorUrl = (q(el, "a.update-components-actor__meta-link") || q(el, "a.update-components-actor__image") || q(el, "a[href*='/in/']"))?.href?.split("?")[0] || "";
-  const body = q(el, ".update-components-text, .feed-shared-inline-show-more-text, .feed-shared-text");
-  const urn = el?.getAttribute("data-urn") || q(el, "[data-urn]")?.getAttribute("data-urn") || "";
-  const url = location.pathname.startsWith("/feed/update/") || location.pathname.startsWith("/posts/")
-    ? location.href.split("?")[0] : urn ? "https://www.linkedin.com/feed/update/" + urn + "/" : location.href.split("?")[0];
-  const comments = [...(el || document).querySelectorAll("article.comments-comment-entity, article.comments-comment-item")].slice(0, 40).map((c) => ({
-    author: clean(c.querySelector(".comments-comment-meta__description-title, .comments-post-meta__name-text")?.textContent || ""),
-    text: clean(c.querySelector(".comments-comment-item__main-content, .update-components-text")?.textContent || "").slice(0, 600),
-  })).filter((c) => c.text);
-  const text = sel.length > 80 ? sel : clean(body?.textContent || "");
-  return { author, authorUrl, url, text, comments, fromSelection: sel.length > 80 };
+  const hit = P.nearestPost(document, innerHeight / 2);
+  const p = hit ? P.readPost(hit.post, hit.row, location) : { author: "", authorUrl: "", url: location.href.split("?")[0], text: "", comments: [] };
+  const fromSelection = sel.length > 80;
+  return { ...p, text: fromSelection ? sel : p.text, fromSelection };
 }
 
 function readPage() {
-  const main = document.querySelector("article, main, [role='main']") || document.body;
+  const main = document.querySelector("main, [role='main']") || document.querySelector("article") || document.body;
   return { url: location.href.split("?")[0], title: document.title, text: main.innerText.replace(/\n{3,}/g, "\n\n").trim().slice(0, 20000) };
 }
 
@@ -77,13 +90,46 @@ function readProfile() {
 }
 
 function findMyReplies(name) {
+  const P = globalThis.PraxDOM;
   const first = name.split(/\s+/)[0].toLowerCase();
-  const mine = [...document.querySelectorAll("article.comments-comment-entity, article.comments-comment-item")]
-    .filter((c) => (c.querySelector(".comments-comment-meta__description-title, .comments-post-meta__name-text")?.textContent || "").toLowerCase().includes(first));
-  // A reply shows as a nested comment article, or a "N replies" control under ours.
-  const replied = mine.filter((c) => c.querySelector("article") || /\b\d+\s+repl(y|ies)\b/i.test(c.innerText));
+  const mine = [...document.querySelectorAll(P.COMMENT_SEL)]
+    .filter((c) => (c.querySelector(".comments-comment-meta__description-title, .comments-post-meta__name-text, a[href*='/in/']")?.textContent || "").toLowerCase().includes(first));
+  // A reply shows as a nested comment, or a "N replies" control under ours.
+  const replied = mine.filter((c) => c.querySelector(P.COMMENT_SEL) || /\b\d+\s+repl(y|ies)\b/i.test(c.innerText));
   return { mine: mine.length, replied: replied.length, url: location.href.split("?")[0] };
 }
+
+// ---------- Prax bar status ----------
+const ago = (t) => { if (!t) return "not yet"; const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `${s} s ago` : `${Math.round(s / 60)} min ago`; };
+async function refreshStatus(rescan) {
+  const rows = [["Extension", "v" + chrome.runtime.getManifest().version]];
+  rows.push(["Prax", !cfg.praxToken ? ["Not connected. Open Prax, Extension, Connect this browser.", "bad"] : me ? [`Connected to ${me.workspace}`, "good"] : meErr ? [meErr, "bad"] : ["Checking…"]]);
+  rows.push(["AI key", cfg.apiKey ? ["Saved in this browser", "good"] : ["Missing. Add it on the Prax Extension page.", "bad"]]);
+  const tab = await activeTab().catch(() => null);
+  if (!tab || !D.isLinkedIn(tab.url)) rows.push(["This tab", "Not a LinkedIn page"]);
+  else {
+    try {
+      const s = await send({ type: "barStatus", tabId: tab.id, rescan: !!rescan });
+      if (s.quiet) rows.push(["Bars", "Off (Quiet mode)"]);
+      else {
+        rows.push(["Posts seen", String(s.seen)]);
+        rows.push(["Bars attached", [`${s.attached} of ${s.seen}`, s.attached < s.seen ? "bad" : "good"]]);
+        rows.push(["Last scan", ago(s.lastScan)]);
+      }
+      if (s.version && s.version !== chrome.runtime.getManifest().version) rows.push(["Tab script", [`v${s.version}. Reload this tab.`, "bad"]]);
+      if (s.error) rows.push(["Last error", [s.error, "bad"]]);
+    } catch (e) { rows.push(["This tab", [e.message, "bad"]]); }
+  }
+  $("bs-list").innerHTML = rows.map(([k, v]) => { const [t, c] = Array.isArray(v) ? v : [v]; return `<dt>${esc(k)}</dt><dd${c ? ` class="${c}"` : ""}>${esc(t)}</dd>`; }).join("");
+}
+let statusTimer = 0;
+const refreshSoon = () => { clearTimeout(statusTimer); statusTimer = setTimeout(() => refreshStatus(false), 300); };
+$("bs-refresh").addEventListener("click", () => refreshStatus(false));
+$("bs-fix").addEventListener("click", async () => {
+  const b = $("bs-fix"); busy(b, true);
+  await refreshStatus(true); toast("Checked the Prax bar on this tab");
+  busy(b, false);
+});
 
 // ---------- AI drafting with the user's own key ----------
 function prompt() {
@@ -140,23 +186,23 @@ $("modes").addEventListener("click", (e) => {
 $("read").addEventListener("click", async () => {
   try {
     post = await run(readPost);
-    if (!post?.text) throw new Error("No post text found. Open the post itself, or select its text and try again.");
+    if (!post?.text) throw new Error("No post text found. Scroll the post to the middle of the screen, or select its text, and try again.");
     sources = [];
     $("post").classList.remove("hidden");
     $("post").innerHTML = `<div class="label">${esc(post.author || "Post")}${post.fromSelection ? " · from selection" : ""}</div>
       <div class="post-text">${esc(post.text)}</div>
       <div class="meta" style="margin:8px 0 0">${post.text.split(/\s+/).length} words · ${post.comments.length} comments read · <span id="srcs">no extra source</span></div>`;
     $("modes").classList.remove("hidden"); $("go").classList.remove("hidden"); $("drafts").innerHTML = "";
-  } catch (e) { toast(e.message); }
+  } catch (e) { fail(e); }
 });
 
 $("addsrc").addEventListener("click", async () => {
-  if (!post) return toast("Read the post first, then open the linked page.");
+  if (!post) return toast("Read the post first, then open the linked page.", true);
   try {
-    const p = await run(readPage);
+    const p = await run(readPage, [], { anyPage: true });
     sources.push(p); $("srcs").textContent = `${sources.length} extra source${sources.length > 1 ? "s" : ""} added`;
     toast("Added " + (p.title || "page") + " as source");
-  } catch (e) { toast(e.message); }
+  } catch (e) { fail(e); }
 });
 
 $("go").addEventListener("click", async () => {
@@ -165,7 +211,7 @@ $("go").addEventListener("click", async () => {
   $("drafts").innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   try {
     renderDrafts(parseDrafts(await send({ type: "draft", rules: "", user: prompt() })));
-  } catch (e) { $("drafts").innerHTML = ""; toast(e.message); }
+  } catch (e) { $("drafts").innerHTML = ""; fail(e); }
   busy(btn, false, "Draft 3 comments");
 });
 
@@ -173,14 +219,17 @@ $("drafts").addEventListener("input", (e) => { const i = e.target.dataset.i; if 
 $("drafts").addEventListener("click", async (e) => {
   const c = e.target.dataset.copy, l = e.target.dataset.log;
   const text = (i) => document.querySelector(`[data-i="${i}"]`).innerText.trim();
-  if (c != null) { await navigator.clipboard.writeText(text(c)); toast("Copied. Paste it on LinkedIn and post it yourself."); }
+  if (c != null) {
+    try { await navigator.clipboard.writeText(text(c)); toast("Copied. Paste it on LinkedIn and post it yourself."); }
+    catch { fail(new Error("Could not copy. Select the text and press Cmd+C.")); }
+  }
   if (l != null) {
     busy(e.target, true);
     try {
       const r = await prax("log", { author: post.author, author_url: post.authorUrl, url: post.url, mode, text: text(l), post_text: post.text });
       e.target.textContent = "Logged";
       toast(["Logged in Prax", r.ticked ? "today's comment ticked" : "", r.prospect ? `${r.prospect} moved to Warming` : ""].filter(Boolean).join(" · "));
-    } catch (err) { busy(e.target, false); toast(err.message); }
+    } catch (err) { busy(e.target, false); fail(err); }
   }
 });
 
@@ -188,48 +237,58 @@ $("replies").addEventListener("click", async () => {
   try {
     if (!me) me = await prax("me");
     const r = await run(findMyReplies, [me.workspace]);
-    if (!r.mine) return toast(`No comment by ${me.workspace} is loaded on this page. Open the post and load its comments.`);
+    if (!r.mine) return toast(`No comment by ${me.workspace} is loaded on this page. Open the post and load its comments.`, true);
     if (!r.replied) return toast("No replies yet.");
     const j = await prax("replies", { url: r.url });
     toast(j.marked ? `Marked ${j.marked} logged comment${j.marked > 1 ? "s" : ""} as replied` : "Reply found, but this post was not logged in Prax.");
-  } catch (e) { toast(e.message); }
+  } catch (e) { fail(e); }
 });
 
 $("capprofile").addEventListener("click", async () => {
   const btn = $("capprofile");
   try {
     const tab = await activeTab();
-    if (!/linkedin\.com\/in\//.test(tab.url || "")) throw new Error("Open a LinkedIn profile page first.");
+    if (!/linkedin\.com\/in\//.test(tab?.url || "")) throw new Error("Open a LinkedIn profile page (linkedin.com/in/...) first.");
     busy(btn, true, "Capturing…");
     const p = await run(readProfile);
+    if (!p?.raw || p.raw.length < 40) throw new Error("The profile has not loaded yet. Wait a moment and try again.");
     const r = await prax("capture", { ...p, self: $("self").checked });
     toast(`${r.name || "Profile"} scored ${r.score}/100${r.created ? " · added to pipeline" : ""}`);
-  } catch (e) { toast(e.message); }
+  } catch (e) { fail(e); }
   busy(btn, false, "Capture this profile");
 });
 
 $("capstats").addEventListener("click", async () => {
   try {
     const { text } = await run(readPage);
-    const num = (label) => { const m = text.match(new RegExp("([\\d,.]+[KkMm]?)\\s*\\n?\\s*" + label, "i")); if (!m) return null;
-      const v = m[1].replace(/,/g, ""); return /k$/i.test(v) ? parseFloat(v) * 1e3 : /m$/i.test(v) ? parseFloat(v) * 1e6 : Number(v); };
-    const metrics = Object.fromEntries(Object.entries({
-      impressions_7d: num("(?:post )?impressions"), followers: num("(?:total )?followers"),
-      profile_views_90d: num("profile view"), search_appearances: num("search appearance"),
-    }).filter(([, v]) => v != null && !isNaN(v)));
-    if (!Object.keys(metrics).length) return toast("No analytics numbers found on this page.");
+    const metrics = D.parseAnalytics(text);
+    if (!Object.keys(metrics).length) return toast("No analytics numbers found on this page. Open Me, then Analytics, and try again.", true);
     $("stats").innerHTML = `<div class="meta" style="margin-top:10px">${Object.entries(metrics).map(([k, v]) => `${k.replace(/_/g, " ")}: <b>${v.toLocaleString()}</b>`).join(" · ")}</div>
       <button class="btn small primary" id="sendstats">Save to Prax</button>`;
-    $("sendstats").onclick = async () => { try { const r = await prax("snapshot", { metrics }); toast(`Saved ${r.saved} numbers to the dashboard`); } catch (e) { toast(e.message); } };
-  } catch (e) { toast(e.message); }
+    $("sendstats").onclick = async (ev) => {
+      busy(ev.target, true);
+      try { const r = await prax("snapshot", { metrics }); toast(`Saved ${r.saved} numbers to the dashboard`); ev.target.textContent = "Saved"; }
+      catch (e) { busy(ev.target, false); fail(e); }
+    };
+  } catch (e) { fail(e); }
 });
 
 $("openprax").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));
 $("who").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));
 
-// ---------- start ----------
-(async () => {
+// ---------- start, and keep up with tab and setting changes while the panel stays open ----------
+async function load() {
   cfg = (await chrome.storage.local.get("cfg")).cfg || {};
-  if (!cfg.praxToken || !cfg.apiKey) $("setup").classList.remove("hidden");
-  if (cfg.praxToken) prax("me").then((m) => { me = m; $("who").textContent = m.workspace; }).catch(() => { $("setup").classList.remove("hidden"); });
-})();
+  $("setup").classList.toggle("hidden", !!(cfg.praxToken && cfg.apiKey));
+  me = null; meErr = "";
+  $("who").textContent = cfg.praxToken ? "Connecting…" : "Not connected";
+  refreshStatus(false);
+  if (!cfg.praxToken) return;
+  try { me = await prax("me"); $("who").textContent = me.workspace; }
+  catch (e) { meErr = e.message; $("who").textContent = "Not connected"; $("setup").classList.remove("hidden"); }
+  refreshStatus(false);
+}
+chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) load(); });
+chrome.tabs.onActivated.addListener(refreshSoon);
+chrome.tabs.onUpdated.addListener((_id, info, tab) => { if (tab.active && (info.url || info.status === "complete")) refreshSoon(); });
+load();

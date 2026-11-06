@@ -46,3 +46,9 @@ input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color:
 @keyframes rise { from { opacity: 0; transform: translate(var(--tx, 0), 6px); } to { opacity: 1; transform: translate(var(--tx, 0), 0); } }
 .toast { --tx: -50%; }
 @keyframes pulse { 50% { opacity: .55; } }
+/* Prax bar status: a small diagnostic so reports can say what the bar saw on this tab. */
+.status .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 8px; font-size: 12px; }
+.status dt { color: var(--muted); }
+.status dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.status dd.bad { color: var(--bad); } .status dd.good { color: var(--good); }
+.toast.err { background: var(--bad); border-radius: 10px; }
