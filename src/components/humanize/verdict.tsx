@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Check, ShieldCheck, Wand2 } from "lucide-react";
 import { CheckerLogo, CheckerName } from "@/components/provider-mark";
 import { useWorkspace } from "@/lib/workspace";
-import { badgeText, chipText, stateOf, money, gateLabel, highlight, type Verdict, type State } from "@/lib/humanize";
+import { badgeText, chipText, stateOf, money, gateLabel, highlight, HUMANIZE_EXT, type Verdict, type State } from "@/lib/humanize";
 import type { Humanize } from "./use-humanize";
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
@@ -42,11 +42,13 @@ export function VerdictCard({ h, local, className, sticky }: { h: Humanize; loca
   const v = h.verdict, s = h.state, p = h.plan?.decision, pv = h.preview;
   const confirm = p?.action === "confirm" ? p : null;
   const busy = h.busy === "check" ? "Checking with Pangram" : h.busy === "fix" ? "Rewriting the flagged sentences" : h.busy === "walter" ? "Walter (beta) is rewriting" : "";
-  const why = v?.service === "local" ? v.reason : pv.action;
+  const why = pv.action === "no-ext" || pv.action === "old-ext" ? pv.action : v?.service === "local" ? v.reason : pv.action;
   const reason: Record<string, React.ReactNode> = {
     "local-low": <>Fix the house rules first. Pangram checks from a free score of {h.level - 10}.</>,
-    "no-key": <>Add a Pangram key on the <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/settings#humanization`}>Settings, Humanization</Link> to verify.</>,
-    "no-cap": <>Enter your Pangram plan&apos;s monthly words in <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/settings#humanization`}>Settings</Link> to verify.</>,
+    "no-ext": <>Install Prax for Chrome to verify. Until then the free score decides. <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/extension`}>Get the extension</Link></>,
+    "old-ext": <>Update Prax for Chrome to {HUMANIZE_EXT} to verify. Until then the free score decides. <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/extension`}>Download {HUMANIZE_EXT}</Link></>,
+    "no-key": <>Add a Pangram key in <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/settings#humanization`}>Settings → Humanization</Link> to verify.</>,
+    "no-cap": <>Enter your Pangram plan&apos;s monthly words in <Link className="font-semibold text-ink underline underline-offset-2" href={`/w/${ws.slug}/settings#humanization`}>Settings → Humanization</Link> to verify.</>,
     "cap-reached": <>This month&apos;s Pangram words are used up. Paid checks stop until next month.</>,
   };
   const est = confirm ? confirm.cost : pv.action === "check" || pv.action === "confirm" ? pv.cost : h.estimate;

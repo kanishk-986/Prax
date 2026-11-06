@@ -15,9 +15,9 @@ import { usePostImage } from "./media";
 import { usePostVideo } from "./video";
 import type { ContentSettings } from "./settings";
 import { humanScore } from "@/lib/studio";
-import { useHumanize, useHumanizeSettings } from "@/components/humanize/use-humanize";
+import { useHumanize, useHumanizeSettings, passGate } from "@/components/humanize/use-humanize";
 import { VerdictCard, VerdictBadge, gateText } from "@/components/humanize/verdict";
-import { kindOfFormat, levelFor, gate, gateLabel, textHash, type Verdict } from "@/lib/humanize";
+import { kindOfFormat, levelFor, type Verdict } from "@/lib/humanize";
 
 const when = (p: Post) => (p.publish_date ? `${fmtDay(p.publish_date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned");
 const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -135,21 +135,20 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     if (!f.draft.trim()) { toast("Write the draft first"); return; }
     if (flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
     // The gate (Q131): posts and articles go for approval only at or above the profile's level.
-    let v: Verdict | null = null;
-    if (hz.level > 0) {
-      v = await hz.ensure();
-      const g = gate(hzKind, hz.level, v, await textHash(f.draft));
-      if (!g.ok) { toast(g.why === "below" ? `${gateLabel(hz.level)}. Use Fix it in the Pangram card.` : "Check it with Pangram first, in the Pangram card. Long pieces check on click."); return; }
-    }
+    const g = await passGate(hz, f.draft);
+    if (!g.ok) { toast(g.note); return; }
     const undo = { status: f.status, requested_by: f.requested_by, requested_at: f.requested_at, decision: f.decision, decision_note: f.decision_note };
-    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "", ...(v ? { humanize: v } : {}) }, `Sent to ${first}. It is in the weekly approval session on Today.`, undo))
+    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "", ...(g.v ? { humanize: g.v } : {}) }, `Sent to ${first}. It is in the weekly approval session on Today.${g.note ? ` ${g.note}` : ""}`, undo))
       logActivity(ws.id, "approval", `Sent for approval: ${f.title}`, post.id);
   }
   async function decide(approved: boolean) {
     if (!approved && !note.trim()) { toast("Add a short note so the team knows what to change"); return; }
     if (approved && flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
+    // Approve and Approve it myself pass the same gate as Send.
+    const g = approved ? await passGate(hz, f.draft) : { ok: true, v: null, note: "" };
+    if (!g.ok) { toast(g.note); return; }
     const undo = { status: f.status, decided_by: f.decided_by, decided_at: f.decided_at, decision: f.decision, decision_note: f.decision_note };
-    if (await save({ status: approved ? "Ready" : "Drafting", decided_by: userId, decided_at: new Date().toISOString(), decision: approved ? "approved" : "changes", decision_note: note.trim() }, approved ? "Approved. It is Ready." : "Changes asked. The team sees your note.", undo)) {
+    if (await save({ status: approved ? "Ready" : "Drafting", decided_by: userId, decided_at: new Date().toISOString(), decision: approved ? "approved" : "changes", decision_note: note.trim(), ...(g.v ? { humanize: g.v } : {}) }, approved ? `Approved. It is Ready.${g.note ? ` ${g.note}` : ""}` : "Changes asked. The team sees your note.", undo)) {
       logActivity(ws.id, "approval", `${approved ? "Approved" : "Changes asked"}: ${f.title}`, post.id); setNote("");
     }
   }
