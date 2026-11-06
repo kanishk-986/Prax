@@ -313,3 +313,56 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 10. **Step 4 items (D10, X7, P19, D11, S5):** weekly report, Inbox view, account map, multi-profile overview, Playbook merge. Ask the user for the order first.
 
 Alongside, and only the user can do these: reinstall extension 0.9.2 (X3), the Supabase switches and custom SMTP (O1 to O5), a first real AI citations and Discovery run with keys (AC22, DS17), and Shashi's real LinkedIn export (N13).
+
+---
+
+## Independent recheck (7 Nov)
+
+Done by a fresh subagent that built nothing. Sources: all 178 user messages in the session log (5 Nov 15:48 to 6 Nov 09:52 UTC), the 34 screenshots the user sent, decisions Q1 to Q125 with their answers, `docs/HANDOFF.md`, and the code on local `main` at `3b5ee6c` (18 commits ahead of `origin/main` at `26af0a5`). About 110 un-numbered requests plus the 125 numbered decisions were mapped to a row. Code was checked by grep and by reading files, not in a browser.
+
+**Note on times.** The times in the Source column above are UTC, not IST (for example, "do the 4 pointers" was sent at 21:10 UTC, which is 02:40 IST on 6 Nov). The rows below use UTC too, so they match.
+
+### (a) Items the first audit missed
+
+| ID | Item, in plain English | Source | Status |
+|---|---|---|---|
+| R1 | Buttons must never wrap onto two lines ("Use it", "All actions", "Profile Studio", "Suggest a LinkedIn article"); the user raised it again after the first fix ("still all are same no changes") | 5 Nov 23:38 (2 screenshots); 6 Nov 00:23 (screenshot); 00:26 (screenshot) | Live (`.btn` has `white-space: nowrap` in `globals.css` and `citations.module.css`) |
+| R2 | Discovery Criteria layout bugs: the "Total 100 of 100" pill wrapped, there were big empty gaps, and the right column was cut off ("these all are mistakes of criteria section") | 5 Nov 21:20 (3 screenshots) | Live (fixed in preview v28 at 21:27; the real `criteria.tsx` pill is `pill shrink-0` with no wrapping; not checked again in a browser) |
+| R3 | Extension toolbar icon was blank and the site's tab icon was the Next.js default ("add a icon there as well dont put it blank") | 5 Nov 17:26 | Live (replaced later by the Corners mark, DZ5; `extension/icons/*` and `src/app/icon.png` checked) |
+| R4 | Quick edits on the draft (Shorter, Sharper, More formal, Add a question, Stronger close) did nothing | 5 Nov 18:45 (screenshot) | Live (`write.tsx` QUICK actions call the AI rewrite) |
+| R5 | The Visual step should be mature and minimal, with a layout that fits each kind of visual, not vibrant blocks | 5 Nov 18:45 (screenshot) | Live (statement, diagram and photo layouts in `write.tsx`) |
+| R6 | The campaign's "warm up is on today's list" line was confusing ("why it's showing here") | 5 Nov 18:45 | Live (removed; no warm-up copy is left in Content Studio) |
+| R7 | "AI citation is not opening" from Content Studio (the preview sidebar had no link) | 5 Nov 19:42 | Live (AI citations is in the app sidebar) |
+| R8 | "Plan and library options are not opening" | 5 Nov 18:08 | Live (Plan and Library tabs work; CS10, CS12) |
+| R9 | "Unstructured toggles": only the AI citations filters were changed to segmented controls. Claude asked where else the user meant and the question was never followed up | 6 Nov 03:44 "have you fixed... the unstructured toggles" | Partly done (AI citations only; ask the user which other screens, with a screenshot) |
+| R10 | The new logo "everywhere" also means the public AI citations share view and the PDF reports (AI citations report, weekly report, carousel) | 5 Nov 23:59 "go with 2nd one corners, implement it everywhere" | Partly done (logo is in the app, favicon, sign-in page, profiles page and extension; there is no logo on `src/app/share/[token]` or in `src/lib/pdf.ts` output) |
+| R11 | No dashes as values anywhere | 6 Nov 00:26; polish pass rule | Partly done (one is left: a draft's Impact shows "–" when empty, `src/components/content/write.tsx` line 553) |
+| R12 | Run the new database files `db/021`, `022`, `024`, `025` and `026` as one saved Supabase query that Claude opens for the user, who only clicks Run ("no pasting") | 6 Nov 04:05 "I'm not a technical guy... these small things can't you do by your end"; Claude's promise at 04:19 and 09:43 | Not started (needed before S1, S2, CS6, CS29, N11, AC15, X7 and others work live) |
+| R13 | Deploy the 18 commits on `main` that are not on `origin/main`, then push (standing rule: push after every deploy) | Q17, Q20; 6 Nov 09:43 | Not started (waits for the user's "deploy" and R12) |
+| R14 | Reinstall the extension as 0.9.3, not 0.9.2 (`extension/manifest.json` and `LATEST_EXT` are 0.9.3 on `main`) | Follows from N11, N12, DS15, CS29, X7 | Needs user action (after the deploy) |
+| R15 | Install REA (github.com/morluto/rea) | 5 Nov 16:37 "install - https://github.com/morluto/rea.git" | Declined on Claude's advice (5 Nov 16:37: only use was copying VoxReply); the user never said yes or no, and it is not installed |
+| R16 | Claude should click Run in Supabase itself | 6 Nov 04:05 | Not possible (the safety check blocks Claude from running SQL on the production database; R12 keeps it to one click) |
+| R17 | Supabase browser tabs would not close (Cmd+W did nothing) | 6 Nov 03:55, 04:19, 04:26 | Not a product item (Chrome housekeeping; Claude gave force-quit steps at 04:27) |
+
+### (b) Status corrections
+
+| ID | Old status | Corrected status | Evidence |
+|---|---|---|---|
+| Header | "`origin/main` = local `main`… no branch holds unmerged work"; times labelled IST | Local `main` (`3b5ee6c`) is 18 commits ahead of `origin/main` (`26af0a5`). The live site still runs `daa6e68`. Times are UTC | `git log origin/main..main`; log timestamps |
+| AC13 | Declined by user (Q124, 7 Nov: two separate numbers) | Decided by Claude, not the user: two separate numbers, no 70/30 score. The user said "I'm not understanding question 124-25… I just forgot the context", and Claude decided it at 6 Nov 04:56. Confirm with the user | Log, 6 Nov 04:56 |
+| Q125 | Not recorded as a decision | Decided by Claude at 6 Nov 04:56 (order: Inbox, weekly report, Playbook, overview), not answered by the user | Log, 6 Nov 04:56 |
+| I1, I2, I5, I6, I7 | In progress (agreed 7 Nov) | In progress (agreed 6 Nov 09:52 UTC). Nothing for them is on `main` yet; builders are running | Log U178; `grep` finds no SerpApi, Copilot, reply-check or camera code in `src` |
+| I3, I4 | Not started (not agreed) | Not chosen by user (offered 6 Nov 09:51; the user picked the other five) | Log, 6 Nov 09:51 and 09:52 |
+| TN3 | Live | Live today, but `main` moves Notes into Playbook, which sits **above** Extension in the sidebar (Set up: Templates, Playbook, Extension, Settings). After the deploy, the user's "place note section after [Extension]" is no longer true. Confirm with the user or reorder | `src/components/sidebar.tsx` NAV |
+| X3, O7 | Needs user action (reinstall 0.9.2) | Reinstall 0.9.3 after the next deploy (see R14) | `extension/manifest.json` |
+| O10 | Live (all SQL up to `db/020` run) | Still true, but `db/021`, `022`, `024`, `025` and `026` are not run (see R12) | `ls db` |
+| DZ5 | Live | Partly done: not on the share view or in the PDFs (see R10) | `src/app/share/[token]/page.tsx`, `src/lib/pdf.ts` |
+| DZ9, AC20 | Live ("no dashes") | Live except one dash in Content Studio (see R11) | `write.tsx:553` |
+
+**Design complaints checked again in the code (all hold, except where noted):** wrapping buttons (R1); search menu alignment and red half ring (DZ7: `#cmdk:focus-visible { outline: none }`); black or red first tiles (DZ4: no `tile.dark`, `tile.red`, `kpiDark` or `kpiRed` left); black hero cards and uppercase labels (DZ9: uppercase is only in post and carousel previews, which is intended); dashes (R11); red repeated buttons (no `btn-primary` inside a list `.map`); AI citations Company editing (AC20: `TrackedNames` edits person, company, firms and experts on Competitors; Company links there); LinkedIn MCP button (D8: `linkedin-mcp.tsx` on the Dashboard, no "Coming soon"); account menu top right (L7: `AccountMenu` is in `Section`, `PageHeader`, Content Studio and AI citations, so it shows on every section, including Inbox, Weekly report, the lead page and Playbook); sign-in required fields (L1: `aria-required` and "Required" in `auth-card.tsx`); logo everywhere (R10); provider logos (DZ6: Grok has its name only); Strategy canvas look (S1: dotted canvas, ⋮ View, Edit, Delete, if/else lanes; "From strategy" labels in Today, Pipeline and Content Studio).
+
+**Declined by the user, listed so they can be seen:** T9 first-hour block (Q62), P11 deal value and forecast (Q38.7, Q102), P12 saved views (Q106), P16 Board view (Q104), CS24 A/B hooks (Q59), CS35 quote cards (Q46), CS36 mobile one-tap approval and tag check (Q63, Q65), CS37 one merged Studio (Q35), AC11 Person, Company, Both switch (replaced by AC10), DZ11 re-audit (6 Nov 01:01), N9 folding Network into other pages (5 Nov 20:30), I3 and I4 (not chosen). AC13 belongs here only once the user confirms it.
+
+### (c) Verdict
+
+No agreed feature was dropped. Seventeen items had no row: most are fixes already live, two are partly done (logo on the share view and PDFs, and the "unstructured toggles" follow-up), one dash is left, and three are next steps (one-click SQL run, deploy and push, reinstall 0.9.3). Ten statuses needed correcting, mainly the header's "Live" baseline, AC13 (decided by Claude, not the user) and the Notes placement that the Playbook merge changes.

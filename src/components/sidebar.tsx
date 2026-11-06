@@ -32,8 +32,8 @@ export const NAV: NavItem[] = [
   { href: "/network", label: "Network", icon: Network, group: "grow" },
   { href: "/comments", label: "Engagement", icon: MessageSquare, group: "grow" },
   { href: "/templates", label: "Templates", icon: LayoutTemplate, group: "setup" },
-  { href: "/playbook", label: "Playbook", icon: BookOpen, group: "setup", words: "strategy notes plan canvas" },
   { href: "/extension", label: "Extension", icon: Star, group: "setup" },
+  { href: "/playbook", label: "Playbook", icon: BookOpen, group: "setup", words: "strategy notes plan canvas" },
   { href: "/settings", label: "Settings", icon: Settings, group: "setup" },
 ];
 
