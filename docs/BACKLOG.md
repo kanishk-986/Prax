@@ -371,7 +371,7 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 
 | QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Live (deployed 7 Nov) (fixes merged; db/030 turns on live updates for every table) |
 
-| H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | Live (deployed 7 Nov); needs db/031 run, then levels set in Settings |
+| H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | Live (deployed 7 Nov, db/031 run); owner sets levels and Pangram key in Settings |
 
 | C1 | Connections section: 20 to 25 tools by section, tool pages with connect, usage by section, routes, caps; replaces Extension; scattered key forms removed | 7 Nov Q135 to Q141 | Partly done (stopped 7 Nov; work on branch connections-wip) |
 | TS1 | Prax hidden from Google (noindex, robots) | 7 Nov Q142 | Not started |
