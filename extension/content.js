@@ -126,10 +126,26 @@
     .b { height:28px; padding:0 11px; border:1px solid var(--ln); border-radius:8px; background: var(--bg); color: var(--ink); font: inherit; font-size:12px; font-weight:500; cursor:pointer; transition: transform .08s, filter .12s; }
     .b:active { transform: translateY(1px) scale(.985); } .b:disabled { opacity:.5; }
     .b.pri { background: var(--acc); border-color: var(--acc); color:#fff; }
+    .b.ink { background:#141414; border-color:#141414; color:#fff; } .p.dark .b.ink { background:#eef1f5; border-color:#eef1f5; color:#141414; }
     .rf { height:24px; padding:0 8px; font-size:11px; color: var(--mut); }
     .sk { height:70px; border-radius:10px; background: var(--bg2); margin-bottom:8px; animation: pulse 1.1s ease-in-out infinite; }
     .err { color: var(--warn); font-size:12px; margin: 4px 0 8px; }
     .why { font-size:11px; color: var(--mut); }
+    .hzc { display:inline-flex; align-items:center; gap:4px; font-weight:600; white-space:nowrap; }
+    .hz { display:flex; flex-direction:column; gap:6px; border:1px solid var(--ln); border-radius:10px; padding:9px 10px; margin: 0 0 8px; background: var(--bg); }
+    .hz.passed { border-color:#141414; box-shadow: 0 0 0 3px rgba(20,20,20,.07), 0 4px 14px rgba(20,20,20,.08); }
+    .hz.needs { border-color:#d64545; box-shadow: 0 0 0 3px rgba(214,69,69,.12), 0 4px 14px rgba(214,69,69,.12); }
+    .hz.free { border-style:dashed; border-color: #b8b8b8; }
+    .hz.glow { animation: glow .9s cubic-bezier(.16,1,.3,1) both; }
+    .hz .top { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; }
+    .hz .top .st { margin-left:auto; font-size:11px; font-weight:600; }
+    .hz .big { display:flex; align-items:baseline; gap:8px; } .hz .big b { font-size:20px; letter-spacing:-.02em; font-variant-numeric: tabular-nums; } .hz .big span { font-size:11px; color: var(--mut); }
+    .hz .note { font-size:11px; color: var(--mut); }
+    .fl { background:#fbeaea; box-shadow: inset 0 -1px 0 rgba(214,69,69,.55); border-radius:3px; } .p.dark .fl { background: rgba(255,138,128,.22); }
+    .rv { border-top:1px solid var(--ln); padding-top:6px; display:flex; flex-direction:column; gap:6px; }
+    .rv .ch { display:grid; gap:2px; font-size:12px; } .rv .was { color: var(--mut); text-decoration: line-through; text-decoration-color: rgba(214,69,69,.6); } .rv .now { color: var(--ink); }
+    @keyframes glow { from { box-shadow: 0 0 0 0 rgba(20,20,20,0); } }
+    @media (prefers-reduced-motion: reduce) { .hz.glow, .p, .d { animation: none; } }
     @keyframes rise { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform:none; } }
     @keyframes pulse { 50% { opacity:.5; } }`;
 
@@ -148,7 +164,124 @@
   function openPanel(anchor, job) {
     const host = document.createElement("div");
     const p = mount(anchor, host, !job.mode); if (!p) return;
-    const state = { mode: job.kind === "comment" ? (job.mode || null) : job.kind, type: "", drafts: [], err: "" };
+    const state = { mode: job.kind === "comment" ? (job.mode || null) : job.kind, type: "", drafts: [], err: "", chosen: 0 };
+
+    // ---------- humanization (db/031) ----------
+    // Pangram judges only the chosen draft, when it is copied, used or saved (or on Check with Pangram), and only when
+    // the background's plan says so (level above 0, free score near the level, a key, room under the monthly cap; a
+    // cached result costs nothing). Flagged sentences are rewritten by Prax, at most twice, each change accepted by
+    // the user; Walter (beta) only after that. Comments are never blocked: the verdict is information.
+    const hz = {};
+    let level = null;
+    const hzOn = job.kind !== "note";
+    const norm = (t) => String(t || "").replace(/\s+/g, " ").trim();
+    const H = (i) => (hz[i] ||= { v: null, plan: null, busy: "", err: "", review: null, rounds: 0, glow: false });
+    const textOf = (i) => (p.querySelector(`.t[data-i="${i}"]`)?.innerText ?? state.drafts[i]?.text ?? "").trim();
+    const fresh = (i) => { const h = H(i); return h.v && h.v.for === norm(state.drafts[i]?.text) ? h.v : null; };
+    const hzState = (i) => (level === 0 ? "off" : fresh(i) ? (fresh(i).score >= level ? "passed" : "needs") : "free");
+    const money = (n) => (n > 0 && n < 0.01 ? "under $0.01" : `$${Number(n || 0).toFixed(2)}`);
+    function hzChip(i) {
+      if (!hzOn || level === 0 || level == null) return "";
+      const v = fresh(i);
+      return `<span class="hzc">${praxCheckerLogo("pangram", 12)}${v ? `${v.score}%` : "Not checked"}</span>`;
+    }
+    function hzCard(i) {
+      if (!hzOn || level === 0) return "";
+      const h = H(i), s = hzState(i), v = fresh(i), d = h.plan?.decision || {};
+      if (level == null) return h.busy ? `<div class="hz free"><div class="note">Checking your humanization level</div></div>` : "";
+      const head = `<div class="top">${praxCheckerLogo("pangram", 14)} Pangram<span class="st" style="color:${s === "needs" ? "#9e1c1c" : s === "passed" ? "#141414" : "var(--mut)"}">${s === "passed" ? "Passed" : s === "needs" ? "Needs work" : "Not verified, free score only"}</span></div>`;
+      const busy = h.busy === "check" ? "Checking with Pangram" : h.busy === "fix" ? "Rewriting the flagged sentences" : h.busy === "walter" ? "Walter (beta) is rewriting" : "";
+      let body = "";
+      if (v) {
+        body = `<div class="big"><b>${v.score}% human</b><span>per Pangram · your level ${level}%</span></div>`;
+        if (s === "needs") {
+          const n = v.flagged.length;
+          const w = h.plan?.walter || {};
+          body += `<div class="note">${n} flagged ${n === 1 ? "passage" : "passages"}, highlighted above.</div>`;
+          if (!h.review && !busy) body += h.rounds < 2 ? `<div class="row"><button class="b ink" data-hz-fix="${i}">Fix it</button><span class="note">Round ${h.rounds + 1} of 2</span></div>`
+            : w.hasKey && w.ready ? `<div class="row"><button class="b" data-hz-walter="${i}">${praxCheckerLogo("walter", 14)} Try Walter (beta)</button></div>`
+            : `<div class="note">Two rewrites did not pass. Rewrite the flagged passages in your own words, then check again.${w.hasKey && !w.ready ? " Walter (beta) is waiting for its API to be confirmed." : ""}</div>`;
+        }
+      } else {
+        const local = human(textOf(i) || state.drafts[i]?.text || "", range()).score;
+        body = `<div class="big"><b>Human ${local}</b><span>free score · your level ${level}%</span></div>`;
+        const why = { "local-low": `Fix the house rules first. Pangram checks from a free score of ${d.need}.`, "no-key": "Add a Pangram key in Prax, Settings, Humanization, to verify.", "no-cap": "Enter your Pangram plan's monthly words in Prax Settings to verify.", "cap-reached": "This month's Pangram words are used up. Paid checks stop until next month." }[d.action];
+        body += why ? `<div class="note">${why}</div>` : !busy ? `<div class="row"><button class="b" data-hz-check="${i}">Check with Pangram${d.cost != null ? ` · about ${money(d.cost)}` : ""}</button><span class="note">Checks run when you copy, use or save.</span></div>` : "";
+      }
+      if (busy) body += `<div class="note">${busy}</div>`;
+      if (h.err) body += `<div class="err">${esc(h.err)}</div>`;
+      if (h.review) {
+        const r = h.review;
+        body += `<div class="rv"><div class="note">${r.src === "walter" ? "Walter (beta) suggests" : "Prax suggests"} ${r.changes.length} ${r.changes.length === 1 ? "change" : "changes"}. Accept each one you want.</div>${r.changes.map((c, k) => `<div class="ch"><span class="was">${esc(c.before)}</span><span class="now">${esc(c.after)}</span><span class="row"><button class="b" data-hz-acc="${k}" data-i="${i}">${r.acc[k] ? "Accepted" : "Accept"}</button></span></div>`).join("")}
+          <div class="row"><button class="b ink" data-hz-apply="${i}">Apply ${r.acc.filter(Boolean).length} and check again</button><button class="b" data-hz-all="${i}">Accept all</button><button class="b" data-hz-drop="${i}">Discard</button></div></div>`;
+      }
+      const glow = h.glow; h.glow = false;
+      return `<div class="hz ${s}${glow ? " glow" : ""}" aria-live="polite">${head}${body}</div>`;
+    }
+    // Plan or check one draft through the background. "check" calls Pangram only when the plan says check.
+    async function hzRun(i, op = "check") {
+      if (!hzOn || level === 0) return;
+      const h = H(i), t = textOf(i);
+      if (!t || h.busy) return;
+      if (op === "check" && fresh(i)) return;
+      h.busy = op === "check" ? "check" : "plan"; h.err = ""; render(false);
+      try {
+        const r = await send({ type: "humanize", op, kind: "comment", section: "linkedin_bar", texts: [t], local: human(t, range()).score });
+        level = r.level; h.plan = r;
+        const res = r.results?.[0];
+        if (res) { h.v = { score: res.score, flagged: res.flagged || [], for: norm(t), at: new Date().toISOString() }; h.glow = true; }
+      } catch (e) { h.err = e.message; }
+      h.busy = ""; render(false);
+    }
+    const verdictOf = (i) => { const v = fresh(i); return v ? { score: v.score, level, service: "pangram", checked_at: v.at, passed: v.score >= level, flagged: v.flagged.length } : undefined; };
+    // The flagged passages that are really in the draft, sentence by sentence.
+    function flaggedIn(t, flagged) {
+      const out = [];
+      for (const f of flagged) {
+        const s = String(f.text || "").trim();
+        if (s && t.includes(s)) out.push(s);
+        else (s.match(/[^.!?\n]+[.!?]*/g) || []).map((x) => x.trim()).filter((x) => x.length > 2 && t.includes(x)).forEach((x) => out.push(x));
+      }
+      return [...new Set(out)];
+    }
+    async function hzFix(i, walter) {
+      const h = H(i), t = textOf(i), v = fresh(i);
+      if (!v) return;
+      const sents = flaggedIn(t, v.flagged);
+      if (!sents.length) { h.err = "The flagged passages could not be found in the draft. Edit it, then check again."; return render(false); }
+      h.busy = walter ? "walter" : "fix"; h.err = ""; render(false);
+      try {
+        let changes = [];
+        if (walter) {
+          const r = await send({ type: "humanize", op: "walter", kind: "comment", section: "linkedin_bar", texts: sents, rounds: h.rounds, failing: true });
+          if (!r.texts) throw new Error({ "no-cap": "Enter Walter's monthly words in Prax Settings first.", "cap-reached": "This month's Walter words are used up.", "not-ready": "Walter (beta) is waiting for its API to be confirmed.", "no-key": "Add a Walter key in Prax, Settings, Humanization." }[r.walter?.why] || "Walter is not available.");
+          changes = sents.map((b, k) => ({ before: b, after: String(r.texts[k] || "").trim() }));
+        } else {
+          const j = parseJSON(await send({ type: "draft", kind: "repair", rules: job.kind === "comment" ? "" : instr(), user: `DRAFT:\n${t}\n\nAn AI detector flagged these sentences as machine-written:\n${sents.map((s, k) => `${k + 1}. ${s}`).join("\n")}\n\nRewrite only these sentences so they read as a senior person wrote them: plain words, varied sentence length, one concrete detail where the draft allows it, no stock phrases. Keep each one's meaning and every fact; add no new facts. No dashes, no contractions, no hashtags.${h.rounds ? " This is the second try: change the rhythm and structure more, not only the words." : ""}\nReturn only JSON: {"changes": [{"before": "the exact sentence", "after": "the rewrite"}]}` }));
+          changes = (j?.changes || []).map((c) => ({ before: String(c?.before || "").trim(), after: String(c?.after || "").trim() }));
+        }
+        changes = changes.filter((c) => c.before && c.after && c.before !== c.after && t.includes(c.before));
+        if (!changes.length) throw new Error("No usable rewrite came back. Try again, or edit the flagged passages yourself.");
+        h.review = { src: walter ? "walter" : "prax", changes, acc: changes.map(() => false) };
+      } catch (e) { h.err = e.message; }
+      h.busy = ""; render(false);
+    }
+    function hlHTML(t, flagged) {
+      const ranges = flaggedIn(t, flagged).map((s) => { const a = t.indexOf(s); return [a, a + s.length]; }).sort((a, b) => a[0] - b[0]);
+      let out = "", at = 0;
+      for (const [a, b] of ranges) { if (a < at) continue; out += esc(t.slice(at, a)) + `<span class="fl">${esc(t.slice(a, b))}</span>`; at = b; }
+      return out + esc(t.slice(at));
+    }
+    async function hzApply(i) {
+      const h = H(i), r = h.review;
+      if (!r || !r.acc.some(Boolean)) { h.err = "Accept at least one change, or Discard."; return render(false); }
+      let t = textOf(i);
+      r.changes.forEach((c, k) => { if (r.acc[k] && t.includes(c.before)) t = t.replace(c.before, c.after); });
+      state.drafts[i] = { ...state.drafts[i], text: t };
+      if (r.src === "prax") h.rounds++;
+      h.review = null; render(false);
+      await hzRun(i, "check");
+    }
 
     const instr = () => job.kind === "note" ? NOTE_RULES + (tun().signature ? ` If it fits within 300 characters, end with: ${tun().signature}` : "") : job.kind === "reply" ? REPLY_RULES : `Style: ${state.mode}. ${styleRules(state.mode)}\n${rules?.tuning || ""}`;
     const range = () => job.kind === "note" ? { lo: 60, hi: 300, chars: true } : job.kind === "reply" ? { lo: 25, hi: 50 } : rangeOf(styleRules(state.mode));
@@ -162,8 +295,9 @@
         ${loading ? '<div class="sk"></div><div class="sk"></div><div class="sk"></div>' : state.drafts.map((d, i) => {
           const h = human(d.text, range());
           return `<div class="d${i === 0 ? " best" : ""}">
-            <div class="t" contenteditable="true" data-i="${i}">${esc(d.text)}</div>
-            <div class="meta"><span class="sc ${h.score >= tun().minHuman ? "ok" : "bad"}">Human ${h.score}</span>${d.impact ? `<span class="sc ${d.impact >= 7 ? "ok" : "bad"}" title="How likely the author is to reply">Impact ${d.impact * 10}</span>` : ""}${d.value ? `<span class="sc ${d.value >= 7 ? "ok" : "bad"}">Value ${d.value * 10}</span>` : ""}${h.flags.length ? `<span class="bad">${esc(h.flags.join(" · "))}</span>` : ""}${d.angle ? `<span class="why">${esc(d.angle)}</span>` : ""}</div>
+            <div class="t" contenteditable="true" data-i="${i}">${i === state.chosen && hzState(i) === "needs" ? hlHTML(d.text, fresh(i).flagged) : esc(d.text)}</div>
+            <div class="meta"><span class="sc ${h.score >= tun().minHuman ? "ok" : "bad"}">Human ${h.score}</span>${i !== state.chosen ? hzChip(i) : ""}${d.impact ? `<span class="sc ${d.impact >= 7 ? "ok" : "bad"}" title="How likely the author is to reply">Impact ${d.impact * 10}</span>` : ""}${d.value ? `<span class="sc ${d.value >= 7 ? "ok" : "bad"}">Value ${d.value * 10}</span>` : ""}${h.flags.length ? `<span class="bad">${esc(h.flags.join(" · "))}</span>` : ""}${d.angle ? `<span class="why">${esc(d.angle)}</span>` : ""}</div>
+            ${i === state.chosen ? hzCard(i) : ""}
             <div class="row"><button class="b pri" data-use="${i}">Use</button><button class="b" data-copy="${i}">Copy</button><button class="b" data-save="${i}" title="Save to the Prax library">Save</button>${Object.keys(REFINE).map((r) => `<button class="b rf" data-rf="${r}" data-i="${i}">${r}</button>`).join("")}</div>
           </div>`;
         }).join("")}`;
@@ -194,7 +328,10 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
         const pc = job.logCtx(state.mode);
         send({ type: "remember", items: state.drafts.map((d) => ({ at: new Date().toISOString(), kind: job.kind, text: d.text, author: pc.author || pc.name || "", url: pc.url || "", style: comment ? state.mode : job.kind, post_type: state.type, human: human(d.text, range()).score, impact: d.impact ? d.impact * 10 : null })) }).catch(() => {});
       } catch (e) { state.err = e.message; }
+      state.chosen = 0;
       render(false);
+      // Free: Prax's plan gives the level and any cached result. Pangram is not called here.
+      if (state.drafts.length && hzOn) hzRun(0, "plan");
     }
 
     // Guardrail repair and auto-humanize: one extra call fixes every draft that trips a house rule
@@ -215,11 +352,26 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
       if (el.classList.contains("x")) return host.remove();
       if (el.dataset.m) { state.mode = el.dataset.m; return generate(); }
       const text = (i) => p.querySelector(`.t[data-i="${i}"]`).innerText.trim();
-      if (el.dataset.copy != null) { await navigator.clipboard.writeText(text(el.dataset.copy)); return toast("Copied"); }
+      const hzI = el.dataset.hzCheck ?? el.dataset.hzFix ?? el.dataset.hzWalter ?? el.dataset.hzApply ?? el.dataset.hzAll ?? el.dataset.hzDrop;
+      if (hzI != null) {
+        const i = +hzI, h = H(i);
+        if (el.dataset.hzCheck != null) return hzRun(i, "check");
+        if (el.dataset.hzFix != null) return hzFix(i, false);
+        if (el.dataset.hzWalter != null) return hzFix(i, true);
+        if (el.dataset.hzApply != null) return hzApply(i);
+        if (el.dataset.hzAll != null && h.review) { h.review.acc = h.review.acc.map(() => true); return render(false); }
+        if (el.dataset.hzDrop != null) { h.review = null; return render(false); }
+      }
+      if (el.dataset.hzAcc != null) { const r = H(+el.dataset.i).review; if (r) { r.acc[+el.dataset.hzAcc] = !r.acc[+el.dataset.hzAcc]; render(false); } return; }
+      // The draft being used becomes the chosen one: its verdict sits above its buttons and Pangram checks it.
+      const used = el.dataset.copy ?? el.dataset.save ?? el.dataset.use;
+      if (used != null && +used !== state.chosen) { state.drafts.forEach((d, k) => { d.text = text(k); }); state.chosen = +used; render(false); }
+      if (el.dataset.copy != null) { await navigator.clipboard.writeText(text(el.dataset.copy)); toast("Copied"); return hzRun(+el.dataset.copy, "check"); }
       if (el.dataset.save != null) {
         const i = +el.dataset.save, d = state.drafts[i], pc = job.logCtx(state.mode);
         el.disabled = true;
-        try { await send({ type: "prax", action: "save", body: { kind: job.kind, text: text(i), author: pc.author || pc.name || "", url: pc.url || "", style: job.kind === "comment" ? state.mode : job.kind, post_type: state.type, human: human(text(i), range()).score, impact: d.impact ? d.impact * 10 : null } }); el.textContent = "Saved"; toast("Saved to the Prax library"); }
+        await hzRun(i, "check");
+        try { await send({ type: "prax", action: "save", body: { kind: job.kind, text: text(i), author: pc.author || pc.name || "", url: pc.url || "", style: job.kind === "comment" ? state.mode : job.kind, post_type: state.type, human: human(text(i), range()).score, impact: d.impact ? d.impact * 10 : null, humanize: verdictOf(i) } }); const b = p.querySelector(`[data-save="${i}"]`); if (b) { b.textContent = "Saved"; b.disabled = true; } toast("Saved to the Prax library"); }
         catch (err) { el.disabled = false; toast(err.message); }
         return;
       }

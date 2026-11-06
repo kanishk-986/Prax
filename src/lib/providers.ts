@@ -65,6 +65,38 @@ export function providerOf(idOrName: string): Provider | null {
 }
 export const providerName = (id: string, short = false) => { const p = providerOf(id); return p ? (short ? p.short : p.name) : id; };
 
+// ---------- AI writing checkers (humanization, db/031) ----------
+// Pangram judges drafts; Walter AI is an optional second fixer in early access. Their marks are the companies' own
+// files, unaltered: Pangram's favicon SVG from https://www.pangram.com/favicon.svg (fetched 6 Nov 2026), and Walter's
+// site icon PNG from https://walterwrites.ai/wp-content/uploads/2024/12/cropped-Walter-Alterated-Logo_Icon_gradient-192x192.png
+// (fetched 6 Nov 2026, scaled to 64px, served from public/brand/walter.png). Walter publishes no SVG mark.
+// extension/marks.js holds the same Pangram paths; scripts/test-humanize.ts checks the copies match.
+export type CheckerId = "pangram" | "walter";
+export type CheckerMark = { viewBox: string; paths: { d: string; fill: string; evenodd?: boolean }[]; source: string } | { image: string; source: string };
+export type Checker = { id: CheckerId; name: string; label: string; console: string; keyHint: string; beta?: boolean; mark: CheckerMark };
+export const CHECKERS: Record<CheckerId, Checker> = {
+  pangram: {
+    id: "pangram", name: "Pangram", label: "Pangram", console: "https://www.pangram.com/dashboard", keyHint: "",
+    mark: { viewBox: "116 116 488 488", source: "https://www.pangram.com/favicon.svg", paths: [
+      { d: "M359.983 575.114V575.131L165.343 385.77V144.852L359.983 575.114Z", fill: "#FECAB9", evenodd: true },
+      { d: "M554.623 144.852V385.77L360.034 575.098L360 575.114L359.983 575.131V575.114L360 575.081L554.623 144.852Z", fill: "#FECAB9" },
+      { d: "M554.657 144.852L360 575.081L359.983 575.114L165.343 144.852L360 256.258L554.657 144.852Z", fill: "#FF6106" },
+      { d: "M360 575.081V575.148L359.983 575.131V575.114L360 575.081Z", fill: "#FF6106" },
+    ] },
+  },
+  walter: {
+    id: "walter", name: "Walter AI", label: "Walter (beta)", console: "https://walterwrites.ai/api/", keyHint: "", beta: true,
+    mark: { image: "/brand/walter.png", source: "https://walterwrites.ai/wp-content/uploads/2024/12/cropped-Walter-Alterated-Logo_Icon_gradient-192x192.png" },
+  },
+};
+
+// Checker keys live in the extension (chrome.storage, cfg.checkers.<id>), set through extension/bridge.js and used only
+// by extension/background.js. A page sees only whether one is saved (ExtStatus.checkerKeys). These three are the whole
+// key interface, so the Connections section can show and change them without knowing the storage.
+export const checkerConnected = (status: { checkerKeys?: Partial<Record<CheckerId, boolean>> } | null | undefined, id: CheckerId) => !!status?.checkerKeys?.[id];
+export const saveCheckerKey = (id: CheckerId, key: string) => ({ checkerKey: { service: id, key: key.trim() } });
+export const removeCheckerKey = (id: CheckerId) => ({ clearCheckerKey: id });
+
 export const KEY_STATE = { on: "Connected in this browser", off: "No key in this browser" } as const;
 /** All a page may show of a saved key. */
 export const SAVED_KEY = "Saved ····";

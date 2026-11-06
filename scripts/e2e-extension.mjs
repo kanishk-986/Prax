@@ -26,6 +26,9 @@ const SINGLE_MAIN = inner(fx("single-post.html"));
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "ok  " : "FAIL"} ${name}${ok ? "" : " " + extra}`); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// SHOTS=<folder> also saves screenshots of the humanization card on the LinkedIn bar.
+const SHOTS = process.env.SHOTS || "";
+const shoot = (loc, name) => (SHOTS ? loc.screenshot({ path: path.join(SHOTS, name) }).catch(() => {}) : null);
 
 const ctx = await chromium.launchPersistentContext(mkdtempSync(path.join(tmpdir(), "prax-e2e-")), {
   channel: "chromium", headless: true,
@@ -50,7 +53,19 @@ async function stub(sw) {
     const J = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "content-type": "application/json" } });
     self.fetch = async (url, init) => {
       url = String(url); const b = init?.body ? JSON.parse(init.body) : {};
-      self.__calls.push({ url, b });
+      self.__calls.push({ url, b, h: init?.headers || {} });
+      // Humanization (db/031): Prax's plan and record, and Pangram's documented /models, POST /task and GET /task/{id}.
+      if (url.includes("api.anthropic.com") && /flagged these sentences/.test(b.messages?.[0]?.content || "")) return J({ stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: JSON.stringify({ changes: [{ before: "A bank has to show its board who can move collateral, when, and with what audit trail.", after: "The board will ask one thing: who can move collateral, and where is the record." }] }) }] });
+      if (url.endsWith("/api/ext/humanize")) {
+        if (b.op === "plan") return J({ decision: { action: "check", words: 40, cost: 0.02 }, level: 70, results: (b.texts || []).map(() => null), used: { pangram: 0, walter: 0 }, caps: { pangram: 10000, walter: 0 }, rate: 0.05 });
+        const w = b.raw?.windows || [];
+        return J({ result: { score: Math.round((b.raw?.fraction_human ?? 1) * 100), words: 40, flagged: w.filter((x) => !/^Human/.test(x.label)).map((x) => ({ text: x.text, label: x.label })), prediction: "", headline: "", version: "4.0" }, used: 40 });
+      }
+      if (url.startsWith("https://text.external-api.pangram.com/models")) return J({ models: ["default", "pangram-4"] });
+      if (url === "https://text.external-api.pangram.com/task") return J({ task_id: "t" + (self.__pg = (self.__pg || 0) + 1) });
+      if (url.startsWith("https://text.external-api.pangram.com/task/")) return J(self.__pg === 1
+        ? { stage: "STAGE_SUCCESS", fraction_human: 0.6, windows: [{ text: "A bank has to show its board who can move collateral, when, and with what audit trail.", label: "AI-Generated", word_count: 17 }, { text: "In my view the hard part is the controls.", label: "Human Written", word_count: 9 }] }
+        : { stage: "STAGE_SUCCESS", fraction_human: 0.96, windows: [] });
       if (url.includes("api.anthropic.com")) return J({ stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: "text", text: JSON.stringify({ post_type: "Opinion or hot take", mode: "Agree and add", drafts: [{ text: "In my view the hard part is the controls. A bank has to show its board who can move collateral, when, and with what audit trail. I think the pilot will be judged on that first, well before anyone asks about speed or cost.", angle: "controls first", value: 8, impact: 7 }] }) }] });
       if (url.endsWith("/api/ext/me")) return J({ workspace: "Shashi Pal", studio: null, rules: null, topics: [], prospects: [] });
       if (url.endsWith("/api/ext/discovery")) return self.__failDiscovery ? J({ error: "Discovery is not set up yet." }, 400) : J({ id: "d1" });
@@ -267,6 +282,39 @@ check("the re-added bar works on the first click", (await page.locator(".prx-hos
 // The page itself cannot switch off a working bar with the takeover event.
 await page.evaluate(() => document.dispatchEvent(new CustomEvent("prax:takeover"))); await wait(300);
 check("a takeover event from the page is ignored while the bar is working", (await bars()) === 7);
+
+// Humanization (db/031) on the LinkedIn bar: the chosen draft's Pangram verdict above its buttons, checked only on
+// Save (or Copy, Use, Check), Fix it with the change accepted, the recheck, and the Pangram key never sent to Prax.
+await sw.evaluate(async () => { const { cfg } = await chrome.storage.local.get("cfg"); await chrome.storage.local.set({ cfg: { ...cfg, checkers: { pangram: "pg-test-key" } } }); self.__calls = []; self.__pg = 0; });
+await wait(1200);
+await page.locator(".prx-write").first().click();
+await page.locator(".prx-host .hz").first().waitFor({ timeout: 8000 }).catch(() => {});
+const hzText = async () => (await page.locator(".prx-host .hz").first().innerText().catch(() => "")).replace(/\s+/g, " ");
+await wait(500); await shoot(page.locator(".prx-host").first(), "ext-1-not-verified.png");
+check("humanize: the chosen draft shows Not verified with Check with Pangram, before any paid call", /Not verified, free score only/.test(await hzText()) && /Check with Pangram/.test(await hzText()) && !(await sw.evaluate(() => self.__calls.some((c) => c.url.includes("pangram.com")))), await hzText());
+await page.locator(".prx-host [data-save='0']").click();
+await page.locator(".prx-host .hz.needs").waitFor({ timeout: 10000 }).catch(() => {});
+check("humanize: Save checks with Pangram and shows Needs work with the score and level", /60% human/.test(await hzText()) && /your level 70%/.test(await hzText()) && /Needs work/.test(await hzText()), await hzText());
+await wait(1000); await shoot(page.locator(".prx-host").first(), "ext-2-needs-work.png");
+check("humanize: the flagged passage is highlighted in the draft", (await page.locator(".prx-host .t .fl").count()) === 1);
+const hzCalls = await sw.evaluate(() => self.__calls.map((c) => ({ url: c.url, b: c.b, key: c.h["x-api-key"] || "" })));
+const pg = hzCalls.filter((c) => c.url.includes("text.external-api.pangram.com"));
+check("humanize: Pangram is called at its documented endpoints with x-api-key", pg.some((c) => c.url.endsWith("/task") && c.key === "pg-test-key" && c.b.model === "default") && pg.some((c) => /\/task\/t1$/.test(c.url)), JSON.stringify(pg.map((c) => c.url)));
+check("humanize: the Pangram key never goes to Prax", !hzCalls.filter((c) => c.url.includes("prax-gamma")).some((c) => JSON.stringify(c.b).includes("pg-test-key")));
+check("humanize: the check is tagged with its job and section", hzCalls.some((c) => c.url.endsWith("/api/ext/humanize") && c.b.op === "record" && c.b.job === "humanize_check" && c.b.section === "linkedin_bar"));
+const saved = hzCalls.find((c) => c.url.endsWith("/api/ext/save"));
+check("humanize: the saved draft carries its badge", saved?.b?.humanize?.score === 60 && saved?.b?.humanize?.service === "pangram", JSON.stringify(saved?.b?.humanize));
+await page.locator(".prx-host [data-hz-fix='0']").click();
+await page.locator(".prx-host .rv").waitFor({ timeout: 8000 }).catch(() => {});
+await wait(500); await shoot(page.locator(".prx-host").first(), "ext-3-review.png");
+check("humanize: Fix it shows before and after, nothing applied yet", (await page.locator(".prx-host .rv .ch").count()) === 1 && /audit trail/.test(await page.locator(".prx-host .t").first().innerText()));
+await page.locator(".prx-host [data-hz-all='0']").click();
+await page.locator(".prx-host [data-hz-apply='0']").click();
+await page.locator(".prx-host .hz.passed").waitFor({ timeout: 10000 }).catch(() => {});
+check("humanize: the accepted change is applied and rechecked: Passed", /96% human/.test(await hzText()) && /Passed/.test(await hzText()) && /where is the record/.test(await page.locator(".prx-host .t").first().innerText()), await hzText());
+await wait(1000); await shoot(page.locator(".prx-host").first(), "ext-4-passed.png");
+check("humanize: two Pangram checks in all", (await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("text.external-api.pangram.com/task")).length)) === 2);
+await page.locator(".prx-host .x").first().click();
 
 // The Prax site's bridge answers (Extension page handshake).
 const web = await ctx.newPage();

@@ -19,7 +19,7 @@ async function tabSay(tabId, type) {
 }
 async function injectBar(tabId) {
   await chrome.scripting.insertCSS({ target: { tabId }, files: ["content.css"] }).catch(() => {});
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["dom.js", "content.js"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["dom.js", "marks.js", "content.js"] });
 }
 // Returns the bar status in that tab, adding the script first when it does not answer.
 async function ensureBar(tabId, rescan) {
@@ -283,6 +283,87 @@ async function image({ provider, prompt, size }) {
   return { provider: p, model, url };
 }
 
+// ---------- Humanization: Pangram checks, Walter (beta) rewrites (db/031) ----------
+// Self-contained: the Prax pages and the LinkedIn bar send { type: "humanize", op, kind, texts, ... } and get back the
+// plan (level, decision, cached results, month use) or the checked results. Before any paid call Prax is asked for the
+// plan (settings, the cache by text hash, the monthly cap); after it, the reply is recorded there. The Pangram and Walter
+// keys (cfg.checkers) go only to Pangram and Walter, never to Prax, and are never returned.
+// Pangram, as documented at docs.pangram.com/api-reference/ai-detection.md: POST /task with the x-api-key header, then
+// GET /task/{task_id} until stage is STAGE_SUCCESS or STAGE_FAILED. Models from GET /models (docs .../models.md).
+importScripts("walter.js");
+const PANGRAM = "https://text.external-api.pangram.com";
+const PANGRAM_ERR = { 400: "Pangram could not read the request.", 401: "Pangram did not accept the key. Check it on the Prax Extension page.", 402: "The Pangram account has no credits left.", 403: "This Pangram key cannot use that model.", 404: "Pangram lost that check. Try again.", 413: "That text is too long for Pangram.", 422: "Pangram could not check that text.", 429: "Pangram is rate limiting this key. Wait a minute and try again.", 500: "Pangram had an error. Try again.", 503: "Pangram is busy. Try again shortly." };
+let pangramModelCache = null;
+
+async function pangramFetch(path, key, init = {}) {
+  let r;
+  try { r = await fetch(PANGRAM + path, { ...init, headers: { "x-api-key": key, ...(init.body ? { "content-type": "application/json" } : {}) } }); }
+  catch { throw new Error("Pangram could not be reached. Check the internet connection and try again."); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(PANGRAM_ERR[r.status] || `Pangram returned ${r.status}.`);
+  return j;
+}
+// The docs ask integrations to send a selector returned by GET /models; "default" follows Pangram's current model.
+async function pangramModel(key) {
+  if (pangramModelCache) return pangramModelCache;
+  const j = await pangramFetch("/models", key).catch(() => ({}));
+  const list = Array.isArray(j.models) ? j.models : [];
+  pangramModelCache = list.includes("default") ? "default" : list[0] || "default";
+  return pangramModelCache;
+}
+async function pangramDetect(key, text) {
+  const { task_id } = await pangramFetch("/task", key, { method: "POST", body: JSON.stringify({ text, model: await pangramModel(key), public_dashboard_link: false }) });
+  if (!task_id) throw new Error("Pangram did not start the check.");
+  for (let i = 0, wait = 700; i < 90; i++, wait = Math.min(2000, wait + 200)) {
+    await new Promise((r) => setTimeout(r, wait));
+    const j = await pangramFetch("/task/" + encodeURIComponent(task_id), key);
+    if (j.stage === "STAGE_FAILED") throw new Error(`Pangram could not check this text: ${j.headline || "it failed"}`);
+    if (j.stage === "STAGE_SUCCESS") {
+      // Only the fields Prax maps (src/lib/humanize.ts mapPangram) go on to Prax.
+      const w = (j.windows || []).map((x) => ({ text: x.text, label: x.label, ai_assistance_score: x.ai_assistance_score, confidence: x.confidence, start_index: x.start_index, end_index: x.end_index, word_count: x.word_count }));
+      return { stage: j.stage, version: j.version, headline: j.headline, prediction_short: j.prediction_short, fraction_human: j.fraction_human, fraction_ai: j.fraction_ai, fraction_ai_assisted: j.fraction_ai_assisted, windows: w };
+    }
+  }
+  throw new Error("Pangram took too long. Try again.");
+}
+
+// Detectors Prax can ask, each one function: check(key, text) returns the raw reply, which Prax maps (src/lib/humanize.ts
+// DETECTORS). GPTZero or Originality.ai would add an entry here and one there; nothing else changes.
+const DETECTORS = { pangram: { check: pangramDetect } };
+// Every paid call is tagged for usage: the job (humanize_check, humanize_rewrite) is set by Prax from the service,
+// and the section is where the call came from (comment_studio, linkedin_bar, content_write, content_editor).
+const SECTIONS = ["comment_studio", "linkedin_bar", "content_write", "content_editor"];
+
+async function humanize(msg) {
+  const c = await cfg();
+  const keys = c.checkers || {};
+  const kind = ["comment", "post", "article"].includes(msg.kind) ? msg.kind : "post";
+  const texts = (Array.isArray(msg.texts) ? msg.texts : [msg.text]).map((t) => String(t || "")).filter((t) => t.trim()).slice(0, 60);
+  const section = SECTIONS.includes(msg.section) ? msg.section : "";
+  if (msg.op === "walter") {
+    const plan = await prax("humanize", { op: "plan", service: "walter", kind, texts, has_key: !!keys.walter, ready: WALTER.confirmed, rounds: Number(msg.rounds) || 0, failing: !!msg.failing });
+    if (!plan.walter?.ok) return { ...plan, texts: null };
+    const out = [];
+    for (const t of texts) {
+      out.push(await WALTER.humanize(keys.walter, t));
+      prax("humanize", { op: "record", service: "walter", job: "humanize_rewrite", section, kind, text: t }).catch(() => {});
+    }
+    return { ...plan, texts: out };
+  }
+  const plan = await prax("humanize", { op: "plan", service: "pangram", kind, texts, local: Number(msg.local) || 0, has_key: !!keys.pangram, confirm: !!msg.confirm });
+  const base = { ...plan, walter: { hasKey: !!keys.walter, ready: WALTER.confirmed } };
+  if (msg.op !== "check" || plan.decision?.action !== "check") return base;
+  const results = plan.results.slice();
+  let used = plan.used?.pangram || 0;
+  for (let i = 0; i < texts.length; i++) {
+    if (results[i]) continue;
+    const raw = await DETECTORS.pangram.check(keys.pangram, texts[i]);
+    const rec = await prax("humanize", { op: "record", service: "pangram", job: "humanize_check", section, kind, text: texts[i], raw });
+    results[i] = rec.result; used = rec.used ?? used;
+  }
+  return { ...base, decision: { ...plan.decision, action: "checked" }, results, used: { ...plan.used, pangram: used } };
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const jobs = {
     me: () => me(msg.fresh),
@@ -294,6 +375,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     clearHistory: async () => { await chrome.storage.local.remove("history"); return []; },
     search: () => search(msg),
     image: () => image(msg),
+    humanize: () => humanize(msg),
     // The side panel's Prax bar status and Fix bars: checks (and if needed adds) the bar in that tab.
     barStatus: () => ensureBar(msg.tabId, !!msg.rescan),
   };

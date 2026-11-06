@@ -1,4 +1,7 @@
 "use client";
+import { VerdictChip } from "@/components/humanize/verdict";
+import { CheckerLogo } from "@/components/provider-mark";
+import { libState, type LibFilter, type Verdict } from "@/lib/humanize";
 import { Switch, SwitchRow } from "@/components/switch";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -510,7 +513,7 @@ function RewriteLab({ studio }: { studio: Studio }) {
 }
 
 // ---------------- Library ----------------
-type Saved = { id: string; kind: string; text: string; author: string; post_url: string; style: string; post_type: string; human: number | null; impact: number | null; source: string; created_at: string };
+type Saved = { id: string; kind: string; text: string; author: string; post_url: string; style: string; post_type: string; human: number | null; impact: number | null; source: string; created_at: string; humanize?: Partial<Verdict> };
 type Hist = { at: string; kind: string; text: string; author: string; url: string; style: string; post_type: string; human: number; impact: number | null };
 
 function Library() {
@@ -521,6 +524,9 @@ function Library() {
   const [hist, setHist] = useState<Hist[] | null>(null);
   const [histErr, setHistErr] = useState("");
   const [q, setQ] = useState("");
+  const [hzF, setHzF] = useState<LibFilter>("all");
+  const hzOf = (s: Saved) => (s.humanize?.checked_at ? (s.humanize as Verdict) : null);
+  const hzCount = (k: LibFilter) => (k === "all" ? saved.rows.length : saved.rows.filter((s) => libState(hzOf(s)) === k).length);
   useEffect(() => { if (view === "history" && !hist) askExtension<Hist[]>("history", {}, 3000).then(setHist, (e) => setHistErr(e.message)); }, [view, hist]);
   const match = (x: { text: string; author?: string; style?: string }) => !q || `${x.text} ${x.author} ${x.style}`.toLowerCase().includes(q.toLowerCase());
 
@@ -540,8 +546,8 @@ function Library() {
         <button className="btn btn-ghost h-6 px-2 text-meta" onClick={async () => { await navigator.clipboard.writeText(text); haptic(); toast("Copied"); }}><Copy size={12} /> Copy</button>{actions}</span></div>
     </div>
   );
-  const chips = (x: { style?: string; post_type?: string; human?: number | null; impact?: number | null; author?: string }) => (
-    <>{x.author && <span className="font-medium text-ink-2">{x.author}</span>}{x.style && <span className="chip">{x.style}</span>}{x.post_type && <span className="chip">{x.post_type}</span>}{x.human != null && <span className="num">Human {x.human}</span>}{x.impact != null && <span className="num">Impact {x.impact}</span>}</>
+  const chips = (x: { style?: string; post_type?: string; human?: number | null; impact?: number | null; author?: string; humanize?: Partial<Verdict> }) => (
+    <>{"humanize" in x && <VerdictChip v={x.humanize?.checked_at ? (x.humanize as Verdict) : null} />}{x.author && <span className="font-medium text-ink-2">{x.author}</span>}{x.style && <span className="chip">{x.style}</span>}{x.post_type && <span className="chip">{x.post_type}</span>}{x.human != null && <span className="num">Human {x.human}</span>}{x.impact != null && <span className="num">Impact {x.impact}</span>}</>
   );
   return (
     <div className="card overflow-hidden">
@@ -549,14 +555,17 @@ function Library() {
         <div className="flex rounded-lg border border-line-strong p-0.5">
           {(["saved", "history"] as const).map((v) => <button key={v} className={`btn h-7 border-0 ${view === v ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setView(v)}>{v === "saved" ? `Saved ${saved.rows.length}` : "History"}</button>)}
         </div>
+        {view === "saved" && <div className="flex max-w-full flex-wrap rounded-lg border border-line-strong p-0.5" role="group" aria-label="Pangram verdict">
+          {([["all", "All"], ["passed", "Passed"], ["needs", "Needs work"], ["unchecked", "Not checked"]] as [LibFilter, string][]).map(([k, l]) => <button key={k} aria-pressed={hzF === k} className={`btn h-7 border-0 px-2.5 ${hzF === k ? "bg-surface-2" : "bg-transparent"}`} onClick={() => setHzF(k)}>{k === "all" ? <CheckerLogo id="pangram" size={12} /> : null}{l} <span className="num text-meta text-muted">{hzCount(k)}</span></button>)}
+        </div>}
         <input className="field h-8 w-full sm:ml-auto sm:w-64" placeholder="Search comments, authors, styles" value={q} onChange={(e) => setQ(e.target.value)} />
         <button className="btn" onClick={exportJSON}><Download size={13} /> Export JSON</button>
         {view === "history" && hist && hist.length > 0 && <button className="btn btn-ghost hover:text-bad" onClick={async () => { await askExtension("clearHistory", {}, 3000); setHist([]); haptic(); toast("History cleared in this browser"); }}>Clear history</button>}
       </div>
       {view === "saved" ? (
-        saved.loading ? <div className="h-32 animate-pulse bg-surface-2" /> : saved.rows.filter(match).length === 0
-          ? <p className="p-8 text-center text-body text-muted">Nothing saved yet. Press Save on any Prax draft, on LinkedIn or in Rewrite Lab.</p>
-          : saved.rows.filter(match).map((s) => <Card key={s.id} text={s.text} meta={<>{chips(s)}<span>{fmtDay(ymd(new Date(s.created_at)), { day: "numeric", month: "short" })}</span>{s.post_url && <a href={s.post_url} target="_blank" rel="noopener" className="underline">post</a>}</>} actions={can("editor") && <button className="btn btn-ghost h-6 px-2 text-meta hover:text-bad" onClick={() => del(s)}><Trash2 size={12} /></button>} />)
+        saved.loading ? <div className="h-32 animate-pulse bg-surface-2" /> : saved.rows.filter(match).filter((s) => hzF === "all" || libState(hzOf(s)) === hzF).length === 0
+          ? <p className="p-8 text-center text-body text-muted">{hzF !== "all" && saved.rows.length ? "No saved drafts match this filter." : "Nothing saved yet. Press Save on any Prax draft, on LinkedIn or in Rewrite Lab."}</p>
+          : saved.rows.filter(match).filter((s) => hzF === "all" || libState(hzOf(s)) === hzF).map((s) => <Card key={s.id} text={s.text} meta={<>{chips(s)}<span>{fmtDay(ymd(new Date(s.created_at)), { day: "numeric", month: "short" })}</span>{s.post_url && <a href={s.post_url} target="_blank" rel="noopener" className="underline">post</a>}</>} actions={can("editor") && <button className="btn btn-ghost h-6 px-2 text-meta hover:text-bad" onClick={() => del(s)}><Trash2 size={12} /></button>} />)
       ) : histErr ? <p className="p-8 text-center text-body text-muted">{histErr}</p>
         : !hist ? <div className="h-32 animate-pulse bg-surface-2" />
         : hist.filter(match).length === 0 ? <p className="p-8 text-center text-body text-muted">No drafts in this browser yet. History keeps the last 200 drafts here, never on the Prax server.</p>

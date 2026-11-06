@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 // Talks to the Prax extension through its bridge script on this page. Settings sent here go
 // straight into the extension's storage in this browser; the AI key never reaches the server.
-export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[] };
-export const LATEST_EXT = "0.9.5";
+export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[]; checkerKeys?: { pangram?: boolean; walter?: boolean } };
+export const LATEST_EXT = "0.9.6";
 
 export function useExtension() {
   const [status, setStatus] = useState<ExtStatus | null>(null);
@@ -48,7 +48,7 @@ function bridgeAnswers(ms = 1500): Promise<boolean> {
 }
 
 /** AI work and local draft history from the extension. The AI key stays in the extension. */
-export async function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+export async function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image" | "humanize", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
   if (!(await bridgeAnswers())) throw new Error(NO_EXTENSION);
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);

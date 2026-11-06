@@ -1,4 +1,6 @@
 "use client";
+import { VerdictChip } from "@/components/humanize/verdict";
+import { libState, type LibFilter, type Verdict } from "@/lib/humanize";
 import { AccountMenu } from "@/components/account-menu";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Quote } from "lucide-react";
@@ -22,6 +24,8 @@ import { SidePanel, Tag } from "@/components/discovery/shared";
 import Link from "next/link";
 import type { ProspectLite } from "@/lib/network";
 
+// db/031: the saved Pangram badge of a post, or null when it was never checked.
+const hzOf = (p: { humanize?: Partial<Verdict> }) => (p.humanize?.checked_at ? (p.humanize as Verdict) : null);
 const TABS = [["home", "Home"], ["write", "Write a post"], ["campaigns", "Campaigns"], ["plan", "Plan"], ["library", "Library"], ["formatter", "Formatter"]] as const;
 type Tab = (typeof TABS)[number][0];
 const SUB: Record<Tab, string> = {
@@ -223,6 +227,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
   const [source, setSource] = useState<"all" | PostSource>("all");
   const [disc, setDisc] = useState<Post | null>(null);
   const [q, setQ] = useState("");
+  const [hzF, setHzF] = useState<LibFilter>("all");
   const [pop, setPop] = useState<{ post: Post; el: HTMLElement } | null>(null);
   const [menu, setMenu] = useState<{ post: Post; el: HTMLElement } | null>(null);
   const [del, setDel] = useState<Post | null>(null);
@@ -259,6 +264,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
     });
   }
   const rows = all.filter((p) => (status === "all" || statusOf(p.status) === status) && (source === "all" || postSource(p) === source) && (type === "all" || (p.format || "Text post") === type) && (camp === "all" || (camp === "none" ? !p.campaign_id : p.campaign_id === camp))
+    && (hzF === "all" || libState(hzOf(p)) === hzF)
     && (!q || `${p.title} ${p.pillar} ${p.topic}`.toLowerCase().includes(q.toLowerCase())))
     .sort((a, b) => (b.publish_date ?? "9999").localeCompare(a.publish_date ?? "9999"));
   const count = (s: string) => all.filter((p) => s === "all" || statusOf(p.status) === s).length;
@@ -293,6 +299,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
         </div>
         <select className="field h-9 w-auto" value={type} onChange={(e) => setType(e.target.value)} aria-label="Type"><option value="all">All types</option>{FORMATS.map((f) => <option key={f}>{f}</option>)}</select>
         <select className="field h-9 w-auto" value={source} onChange={(e) => setSource(e.target.value as "all" | PostSource)} aria-label="Source"><option value="all">All sources</option><option value="discovery">Discovery Studio</option><option value="citations">AI citations</option><option value="campaign">Campaign</option><option value="here">Written here</option></select>
+        <select className="field h-9 w-auto" value={hzF} onChange={(e) => setHzF(e.target.value as LibFilter)} aria-label="Pangram verdict"><option value="all">Any Pangram verdict</option><option value="passed">Passed</option><option value="needs">Needs work</option><option value="unchecked">Not checked</option></select>
         <select className="field h-9 w-auto" value={camp} onChange={(e) => setCamp(e.target.value)} aria-label="Campaign"><option value="all">All campaigns</option><option value="none">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <input className="field ml-auto h-9 w-full sm:w-64" placeholder="Search posts and pillars" value={q} onChange={(e) => setQ(e.target.value)} />
         {editable && <button className="btn h-9" onClick={newPost}>Blank post</button>}
@@ -306,7 +313,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
               return (
                 <div key={p.id} className={`group grid ${cols} items-center gap-3 border-t border-line px-4 py-3 text-body first:border-t-0 hover:bg-[#fafafa]`}>
                   <span className="flex min-w-0 flex-col items-start gap-0.5"><span className="flex max-w-full items-center gap-2"><button type="button" className="truncate text-left font-semibold hover:underline" onClick={() => openPost(p)}>{p.title}</button><ChannelFlag p={p} /></span>
-                    <span className="max-w-full truncate text-meta text-muted">{p.format || "Text post"} · {p.pillar || p.topic || "No pillar"}</span>
+                    <span className="flex max-w-full items-center gap-2"><span className="min-w-0 truncate text-meta text-muted">{p.format || "Text post"} · {p.pillar || p.topic || "No pillar"}</span>{s !== "Idea" && <VerdictChip v={hzOf(p)} className="shrink-0" />}</span>
                     {postSource(p) === "discovery" && <button type="button" className="pill h-[22px] border border-line-strong bg-white px-2 text-meta text-ink-2 hover:border-ink" onClick={() => setDisc(p)}>From Discovery{p.discovery?.rank ? ` · #${p.discovery.rank}` : ""}{p.discovery?.score != null ? ` · ${p.discovery.score}` : ""}</button>}</span>
                   <span className="truncate text-meta" style={{ color: cn ? "var(--ink)" : "var(--muted)" }}>{cn ?? "Independent"}</span>
                   <span><StatusPill s={s} /></span>
