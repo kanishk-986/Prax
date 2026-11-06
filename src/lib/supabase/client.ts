@@ -14,6 +14,8 @@ const tracked: typeof fetch = async (input, init) => {
 };
 
 export function supabase() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TEMPORARY preview patch
+  if (typeof window !== "undefined" && (window as any).__praxFakeSupabase) return (window as any).__praxFakeSupabase;
   if (!client) {
     client = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { global: { fetch: tracked } });
   }

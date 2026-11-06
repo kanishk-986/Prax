@@ -3,7 +3,7 @@
 // connection, the jobs it can do with routing and fallback, usage by section with filters, the monthly cap with an
 // 80% warning, the model (Edit), the call log (Review, no content), Replace and Delete with Undo, Back and Previous
 // and Next through the catalog as filtered.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, Copy, Check, AlertCircle, Loader2 } from "lucide-react";
@@ -42,6 +42,8 @@ export function ToolPage({ id }: { id: string }) {
   const [openSignal, setOpenSignal] = useState(0);
   const [test, setTest] = useState<TestResult | null>(null);
   const [testing, setTesting] = useState(false);
+  // A test line belongs to the key it tested: it goes when the key is deleted.
+  useEffect(() => { if (!on) setTest(null); }, [on]);
   const old = oldExtension(conn.status);
   const section = SECTIONS.find((s) => s.id === t.section)!;
   const filtered = !!(filter.section || filter.status || filter.job || filter.q);
@@ -93,7 +95,7 @@ export function ToolPage({ id }: { id: string }) {
             <p className="mt-4 rounded-lg bg-surface-2 px-3 py-2.5 text-body">
               {t.coming ? <>Not available yet. It will: {t.later}</>
                 : !t.jobs.length ? <><span className="font-semibold">Prax does not use {t.name} for any job yet.</span> It will be used for: {t.later}</>
-                : jobs.length ? <><span className="font-semibold">Prax uses {t.name} today</span> for {jobs.map((j) => jobOf(j)?.name.toLowerCase()).join(", ")}.</>
+                : jobs.length ? <><span className="font-semibold">Prax uses {t.name} today</span> for {jobs.map((j) => jobOf(j)?.name).join(", ")}.</>
                 : on ? <><span className="font-semibold">Connected, but no job is routed to {t.name} yet.</span> Route a job to it below.</>
                 : <>Connect a key, then route a job to it below.</>}
             </p>
@@ -314,7 +316,7 @@ function MonthCard({ conn, id }: { conn: Conn; id: string }) {
         <>
           <div className="num mt-1.5 text-kpi font-semibold tracking-[-0.03em]">{spendLine(tot)}</div>
           <div className="mt-0.5 text-meta text-muted">{tot.calls ? `${tot.calls.toLocaleString("en-GB")} calls · ${amount(tot, t.unit)}` : "No calls yet this month"}</div>
-          <div className="mt-3"><Spark points={daily(filterEvents(conn.monthEvents, { tool: id }), Math.max(2, new Date().getDate())).map((d) => d.calls)} width={290} height={34} label="Calls per day this month" /></div>
+          {tot.calls > 0 && <div className="mt-3"><Spark points={daily(filterEvents(conn.monthEvents, { tool: id }), Math.max(2, new Date().getDate())).map((d) => d.calls)} width={290} height={34} label="Calls per day this month" /></div>}
         </>
       )}
     </section>

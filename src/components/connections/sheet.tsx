@@ -137,7 +137,7 @@ export function ToolSheet({ tool, job, onClose }: { tool?: string; job?: JobId; 
       // Writing jobs also set the drafting model here, so the extension follows even before db/032 runs.
       if (job === "comment") await conn.send("settings", { provider: t }).catch(() => {});
       haptic();
-      toast(`${j!.name} now use ${toolName(t)}`, async () => { await conn.save({ routes: prev.routes }); if (job === "comment") await conn.send("settings", { provider: route.primary }).catch(() => {}); });
+      toast(`${j!.name}: now ${toolName(t)}`, async () => { await conn.save({ routes: prev.routes }); if (job === "comment") await conn.send("settings", { provider: route.primary }).catch(() => {}); });
     } catch (e) { toast((e as Error).message); setPick(route.primary); }
   }
 

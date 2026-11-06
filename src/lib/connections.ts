@@ -403,9 +403,9 @@ export function usageLine(t: Totals, unit: Unit = "tokens"): string {
   if (t.priced) parts.push(money(t.cost));
   return parts.join(" · ");
 }
-/** The month's spend in words: "$1.24", "None this month", or "Not priced" when no call had a price. */
+/** The spend in words: "$1.24", "None" (no calls), or "Not priced" when no call had a price. */
 export function spendLine(t: Totals): string {
-  if (!t.calls) return "None this month";
+  if (!t.calls) return "None";
   return t.priced ? money(t.cost) : "Not priced";
 }
 

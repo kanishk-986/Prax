@@ -62,7 +62,7 @@ export function Overview({ conn, onTools }: { conn: Conn; onTools: () => void })
             <ul className="mt-3 flex flex-col gap-3">
               {byTool.slice(0, 8).map((r) => (
                 <li key={r.key} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-3 text-body"><Link href={`/w/${ws.slug}/connections/${r.key}`} className="min-w-0 hover:underline"><ToolInline id={r.key} /></Link><span className="num shrink-0 text-meta text-muted">{r.totals.calls} calls · <span className="font-medium text-ink">{spendLine(r.totals)}</span></span></div>
+                  <div className="flex items-center justify-between gap-3 text-body"><Link href={`/w/${ws.slug}/connections/${r.key}`} className="min-w-0 hover:underline"><ToolInline id={r.key} /></Link><span className="num shrink-0 text-meta text-muted">{r.totals.calls} {r.totals.calls === 1 ? "call" : "calls"} · <span className="font-medium text-ink">{spendLine(r.totals)}</span></span></div>
                   <Bar value={r.totals.priced ? r.totals.cost / maxCost : r.share} label={`${toolName(r.key)} share`} />
                 </li>
               ))}

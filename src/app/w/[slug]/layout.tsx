@@ -4,9 +4,11 @@ import { WorkspaceProvider, type Role, type Workspace } from "@/lib/workspace";
 import { Sidebar } from "@/components/sidebar";
 import { Toaster } from "@/components/toaster";
 import { CommandMenu } from "@/components/command-menu";
+import { PreviewShell } from "./preview-shell";
 
 export default async function WsLayout({ children, params }: { children: React.ReactNode; params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (process.env.PRAX_PREVIEW === "1") return <PreviewShell slug={slug}>{children}</PreviewShell>;
   const sb = await supabaseServer();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect("/login");
