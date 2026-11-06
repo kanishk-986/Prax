@@ -746,7 +746,7 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 **Merged on main, not deployed:** humanization (H1) with all 9 QA fixes; the QA plan (`docs/QA_PLAN.md`); the sidebar "Do" group renamed "Daily work"; the empty-draft Human score fix; decisions Q135 to Q160.
 
 **In flight:**
-- Connections (C1): a builder agent was working on branch `connections` in a worktree under `~/claude.md/.claude/worktrees/` (clone named `prax-work`). If that agent is gone, check that worktree for commits (`git -C <path> log --oneline connections`); merge what's there, or restart C1 from the spec "Connections section, agreed 7 Nov 2026".
+- Connections (C1): a builder agent was working on branch `connections` in `~/claude.md/.claude/worktrees/agent-adcc7ce9c842422b6/prax-work`. An unfinished, unreviewed snapshot is on GitHub as branch `connections-wip`. If the agent is gone, continue from the worktree if it has newer work, else from `connections-wip`; finish C1 per "Connections section, agreed 7 Nov 2026", then QA.
 - QA retest of humanize at 4401bbc was running. If there's no verdict, re-run the gate from `docs/QA_PLAN.md`.
 
 **Next, in order:**
