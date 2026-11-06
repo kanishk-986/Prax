@@ -1,6 +1,7 @@
 // Checks the section shell rules: entry moment and tour gating, and tour step maths. Run: node scripts/test-shell.ts
 import { readFileSync } from "node:fs";
 import { shouldPlayIntro, markIntro, shouldAutoTour, markTourSeen, moveTour, tourLabel, tourPercent, navActive, tourPlace, playbookTab, playbookHref, type Store } from "../src/lib/shell.ts";
+import { writtenTable } from "../src/lib/writes.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -64,6 +65,22 @@ eq("the Strategy tab has no query", playbookHref("shashi"), "/w/shashi/playbook"
 eq("the Notes tab address", playbookHref("shashi", "notes"), "/w/shashi/playbook?tab=notes");
 eq("the playbook item is active on its page with a tab", navActive(`${B}/playbook`, B, "/playbook"), true);
 eq("the sidebar has one Playbook item and no Strategy or Notes", [NAV_HREFS.includes("/playbook"), NAV_HREFS.includes("/strategy"), NAV_HREFS.includes("/notes")], [true, false, false]);
+
+// Lists reload after this browser's own writes (QA 6 Nov: Add, Save and Delete looked dead until a reload).
+const REST = "https://x.supabase.co/rest/v1";
+eq("an insert names its table", writtenTable(`${REST}/note_items?select=id`, "POST"), "note_items");
+eq("an update names its table", writtenTable(`${REST}/daily_items?id=eq.1`, "PATCH"), "daily_items");
+eq("a delete names its table", writtenTable(`${REST}/saved_drafts?id=eq.1`, "DELETE"), "saved_drafts");
+eq("a read is not a write", writtenTable(`${REST}/daily_items?select=*`, "GET"), "");
+eq("a count is not a write", writtenTable(`${REST}/daily_items?select=*`, "HEAD"), "");
+eq("an RPC is not taken as a table", writtenTable(`${REST}/rpc/strategy_activate`, "POST"), "");
+eq("auth and other calls are ignored", writtenTable("https://x.supabase.co/auth/v1/token?grant_type=refresh_token", "POST"), "");
+eq("no method means a read", writtenTable(`${REST}/posts`), "");
+const LIVE = readFileSync(new URL("../src/lib/live.ts", import.meta.url), "utf8");
+const CLIENT = readFileSync(new URL("../src/lib/supabase/client.ts", import.meta.url), "utf8");
+eq("useLive reloads on the write event, and the client fires it", [LIVE.includes("addEventListener(WROTE"), CLIENT.includes("dispatchEvent(new CustomEvent(WROTE")], [true, true]);
+const TODAY = readFileSync(new URL("../src/app/w/[slug]/today/page.tsx", import.meta.url), "utf8");
+eq("no query is left unsent in a click handler", /onClick=\{\(\) => supabase\(\)\./.test(TODAY), false);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

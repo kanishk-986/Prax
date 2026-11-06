@@ -31,8 +31,25 @@ export function useExtension() {
   return { status, send };
 }
 
+export const NO_EXTENSION = `Prax for Chrome is not answering in this browser. Install ${LATEST_EXT}, connect it on the Extension page, then reload this page.`;
+
+// Once the bridge has answered on this page it stays; until then each ask checks first, so a missing extension
+// is said within a second or two instead of after the full AI wait (up to two minutes of "Reading").
+let bridgeSeen = false;
+function bridgeAnswers(ms = 1500): Promise<boolean> {
+  if (bridgeSeen) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const on = (e: MessageEvent) => { if (e.source !== window || !e.data?.praxExt) return; done(true); };
+    const done = (ok: boolean) => { window.removeEventListener("message", on); clearTimeout(t); if (ok) bridgeSeen = true; resolve(ok); };
+    const t = setTimeout(() => done(false), ms);
+    window.addEventListener("message", on);
+    window.postMessage({ praxWeb: true, id: `ping-${Math.random().toString(36).slice(2)}`, type: "status" }, location.origin);
+  });
+}
+
 /** AI work and local draft history from the extension. The AI key stays in the extension. */
-export function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+export async function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+  if (!(await bridgeAnswers())) throw new Error(NO_EXTENSION);
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
     const on = (e: MessageEvent) => {

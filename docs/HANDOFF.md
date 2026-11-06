@@ -8,6 +8,17 @@
 - **Checked** in Chrome (Playwright, `channel: chrome`) through a temporary preview route with the real screens over a mock Supabase (deleted), at 1440 and 390: every switch measured (36 by 20, knob inside, named), no horizontal overflow, no console errors, Space and Enter toggle, label click toggles, disabled stays put; the share page and expired screen. Sample PDFs from the real writers rendered to PNG with PDFKit. Screenshots and PDF pages: `/private/tmp/claude-503/-Users-kanishk-raj-claude-md/5ea672f0-465e-415c-b793-7822bc9d8b7c/scratchpad/recheck-fixes/`.
 - **Not checked in a browser:** the AI citations Run prompts panel (needs a tracked profile set up), the Write step newsletter row (Article type with a newsletter, deep in the flow) and the campaign resource request form. They use the same `SwitchRow`. Not checked signed in against Supabase. The weekly report PDF was rendered from a sample `PdfDoc`, not from `reportPdf` in `weekly-screen.tsx`.
 
+## QA: buttons that did nothing (6 Nov 2026, branch `qa-fixes`, not deployed, no SQL)
+
+- Full list by section in `docs/QA-2026-11-06.md`. Five causes, all fixed:
+  - `askExtension` now checks the bridge first, so AI buttons say at once that the extension is missing instead of waiting up to two minutes.
+  - The Supabase browser client fires `prax:wrote` after each write, and `useLive` lists of that table reload (`src/lib/writes.ts`). Deletes never come through a filtered Realtime channel, and live inserts did not either.
+  - Today's Delete task now awaits its query.
+  - `logActivity` is async, so its un-awaited callers actually write.
+  - Playbooks Classify takes the link out of a paste and explains a link-only or too-short paste (`classifyInput`).
+- Also: Content Studio Fetch no longer stays busy when the server returns no JSON.
+- **To check after the deploy:** whether `templates`, `saved_drafts` and `prospects` are in the `supabase_realtime` publication (other people's changes still depend on it). Then delete the demo "QA test task" on Today.
+
 ## Playbook: Strategy and Notes in one section (S5; 7 Nov 2026, branch `playbook`, not deployed, no SQL)
 
 - **One section, `/w/[slug]/playbook`**, with underline tabs Strategy and Notes (Notes shows its count). `?tab=notes` opens Notes; Strategy is the default and has no query. The tab is kept in the address with `router.replace`, so reload and Back land on the same tab. Helpers `playbookTab`, `playbookQuery` and `playbookHref` in `src/lib/shell.ts` (tested in `scripts/test-shell.ts`).

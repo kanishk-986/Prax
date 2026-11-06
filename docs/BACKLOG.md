@@ -368,3 +368,5 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 No agreed feature was dropped. Seventeen items had no row: most are fixes already live, two are partly done (logo on the share view and PDFs, and the "unstructured toggles" follow-up), one dash is left, and three are next steps (one-click SQL run, deploy and push, reinstall 0.9.3). Ten statuses needed correcting, mainly the header's "Live" baseline, AC13 (decided by Claude, not the user) and the Notes placement that the Playbook merge changes.
 
 | T20 | Templates section as animated, colour-accented cards: one-word purpose, click for a pop-up, View, Edit and Delete with icons | 7 Nov user request | Built not live (animated accent cards, pop-up, view, edit, delete with Undo) |
+
+| QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Built not live (fixes merged; db/030 turns on live updates for every table) |

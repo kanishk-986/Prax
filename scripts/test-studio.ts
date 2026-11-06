@@ -1,5 +1,5 @@
 // Checks the Comment Studio defaults, merge, tuning text and Human score. Run: node scripts/test-studio.ts
-import { mergeStudio, humanScore, tuningRules, voiceText, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, LENGTHS, panelDrafts, linkIn, onlyLink, commentAsk, readDrafts } from "../src/lib/studio.ts";
+import { mergeStudio, humanScore, tuningRules, voiceText, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, LENGTHS, panelDrafts, linkIn, onlyLink, classifyInput, commentAsk, readDrafts } from "../src/lib/studio.ts";
 
 let fails = 0;
 const ok = (name: string, cond: boolean, got?: unknown) => { if (!cond) fails++; console.log(`${cond ? "ok  " : "FAIL"} ${name}${cond ? "" : `: ${JSON.stringify(got)}`}`); };
@@ -29,6 +29,14 @@ const url = "https://www.linkedin.com/posts/maya-rao_stablecoins-activity-726123
 ok("a LinkedIn link is found in a paste", linkIn(`See ${url}.`) === url, linkIn(`See ${url}.`));
 ok("other sites are not taken as the post link", linkIn("https://example.com/post") === "");
 ok("a bare link is only a link", onlyLink(url) && !onlyLink(`${url}\n\n${good}`));
+
+// Playbooks "Try it": a link alone cannot be classified (Prax never opens LinkedIn); the link is not sent as the post.
+ok("classify: a bare post link asks for the text", classifyInput(url).problem === "link", classifyInput(url));
+ok("classify: a short link is too little to read", classifyInput("https://lnkd.in/gAbc123").problem === "short");
+ok("classify: a few words are too short", classifyInput("Great news today").problem === "short");
+const both = classifyInput(`${url}\n\n${good}`);
+ok("classify: link and text classify the text without the link", both.problem === "" && !both.text.includes("linkedin.com") && both.text === good.trim(), both);
+ok("classify: post text alone is ready", classifyInput(good).problem === "" && classifyInput(good).text === good.trim());
 const ask = commentAsk({ post: good, author: "Maya Rao", studio: m });
 ok("the ask carries the post, author, playbooks, tuning and 3 drafts", ask.includes("POST BY Maya Rao") && ask.includes("Regulation or policy:") && ask.includes("50 to 70 words") && ask.includes("Write 3 different drafts") && ask.includes("Choose the best style"), ask.slice(0, 200));
 const styled = commentAsk({ post: good, style: "Board lens", studio: m });

@@ -112,6 +112,16 @@ export function linkIn(text: string): string {
 /** True when the paste is only a link, with no post text to write about. */
 export const onlyLink = (text: string) => { const l = linkIn(text); return !!l && text.replace(l, "").trim().length < 20; };
 
+/** What Playbooks' "Try it" can classify: the post text without its link, and why it cannot yet ("" when it can).
+ *  Prax never opens LinkedIn, so a link alone has nothing to read; under 40 characters is too little to tell. */
+export function classifyInput(paste: string): { text: string; problem: "" | "link" | "short" } {
+  const l = linkIn(paste);
+  const text = (l ? paste.replace(l, "") : paste).trim();
+  if (l && text.length < 20) return { text, problem: "link" };
+  if (text.length < 40) return { text, problem: "short" };
+  return { text, problem: "" };
+}
+
 /** The user message for 2 or 3 comment drafts. The voice, the voice fingerprint and the locked rules are added
  *  by the extension (kind "comment"), so this carries the post, the playbooks, the style and the tuning. */
 export function commentAsk({ post, author, style, studio }: DraftAsk): string {

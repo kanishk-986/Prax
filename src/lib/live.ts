@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase/client";
+import { WROTE } from "./writes";
 
 /** Rows of one table for this workspace, kept live through Supabase Realtime. A change of `key` reloads (use it when
  *  `filter` depends on a value); `skip` waits without loading; `error` is true when the table could not be read. */
@@ -39,7 +40,14 @@ export function useLive<T = Record<string, unknown>>(table: string, wsId: string
         timer.current = setTimeout(load, 150);
       })
       .subscribe();
-    return () => { supabase().removeChannel(ch); };
+    // This browser's own writes reload at once, whether or not Realtime delivers them (it never delivers deletes here).
+    const wrote = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== table) return;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(load, 150);
+    };
+    window.addEventListener(WROTE, wrote);
+    return () => { supabase().removeChannel(ch); window.removeEventListener(WROTE, wrote); };
   }, [table, wsId, load]);
 
   return { rows, setRows, loading, error, reload: load };

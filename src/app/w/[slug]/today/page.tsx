@@ -153,6 +153,16 @@ export default function Today() {
     toast(`${typeLabel(it)} skipped`, () => patch(it.id, { note: it.note }));
   }, [editable, patch, toast, hold]);
 
+  // Delete leaves the list at once; Realtime does not deliver deletes on a filtered channel, so the row is dropped here.
+  const remove = useCallback(async (it: Item) => {
+    if (!editable) return;
+    setRows((rs) => rs.filter((r) => r.id !== it.id));
+    const { error } = await supabase().from("daily_items").delete().eq("id", it.id);
+    if (error) { toast("Could not delete. Check your connection."); reload(); return; }
+    haptic(4);
+    toast("Task deleted", async () => { await supabase().from("daily_items").insert(it); reload(); });
+  }, [editable, setRows, toast, reload]);
+
   // Keyboard: j/k move, x toggles done, s skips.
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -255,7 +265,7 @@ export default function Today() {
                 <ul className="border-t border-line">
                   {g.items.map((it) => { const i = ordered.indexOf(it); return (
                     <Row key={it.id} it={it} i={i} slug={ws.slug} sug={suggest[it.id]} tour={it === firstOpen ? "row" : undefined} focused={i === focus} pop={justDone === it.id} editable={editable}
-                      onToggle={() => { setFocus(i); toggle(it); }} onSkip={() => { setFocus(i); skip(it); }} onPatch={patch} onFocusRow={() => setFocus(i)} />
+                      onToggle={() => { setFocus(i); toggle(it); }} onSkip={() => { setFocus(i); skip(it); }} onDelete={() => remove(it)} onPatch={patch} onFocusRow={() => setFocus(i)} />
                   ); })}
                 </ul>
                 {g.key === "other" && editable && <button onClick={addCustom} className="flex w-full items-center gap-2 border-t border-line px-[18px] py-2.5 text-left text-body text-muted hover:bg-[#fafafa] hover:text-ink"><Plus size={14} /> Add a one-off task</button>}
@@ -367,7 +377,7 @@ function DaySummary({ prog, rows, isToday, slug, onNext }: { prog: ReturnType<ty
   );
 }
 
-function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip, onPatch, onFocusRow }: { it: Item; i: number; slug: string; sug?: Suggestion; tour?: string; focused: boolean; pop: boolean; editable: boolean; onToggle: () => void; onSkip: () => void; onPatch: (id: string, p: Partial<Item>) => void; onFocusRow: () => void }) {
+function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip, onDelete, onPatch, onFocusRow }: { it: Item; i: number; slug: string; sug?: Suggestion; tour?: string; focused: boolean; pop: boolean; editable: boolean; onToggle: () => void; onSkip: () => void; onDelete: () => void; onPatch: (id: string, p: Partial<Item>) => void; onFocusRow: () => void }) {
   // An empty row shows the suggested person or post; typing replaces it. The placeholder is only the fallback.
   const shown = it.title || (it.done ? "" : sug?.title ?? "");
   const [title, setTitle] = useState(shown);
@@ -424,7 +434,7 @@ function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip,
               <button type="button" onClick={onSkip} className={`btn btn-ghost h-8 whitespace-nowrap px-2 text-meta ${skipped || focused ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"}`}>{skipped ? "Undo skip" : "Skip"}</button>
             )}
             {it.kind === "custom" && editable && (
-              <button className="btn btn-ghost h-8 px-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Delete task" onClick={() => supabase().from("daily_items").delete().eq("id", it.id)}><Trash2 size={14} /></button>
+              <button className="btn btn-ghost h-8 px-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100" aria-label="Delete task" onClick={onDelete}><Trash2 size={14} /></button>
             )}
           </span>
         </span>

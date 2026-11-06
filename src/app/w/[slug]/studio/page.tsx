@@ -15,7 +15,7 @@ import { decodeText } from "@/lib/text";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { DraftModelRow } from "@/components/provider-mark";
 import {
-  mergeStudio, humanScore, LENGTHS, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, DEFAULT_TUNING, DEFAULT_SAFETY,
+  mergeStudio, humanScore, classifyInput, LENGTHS, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, DEFAULT_TUNING, DEFAULT_SAFETY,
   type Studio, type Style, type Playbook, type Tuning, type Safety, type Fingerprint,
 } from "@/lib/studio";
 
@@ -340,11 +340,12 @@ function Playbooks({ studio, save }: { studio: Studio; save: Save }) {
   const [res, setRes] = useState<{ type: string; why: string; angle: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (type: string, v: Partial<Playbook>) => setList(list.map((b) => (b.type === type ? { ...b, ...v } : b)));
+  const input = classifyInput(post);
 
   async function classify() {
     setBusy(true); setRes(null);
     try {
-      const out = await askExtension<string>("ai", { kind: "studio", user: `POST:\n${post.slice(0, 6000)}\n\nClassify this LinkedIn post as exactly one of: ${list.map((b) => b.type).join(", ")}. Return only JSON: {"type": "...", "why": "one sentence", "angle": "the angle a comment should take, following that type's playbook, in one sentence"}` });
+      const out = await askExtension<string>("ai", { kind: "studio", user: `POST:\n${input.text.slice(0, 6000)}\n\nClassify this LinkedIn post as exactly one of: ${list.map((b) => b.type).join(", ")}. Return only JSON: {"type": "...", "why": "one sentence", "angle": "the angle a comment should take, following that type's playbook, in one sentence"}` });
       const j = parseJSON<{ type: string; why: string; angle: string }>(out);
       if (!j?.type) throw new Error("No answer from the model. Try again.");
       setRes(j);
@@ -358,9 +359,11 @@ function Playbooks({ studio, save }: { studio: Studio; save: Save }) {
       <div className="card p-4">
         <div className="mb-1 text-body font-semibold">Try it on a real post</div>
         <Hint>Paste a LinkedIn post to see which kind of post Prax thinks it is and which playbook it would follow.</Hint>
-        <textarea className="field mt-3 min-h-[110px] py-2 text-body" value={post} onChange={(e) => setPost(e.target.value)} placeholder="Paste a LinkedIn post here" />
+        <textarea className="field mt-3 min-h-[110px] py-2 text-body" value={post} onChange={(e) => setPost(e.target.value)} placeholder="Paste the text of a LinkedIn post here" />
+        {post.trim() && input.problem === "link" && <p className="mt-2 text-meta text-warn">That is a link only. Prax does not open LinkedIn, so paste the post text as well.</p>}
+        {post.trim() && input.problem === "short" && <p className="mt-2 text-meta text-muted">Paste a few lines of the post, at least 40 characters, so Prax can tell what kind it is.</p>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button className="btn btn-primary" disabled={post.trim().length < 40 || busy} onClick={classify}>{busy ? "Reading" : "Classify"}</button>
+          <button className="btn btn-primary" disabled={!!input.problem || busy} onClick={classify}>{busy ? "Reading" : "Classify"}</button>
           {res && <span className="anim-rise text-body"><span className="chip text-accent">{res.type}</span> <span className="text-ink-2">{res.why}</span> <span className="block pt-1 text-muted">Angle: {res.angle}</span></span>}
         </div>
       </div>

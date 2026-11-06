@@ -208,9 +208,10 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
 
   async function readLink() {
     setBusy("link"); setErr(""); setPage(null);
-    const r = await fetch("/api/fetch-url", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
-    const j = await r.json(); setBusy("");
-    if (!r.ok) { setErr(j.error ?? "That page could not be read."); return; }
+    // A timeout or an offline network returns no JSON; say so rather than leave Fetch busy for good.
+    const r = await fetch("/api/fetch-url", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {}; setBusy("");
+    if (!r?.ok) { setErr(j.error ?? "That page could not be read. Check the link and try again."); return; }
     const base = { title: j.title || j.host, host: j.host, text: j.text as string, points: [] as string[], pick: 0 };
     setPage(base);
     const pts = await ai<{ points: string[] }>("points", `PAGE: ${j.title}\n${String(j.text).slice(0, 8000)}\n\nPull the three points from this page most relevant to this profile's senior buyers${pillars.length ? ` and to these pillars: ${pillars.join("; ")}` : ""}. Each under 14 words. Return only JSON: {"points": ["...", "...", "..."]}`);
