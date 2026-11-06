@@ -719,6 +719,6 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 
 - P0: an invite today joins the tester to the workspace it was sent from (`invites`, `claim_invites()`), so an invite from Shashi's Settings would expose Shashi's data. Tester invites must be a separate kind that grants only a private demo copy.
 - P1: `/` and `/extension` open the user's oldest workspace; testers must land in their demo copy.
-- P1: Forgot password can't email testers on the free tier. Proposed: the owner can copy a reset link from Settings → Team; the Forgot password page says to ask the person who invited you. (Owner decision pending.)
+- P1 (Q154, agreed): Forgot password can't email testers on the free tier. the owner can copy a reset link from Settings → Team; the Forgot password page says to ask the person who invited you.
 - P2: re-running db/011 inserts "Shashi Pal" and "Antier" into any workspace with a lone company entity; guard it to Shashi's workspace only.
-- "?" in each section: a small menu with Replay tour and Open guide (owner decision pending).
+- Q155 (agreed): "?" in each section opens a small menu with Replay tour and Open guide.

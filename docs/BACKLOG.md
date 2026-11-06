@@ -383,3 +383,5 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | TS7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
 | TS8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
 | TS9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |
+| TS10 | Copy reset link per tester in Settings → Team; Forgot password page says ask your inviter | 7 Nov Q154 | Not started |
+| TS11 | "?" menu in each section: Replay tour and Open guide | 7 Nov Q155 | Not started |
