@@ -301,7 +301,7 @@ const hzCalls = await sw.evaluate(() => self.__calls.map((c) => ({ url: c.url, b
 const pg = hzCalls.filter((c) => c.url.includes("text.external-api.pangram.com"));
 check("humanize: Pangram is called at its documented endpoints with x-api-key", pg.some((c) => c.url.endsWith("/task") && c.key === "pg-test-key" && c.b.model === "default") && pg.some((c) => /\/task\/t1$/.test(c.url)), JSON.stringify(pg.map((c) => c.url)));
 check("humanize: the Pangram key never goes to Prax", !hzCalls.filter((c) => c.url.includes("prax-gamma")).some((c) => JSON.stringify(c.b).includes("pg-test-key")));
-check("humanize: the check is tagged with its job and section", hzCalls.some((c) => c.url.endsWith("/api/ext/humanize") && c.b.op === "record" && c.b.job === "humanize_check" && c.b.section === "linkedin_bar"));
+check("humanize: the check is tagged with its job and section, carries its text hash, and no profile from the bar", hzCalls.some((c) => c.url.endsWith("/api/ext/humanize") && c.b.op === "record" && c.b.job === "humanize_check" && c.b.section === "linkedin_bar" && /^[0-9a-f]{64}$/.test(c.b.hash) && c.b.profile_id === ""));
 const saved = hzCalls.find((c) => c.url.endsWith("/api/ext/save"));
 check("humanize: the saved draft carries its badge", saved?.b?.humanize?.score === 60 && saved?.b?.humanize?.service === "pangram", JSON.stringify(saved?.b?.humanize));
 await page.locator(".prx-host [data-hz-fix='0']").click();

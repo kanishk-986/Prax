@@ -715,10 +715,51 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 
 **Checked** in Chrome (Playwright, `channel: chrome`) through a temporary preview route with the real components, a fake Supabase client and a fake bridge answering with Pangram replies in the documented shape (route deleted, the temporary patches to `supabase/client.ts` and `middleware.ts` reverted), at 1440 and 390: Draft a comment (not verified, Copy checks, needs work, Fix it, accept one, recheck, passed, the other draft's chip), Write (rail card, free score too low, needs work, the gated Send, the explanation, fix and passed), the post view for the approver, the post editor, both Libraries with chips and filters, Settings (meters warning at 84%, presets, save with toast, key form); no page overflow, no console errors. Screenshots: `/private/tmp/claude-503/-Users-kanishk-raj-claude-md/5ea672f0-465e-415c-b793-7822bc9d8b7c/scratchpad/humanize/`. Not checked: a real Pangram key and account (billing units, real window labels, rate limits), real Supabase (031 not run, Realtime on the new tables), Walter (unconfirmed API, never called), real LinkedIn pages (rule 1).
 
+**QA fixes (7 Nov 2026, branch `humanize`, still not deployed, SQL not run).**
+- **Profile on screen.** Prax pages send their profile id with every humanize call (bridge, background, `/api/ext/humanize`). `db/031` now has `ext_humanize_ws`: that profile is used only when the token's user is an editor of it (`has_role_of`, the token-user form of `has_role`), else the call is refused; the LinkedIn bar sends none and uses the connected profile. Levels, caps, cache and usage all follow that profile.
+- **Old extensions.** Below 0.9.6 no humanize ask is sent: the card and Send fall back to the free score with "Update Prax for Chrome to 0.9.6 to verify", and Settings hides the key form behind the same line. No humanize ask waits more than 20 s (`HUMANIZE_WAIT_MS`); the background stops polling Pangram after about 18 s per text, and a finished check stays cached.
+- **One gate.** Send for approval, Approve and Approve it myself all pass `passGate` (Write and the post editor).
+- **No extension, no key or cap reached.** The free score decides and the toast adds "Not verified, free score only. Install Prax for Chrome to verify." (or the update line).
+- **Copy.** A rejected Pangram key, the card and the bar point to Settings → Humanization (Connections later). The Settings header reads "Walter (beta), waiting for its API" while `CHECKERS.walter.ready` (which mirrors `WALTER.confirmed`) is false.
+- **Trust (accepted risk during the proof of concept).** The score still comes from the extension, since Prax holds no Pangram key. Limited: the reply must score 0 to 1, the extension's text hash must match the text, and the database refuses a score outside 0 to 100 or a malformed hash. Commented in the route.
+- **No text in the cache.** `humanize_results` keeps the flagged sentences as offsets into the normalised text (`toCache`, `fromCache`); the sentences are cut again from the text sent with the next request for that hash.
+- Tests: `test-humanize.ts` 143 checks; `test-humanize-sql.ts` adds two profiles (the profile on screen wins, a viewer-only profile and a malformed id are refused, cache and usage stay apart), the score range and the hash, and prints "skipped (no PGlite)" without PGlite; e2e checks the hash and that the bar sends no profile. Browser recheck of the old extension, no extension and Approve it myself at 1440 and 390 (66 checks, no overflow, no console errors): `/private/tmp/claude-503/-Users-kanishk-raj-claude-md/5ea672f0-465e-415c-b793-7822bc9d8b7c/scratchpad/humanize/qa/`. Extension stays 0.9.6 (not shipped); the zip is rebuilt.
+
 ## QA risks to settle in Agent A (7 Nov 2026)
 
 - P0: an invite today joins the tester to the workspace it was sent from (`invites`, `claim_invites()`), so an invite from Shashi's Settings would expose Shashi's data. Tester invites must be a separate kind that grants only a private demo copy.
 - P1: `/` and `/extension` open the user's oldest workspace; testers must land in their demo copy.
-- P1: Forgot password can't email testers on the free tier. Proposed: the owner can copy a reset link from Settings → Team; the Forgot password page says to ask the person who invited you. (Owner decision pending.)
+- P1 (Q154, agreed): Forgot password can't email testers on the free tier. the owner can copy a reset link from Settings → Team; the Forgot password page says to ask the person who invited you.
 - P2: re-running db/011 inserts "Shashi Pal" and "Antier" into any workspace with a lone company entity; guard it to Shashi's workspace only.
-- "?" in each section: a small menu with Replay tour and Open guide (owner decision pending).
+- Q155 (agreed): "?" in each section opens a small menu with Replay tour and Open guide.
+
+## Collapsible sidebar, agreed 7 Nov 2026 (Q156 to Q160)
+
+- Q156: a small rounded-square toggle centred on the sidebar's right edge collapses it to an icon rail and widens the page; click again to expand; smooth slide; shortcut ⌘ + . (period).
+- Q157: the rail shows the Corners mark, section icons in their groups with thin dividers, the current section in red, a tooltip with the name on hover, and counts shown as dots. ⌘K and the account menu still work.
+- Q158: the choice is remembered per browser (localStorage, with try/catch).
+- Q159: below 1280 px wide it starts collapsed, but a saved choice wins; phones keep the slide-in drawer.
+- Q160: built right after Connections merges (both touch sidebar.tsx), shipped in the same deploy.
+
+## Where we are (session state, 7 Nov 2026), read this first in a new session
+
+**Merged on main, not deployed:** humanization (H1) with all 9 QA fixes; the QA plan (`docs/QA_PLAN.md`); the sidebar "Do" group renamed "Daily work"; the empty-draft Human score fix; decisions Q135 to Q160.
+
+**In flight:**
+- Connections (C1): a builder agent was working on branch `connections` in `~/claude.md/.claude/worktrees/agent-adcc7ce9c842422b6/prax-work`. An unfinished, unreviewed snapshot is on GitHub as branch `connections-wip`. If the agent is gone, continue from the worktree if it has newer work, else from `connections-wip`; finish C1 per "Connections section, agreed 7 Nov 2026", then QA.
+- QA retest of humanize at 4401bbc was running. If there's no verdict, re-run the gate from `docs/QA_PLAN.md`.
+
+**Next, in order:**
+1. QA PASS on humanize, then Connections built, merged and QA PASS.
+2. Build the collapsible sidebar (SB1, Q156 to Q160) after the Connections merge.
+3. The owner runs `db/031_humanize.sql`, then `db/032_connections.sql`, in the Supabase SQL editor: one saved query, and the owner clicks Run. Then deploy, only when the owner says "deploy" (`npx vercel deploy --prod --yes`), then push.
+4. Agent A: tester access (TS1 to TS4, TS9, TS10), settling the QA risks section first (P0: tester invites must grant only a private demo copy).
+5. Agent B: tours, Guide, feedback, "?" menu (TS5 to TS7, TS11), written last.
+6. QA new-tester walkthrough (TS8).
+
+**Rules:** free tier only (no domain or paid services); Prax branding (owner Kanishk; no Antier or person names hardcoded); no LinkedIn automation; keys stay in the extension; deploy only on the owner's word; push after every deploy; every agreed item lives in `docs/BACKLOG.md`.
+
+### Humanize QA retest: PASS at 4401bbc (7 Nov 2026). P3 follow-ups
+- The extension changed after 0.9.6 without a version bump. Connections bumps it to 0.9.7; make sure that release includes the humanize profile-id change, then rebuild the zip.
+- With no extension, the card shows "Add a Pangram key" for about 1.5 s before "Install Prax for Chrome". Show a neutral line until the status resolves.
+- `has_role_of` (db/003) can be called by anon. Add a `revoke` in Agent A's security pass, but first check whether any RLS policy calls it as the querying user; if so, revoking it from `authenticated` would break those policies.

@@ -104,7 +104,8 @@ export function mapPangram(raw: unknown): Result {
   if (r.stage === "STAGE_FAILED") throw new Error(`Pangram could not check this text: ${r.headline || "it failed"}`);
   if (r.stage && r.stage !== "STAGE_SUCCESS") throw new Error("Pangram has not finished this check yet.");
   const fh = typeof r.fraction_human === "number" ? r.fraction_human : typeof r.ai_likelihood === "number" ? 1 - r.ai_likelihood : null;
-  if (fh == null) throw new Error("Pangram's reply had no score.");
+  if (fh == null || !Number.isFinite(fh)) throw new Error("Pangram's reply had no score.");
+  if (fh < 0 || fh > 1) throw new Error("Pangram's reply had a score out of range.");
   const wins = Array.isArray(r.windows) ? r.windows : [];
   const flagged = wins.filter((w) => !/^human/i.test(String(w.label ?? "")) && String(w.text ?? "").trim())
     .map((w) => ({ text: String(w.text).trim(), label: String(w.label ?? "AI"), ai: Number(w.ai_assistance_score ?? w.ai_likelihood ?? 0), confidence: String(w.confidence ?? ""), start: Number(w.start_index ?? -1), end: Number(w.end_index ?? -1) }));
@@ -170,6 +171,38 @@ export const SECTIONS = ["comment_studio", "linkedin_bar", "content_write", "con
 export type Section = (typeof SECTIONS)[number];
 export const sectionOf = (s: unknown): Section | "" => ((SECTIONS as readonly string[]).includes(String(s)) ? (s as Section) : "");
 
+// ---------- the cache form (humanize_results.result) ----------
+// The cache never holds text: the flagged sentences are kept as character offsets into normText(text). The text comes
+// back with the next request for the same hash (the same normalised text), and the sentences are cut from it again.
+export type CachedFlag = { start: number; end: number; label: string; ai: number; confidence: string };
+export type Cached = { score: number; words: number; prediction: string; version: string; flagged: CachedFlag[] };
+export function toCache(r: Result, text: string): Cached {
+  const n = normText(text);
+  const flagged: CachedFlag[] = [];
+  const add = (t: string, f: Flag) => { const s = normText(t); const i = s.length > 2 ? n.indexOf(s) : -1; if (i >= 0) flagged.push({ start: i, end: i + s.length, label: f.label, ai: f.ai, confidence: f.confidence }); return i >= 0; };
+  for (const f of r.flagged) if (!add(f.text, f)) sentencesOf(f.text).forEach((s) => add(s, f));
+  return { score: r.score, words: r.words, prediction: r.prediction, version: r.version, flagged };
+}
+export function fromCache(c: Partial<Cached> | null | undefined, text: string): Result | null {
+  if (!c || typeof c.score !== "number") return null;
+  const n = normText(text);
+  const flagged = (Array.isArray(c.flagged) ? c.flagged : [])
+    .filter((f) => Number.isInteger(f?.start) && Number.isInteger(f?.end) && f.start >= 0 && f.end > f.start && f.end <= n.length)
+    .map((f) => ({ text: n.slice(f.start, f.end), label: String(f.label ?? "AI"), ai: Number(f.ai) || 0, confidence: String(f.confidence ?? ""), start: f.start, end: f.end }));
+  return { score: Math.max(0, Math.min(100, Math.round(c.score))), words: Number(c.words) || 0, flagged, prediction: String(c.prediction ?? ""), headline: "", version: String(c.version ?? "") };
+}
+
+/** Prax for Chrome versions: humanization needs 0.9.6 (its humanize handler and the checker keys). */
+export const HUMANIZE_EXT = "0.9.6";
+export function versionAtLeast(v: string | undefined | null, min: string): boolean {
+  if (!v) return false;
+  const a = String(v).split(".").map((x) => parseInt(x, 10) || 0), b = min.split(".").map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0); }
+  return true;
+}
+/** No humanize ask waits longer than this; a finished check is still cached and comes back free next time. */
+export const HUMANIZE_WAIT_MS = 20000;
+
 /** Several checked paragraphs as one article result: the human share weighted by words, every flag kept. */
 export function combine(parts: Result[]): Result | null {
   const ok = parts.filter(Boolean);
@@ -203,12 +236,16 @@ export function monthUsage(rows: { service: string; words: number; cost: number 
 export type PlanInput = {
   kind: Kind; level: number; local: number; words: number; cached: boolean;
   hasKey: boolean; cap: number; used: number; confirmed: boolean; costPer100: number;
+  /** Prax for Chrome in this browser: "ok" (0.9.6 or later, the default), "none" (not answering) or "old". */
+  ext?: "ok" | "none" | "old";
 };
 export type Decision =
   | { action: "empty" }
   | { action: "off" }
   | { action: "cached" }
   | { action: "local-low"; need: number }
+  | { action: "no-ext" }
+  | { action: "old-ext" }
   | { action: "no-key" }
   | { action: "no-cap" }
   | { action: "cap-reached"; meter: Meter }
@@ -218,7 +255,7 @@ export type Decision =
 /**
  * Whether a paid Pangram check runs for the final text, in this order:
  * nothing to check; level 0 (never call Pangram); already checked (cache); free score too far under the level (fix it
- * first, for free); no Pangram key in this browser; no monthly cap entered; the cap would be passed; a long piece or an
+ * first, for free); no Prax for Chrome, or one older than 0.9.6; no Pangram key in this browser; no monthly cap entered; the cap would be passed; a long piece or an
  * article not yet confirmed (show the cost first); otherwise check, warning from 80% of the cap.
  * `words` is what would be sent (for an article, only the paragraphs not in the cache).
  */
@@ -227,6 +264,8 @@ export function decide(p: PlanInput): Decision {
   if (p.level <= 0) return { action: "off" };
   if (p.cached && p.words <= 0) return { action: "cached" };
   if (p.local < p.level - NEAR) return { action: "local-low", need: p.level - NEAR };
+  if (p.ext === "none") return { action: "no-ext" };
+  if (p.ext === "old") return { action: "old-ext" };
   if (!p.hasKey) return { action: "no-key" };
   if (!p.cap || p.cap <= 0) return { action: "no-cap" };
   const m = meter(p.used, p.cap);
@@ -236,7 +275,7 @@ export function decide(p: PlanInput): Decision {
   return { action: "check", words: p.words, cost, meter: meter(p.used + p.words, p.cap), warn: (p.used + p.words) / p.cap >= WARN_AT };
 }
 /** Free-score-only outcomes: Pangram cannot be used, so the badge says "Not verified, free score only". */
-export const FREE_ONLY = ["no-key", "no-cap", "cap-reached"] as const;
+export const FREE_ONLY = ["no-ext", "old-ext", "no-key", "no-cap", "cap-reached"] as const;
 export const isFreeOnly = (a: Decision["action"]) => (FREE_ONLY as readonly string[]).includes(a);
 
 /** Walter (beta): only with its key, its API confirmed, a cap with room, and only after both local rounds failed. */

@@ -371,7 +371,7 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 
 | QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Live (deployed 7 Nov) (fixes merged; db/030 turns on live updates for every table) |
 
-| H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | Built not live (merged 7 Nov, db/031 to run, QA pending) |
+| H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | Built not live (QA PASS 7 Nov at 4401bbc; db/031 to run; deploy pending) |
 
 | C1 | Connections section: 20 to 25 tools by section, tool pages with connect, usage by section, routes, caps; replaces Extension; scattered key forms removed | 7 Nov Q135 to Q141 | In progress |
 | TS1 | Prax hidden from Google (noindex, robots) | 7 Nov Q142 | Not started |
@@ -383,3 +383,6 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | TS7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
 | TS8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
 | TS9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |
+| TS10 | Copy reset link per tester in Settings → Team; Forgot password page says ask your inviter | 7 Nov Q154 | Not started |
+| TS11 | "?" menu in each section: Replay tour and Open guide | 7 Nov Q155 | Not started |
+| SB1 | Collapsible sidebar: edge toggle, icon rail with tooltips, ⌘., remembered per browser, auto-collapse under 1280 | 7 Nov Q156 to Q160 | Not started (after Connections merge) |

@@ -4,7 +4,7 @@ import { parseProfile, auditProfile } from "@/lib/profile";
 import { mergeStudio, tuningRules, voiceText, LOCKED_RULES, LENGTHS } from "@/lib/studio";
 import { parseCount } from "@/lib/content";
 import { normUrl } from "@/lib/network";
-import { KINDS, DETECTORS, detection, sectionOf, decide, levelFor, mergeSettings, textHash, wordCount, costOf, walterAllowed, type Kind, type DetectorId } from "@/lib/humanize";
+import { KINDS, DETECTORS, detection, sectionOf, toCache, fromCache, decide, levelFor, mergeSettings, textHash, wordCount, costOf, walterAllowed, type Kind, type DetectorId } from "@/lib/humanize";
 import { blockedTools, eventsOf, mergeConnSettings } from "@/lib/connections";
 
 // The Chrome extension's only door into Prax. Every call carries the user's extension token,
@@ -22,25 +22,35 @@ async function humanizeOp(body: Record<string, unknown>, rpc: Rpc) {
   const detector: DetectorId = typeof body.service === "string" && body.service in DETECTORS ? (body.service as DetectorId) : "pangram";
   const service = body.service === "walter" ? "walter" : detector;
   const section = sectionOf(body.section);
+  // The profile on screen (the Prax page's workspace). The database checks that the token's user is an editor there;
+  // without one (the LinkedIn bar) the token's own profile is used.
+  const profile_id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.profile_id ?? "")) ? String(body.profile_id) : "";
   if (body.op === "record") {
     const text = String(body.text ?? "").slice(0, 60000);
     const hash = await textHash(text);
     if (service === "walter") {
       const words = wordCount(text);
-      return { words, job: "humanize_rewrite", ...(await rpc("ext_humanize_record", { p: { service, kind, hash, words, section } })) };
+      return { words, job: "humanize_rewrite", ...(await rpc("ext_humanize_record", { p: { service, kind, hash, words, section, profile_id } })) };
     }
+    // ACCEPTED RISK during the proof of concept: Prax cannot call Pangram itself (the key stays in the browser), so the
+    // score comes from the extension and a user could send a made-up reply for their own profile. Limited here: the
+    // reply must have a 0 to 1 score (mapPangram), the hash the extension computed must match this text, and the
+    // database checks the score is 0 to 100 and the profile is one the token's user edits. A server-held key would close it.
+    if (String(body.hash ?? "") !== hash) throw new Error("The text and its hash do not match. Try the check again.");
     // The detector's reply is mapped by its own adapter (Pangram today; GPTZero or Originality.ai plug in the same way).
     const det = DETECTORS[service]!;
     const result = det.map(body.raw);
-    const rec = await rpc("ext_humanize_record", { p: { service, kind, hash, words: result.words || wordCount(text), score: result.score, result, section } });
+    // The cache keeps offsets, never the text (toCache); the full result goes back to this caller only.
+    const rec = await rpc("ext_humanize_record", { p: { service, kind, hash, words: result.words || wordCount(text), score: result.score, result: toCache(result, text), section, profile_id } });
     return { result, detection: detection(det.id, result), hash, job: "humanize_check", ...rec };
   }
   const texts = (Array.isArray(body.texts) ? body.texts : []).slice(0, 60).map((t) => String(t ?? "").slice(0, 60000));
   const hashes = await Promise.all(texts.map(textHash));
-  const st = await rpc("ext_humanize_state", { p: { hashes } });
+  const st = await rpc("ext_humanize_state", { p: { hashes, profile_id } });
   const settings = mergeSettings(st?.settings);
   const used = { pangram: Number(st?.usage?.pangram) || 0, walter: Number(st?.usage?.walter) || 0 };
-  const results = hashes.map((h) => (st?.results?.[h]?.result && typeof st.results[h].result === "object" && "score" in st.results[h].result ? st.results[h].result : null));
+  // Cached results come back as offsets; the flagged sentences are cut again from the text just sent (same hash).
+  const results = hashes.map((h, i) => fromCache(st?.results?.[h]?.result, texts[i]));
   const words = texts.reduce((s, t, i) => s + (results[i] ? 0 : wordCount(t)), 0);
   const level = levelFor(settings, kind);
   const caps = { pangram: settings.pangram_cap, walter: settings.walter_cap };
@@ -49,7 +59,7 @@ async function humanizeOp(body: Record<string, unknown>, rpc: Rpc) {
     return { walter: w, level, used, caps, cost: costOf(texts.reduce((s, t) => s + wordCount(t), 0), settings.walter_cost_100) };
   }
   const decision = decide({ kind, level, local: Number(body.local) || 0, words, cached: results.some(Boolean), hasKey: !!body.has_key, cap: caps.pangram, used: used.pangram, confirmed: !!body.confirm, costPer100: settings.pangram_cost_100 });
-  return { decision, level, hashes, results, used, caps, rate: settings.pangram_cost_100, walter_cap: caps.walter };
+  return { decision, level, hashes, results, used, caps, rate: settings.pangram_cost_100, walter_cap: caps.walter, profile_id: st?.profile_id ?? "" };
 }
 
 export function OPTIONS() { return new Response(null, { headers: cors }); }

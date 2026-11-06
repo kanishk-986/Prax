@@ -9,7 +9,7 @@ import { navActive } from "@/lib/shell";
 
 /** The four sidebar groups, in order. Labels are quiet and in sentence case. */
 export const NAV_GROUPS = [
-  { key: "do", label: "Do" },
+  { key: "do", label: "Daily work" },
   { key: "create", label: "Create" },
   { key: "grow", label: "Grow" },
   { key: "setup", label: "Set up" },

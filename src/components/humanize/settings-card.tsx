@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { CheckerLogo, CheckerName } from "@/components/provider-mark";
+import { CHECKERS } from "@/lib/providers";
 import { PRESETS, meter, money, clampLevel, type Settings, type Kind } from "@/lib/humanize";
 import { useHumanizeSettings } from "./use-humanize";
 
@@ -57,7 +58,7 @@ export function HumanizeSettings() {
     <section id="humanization" className="card min-w-0 p-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="text-body font-semibold">Humanization</h2>
-        <span className="flex items-center gap-1.5 text-meta text-muted"><CheckerLogo id="pangram" size={14} /> Pangram judges <span aria-hidden="true">·</span> <CheckerLogo id="walter" size={14} /> Walter (beta) fixes</span>
+        <span className="flex items-center gap-1.5 text-meta text-muted"><CheckerLogo id="pangram" size={14} /> Pangram judges <span aria-hidden="true">·</span> <CheckerLogo id="walter" size={14} /> {CHECKERS.walter.ready ? "Walter (beta) fixes" : "Walter (beta), waiting for its API"}</span>
       </div>
       <p className="mt-1 text-meta text-muted">Pangram checks only the final text, when the free Human score is near your level, and never the same text twice. At 0% Pangram is never called. The keys stay in the extension.</p>
       {missing && <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-meta text-ink">Run <code className="kbd">db/031_humanize.sql</code> in Supabase to turn this on. Until then nothing is checked or held back.</p>}

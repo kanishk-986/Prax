@@ -91,32 +91,36 @@ grant execute on function ext_connection_state(text) to anon, authenticated;
 alter table humanize_usage drop constraint if exists humanize_usage_service;
 alter table humanize_usage add constraint humanize_usage_service check (service in ('pangram', 'walter', 'gptzero', 'originality'));
 
--- 031's ext_humanize_record, now also for gptzero and originality. Everything else is as in 031.
+-- 031's ext_humanize_record (with the QA fixes: the profile on screen, the score range and the text hash), now also for
+-- gptzero and originality. Everything else is as in 031.
 create or replace function ext_humanize_record(tok text, p jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_catalog as $$
 declare a record; s humanize_settings; svc text := p->>'service'; k text := coalesce(p->>'kind', 'post');
   w int := greatest(0, least(coalesce((p->>'words')::int, 0), 200000)); sc int := (p->>'score')::int; h text := left(coalesce(p->>'hash', ''), 64);
-  rate numeric; lvl int; c numeric; outcome text; m date := date_trunc('month', current_date)::date;
+  rate numeric; lvl int; c numeric; outcome text; m date := date_trunc('month', current_date)::date; pw uuid;
   sec text := case when p->>'section' in ('comment_studio', 'linkedin_bar', 'content_write', 'content_editor') then p->>'section' else '' end;
 begin
   select * into a from ext_auth(tok);
+  pw := ext_humanize_ws(a.ws, a.uid, p);
   if svc not in ('pangram', 'walter', 'gptzero', 'originality') then raise exception 'unknown service'; end if;
   if k not in ('comment', 'post', 'article') then k := 'post'; end if;
-  select * into s from humanize_settings where workspace_id = a.ws;
+  if sc is not null and (sc < 0 or sc > 100) then raise exception 'score out of range'; end if;
+  if svc <> 'walter' and h !~ '^[0-9a-f]{64}$' then raise exception 'bad text hash'; end if;
+  select * into s from humanize_settings where workspace_id = pw;
   rate := case svc when 'pangram' then coalesce(s.pangram_cost_100, 0.05) when 'walter' then coalesce(s.walter_cost_100, 0)
     when 'gptzero' then 0.046 else 0.012 end;
   lvl := case k when 'comment' then coalesce(s.level_comment, 0) when 'article' then coalesce(s.level_article, 0) else coalesce(s.level_post, 0) end;
   c := round(w / 100.0 * rate, 4);
   outcome := case when svc = 'walter' then 'rewrite' when sc is null then 'failed' when sc >= lvl then 'passed' else 'needs work' end;
   insert into humanize_usage(workspace_id, user_id, service, kind, words, cost, text_hash, result, score, job, section)
-  values (a.ws, a.uid, svc, k, w, c, h, outcome, sc, case when svc = 'walter' then 'humanize_rewrite' else 'humanize_check' end, sec);
+  values (pw, a.uid, svc, k, w, c, h, outcome, sc, case when svc = 'walter' then 'humanize_rewrite' else 'humanize_check' end, sec);
   if svc <> 'walter' and sc is not null and h <> '' then
     insert into humanize_results(workspace_id, text_hash, service, score, words, result, checked_at)
-    values (a.ws, h, svc, greatest(0, least(sc, 100)), w, coalesce(p->'result', '{}'::jsonb), now())
+    values (pw, h, svc, sc, w, coalesce(p->'result', '{}'::jsonb), now())
     on conflict (workspace_id, text_hash) do update set service = excluded.service, score = excluded.score, words = excluded.words, result = excluded.result, checked_at = now();
   end if;
   return jsonb_build_object('cost', c, 'level', lvl, 'outcome', outcome,
-    'used', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = a.ws and service = svc and day >= m));
+    'used', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = pw and service = svc and day >= m), 'profile_id', pw);
 end $$;
 revoke all on function ext_humanize_record(text, jsonb) from public;
 grant execute on function ext_humanize_record(text, jsonb) to anon, authenticated;

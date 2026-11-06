@@ -400,7 +400,8 @@ async function pangramModel(key) {
 async function pangramDetect(key, text) {
   const { task_id } = await pangramFetch("/task", key, { method: "POST", body: JSON.stringify({ text, model: await pangramModel(key), public_dashboard_link: false }) });
   if (!task_id) throw new Error("Pangram did not start the check.");
-  for (let i = 0, wait = 700; i < 90; i++, wait = Math.min(2000, wait + 200)) {
+  // At most about 18 s per text: the Prax pages stop waiting at 20 s (HUMANIZE_WAIT_MS in src/lib/humanize.ts).
+  for (let i = 0, wait = 700, spent = 0; spent < 18000; i++, spent += wait, wait = Math.min(2000, wait + 200)) {
     await new Promise((r) => setTimeout(r, wait));
     const j = await pangramFetch("/task/" + encodeURIComponent(task_id), key);
     if (j.stage === "STAGE_FAILED") throw new Error(`Pangram could not check this text: ${j.headline || "it failed"}`);
@@ -422,19 +423,29 @@ const DETECTORS = { pangram: { check: pangramDetect }, gptzero: { check: (k, t) 
 // and the section is where the call came from (comment_studio, linkedin_bar, content_write, content_editor).
 const SECTIONS = ["comment_studio", "linkedin_bar", "content_write", "content_editor"];
 
+// The same cache key as textHash in src/lib/humanize.ts: SHA-256 of the text with whitespace collapsed and trimmed.
+// Prax checks it matches the text before it records a result.
+async function textHash(t) {
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t || "").replace(/\s+/g, " ").trim()));
+  return Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
+}
+
 async function humanize(msg) {
   const c = await cfg();
   const keys = c.checkers || {};
   const kind = ["comment", "post", "article"].includes(msg.kind) ? msg.kind : "post";
   const texts = (Array.isArray(msg.texts) ? msg.texts : [msg.text]).map((t) => String(t || "")).filter((t) => t.trim()).slice(0, 60);
   const section = SECTIONS.includes(msg.section) ? msg.section : "";
+  // The profile on screen (a Prax page sends its workspace id); Prax checks this browser's user edits it. The LinkedIn
+  // bar sends none, so the connected profile is used.
+  const profile_id = /^[0-9a-f-]{36}$/i.test(String(msg.profile || "")) ? String(msg.profile) : "";
   if (msg.op === "walter") {
-    const plan = await prax("humanize", { op: "plan", service: "walter", kind, texts, has_key: !!keys.walter, ready: WALTER.confirmed, rounds: Number(msg.rounds) || 0, failing: !!msg.failing });
+    const plan = await prax("humanize", { op: "plan", service: "walter", profile_id, kind, texts, has_key: !!keys.walter, ready: WALTER.confirmed, rounds: Number(msg.rounds) || 0, failing: !!msg.failing });
     if (!plan.walter?.ok) return { ...plan, texts: null };
     const out = [];
     for (const t of texts) {
       out.push(await WALTER.humanize(keys.walter, t));
-      prax("humanize", { op: "record", service: "walter", job: "humanize_rewrite", section, kind, text: t }).catch(() => {});
+      prax("humanize", { op: "record", service: "walter", job: "humanize_rewrite", section, profile_id, kind, text: t }).catch(() => {});
     }
     return { ...plan, texts: out };
   }
@@ -446,7 +457,7 @@ async function humanize(msg) {
   // A page can ask one detector by id (src/components/humanize/use-humanize.ts detector()); otherwise the route decides.
   const service = DETECTORS[msg.detector] ? msg.detector : DETECTORS[picked.tool] ? picked.tool : "pangram";
   const detKey = T.keyOf(c, service, "humanize_check");
-  const plan = await prax("humanize", { op: "plan", service, kind, texts, local: Number(msg.local) || 0, has_key: !!detKey, confirm: !!msg.confirm });
+  const plan = await prax("humanize", { op: "plan", service, profile_id, kind, texts, local: Number(msg.local) || 0, has_key: !!detKey, confirm: !!msg.confirm });
   const base = { ...plan, walter: { hasKey: !!keys.walter, ready: WALTER.confirmed } };
   if (msg.op !== "check" || plan.decision?.action !== "check") return base;
   const results = plan.results.slice();
@@ -454,7 +465,7 @@ async function humanize(msg) {
   for (let i = 0; i < texts.length; i++) {
     if (results[i]) continue;
     const raw = await DETECTORS[service].check(detKey, texts[i]);
-    const rec = await prax("humanize", { op: "record", service, job: "humanize_check", section, kind, text: texts[i], raw });
+    const rec = await prax("humanize", { op: "record", service, job: "humanize_check", section, profile_id, kind, text: texts[i], hash: await textHash(texts[i]), raw });
     results[i] = rec.result; used = rec.used ?? used;
   }
   return { ...base, detector: service, decision: { ...plan.decision, action: "checked" }, results, used: { ...plan.used, pangram: used } };

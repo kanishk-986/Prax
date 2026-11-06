@@ -7,6 +7,7 @@ import {
   mapPangram, isDone, combine, decide, gate, gateLabel, walterAllowed, meter, monthUsage, textHash, normText, wordCount, costOf, money,
   paragraphsOf, paragraphDiff, highlight, flaggedSentences, sentencesOf, parseChanges, applyChanges, rewriteAsk, badgeText, chipText, stateOf, libState,
   pangramVerdict, localVerdict, mergeSettings, levelFor, kindOfFormat, isFreeOnly, detection, DETECTORS, sectionOf, PRESETS, NEAR, LONG_WORDS,
+  toCache, fromCache, versionAtLeast, HUMANIZE_EXT, HUMANIZE_WAIT_MS,
   type PlanInput, type Result,
 } from "../src/lib/humanize.ts";
 import { CHECKERS } from "../src/lib/providers.ts";
@@ -66,7 +67,12 @@ const chk = act({ used: 7900, words: 200 });
 eq("check with the 80% warning", chk.action === "check" && [chk.cost, chk.warn, chk.meter.state], [0.1, true, "warn"]);
 eq("check without warning", (act({}) as { warn: boolean }).warn, false);
 eq("article with some paragraphs cached: only the rest is counted", act({ kind: "article", cached: true, words: 120, confirmed: true }).action, "check");
-eq("free-only outcomes", ["no-key", "no-cap", "cap-reached", "local-low", "check"].map((a) => isFreeOnly(a as never)), [true, true, true, false, false]);
+eq("free-only outcomes", ["no-ext", "old-ext", "no-key", "no-cap", "cap-reached", "local-low", "check"].map((a) => isFreeOnly(a as never)), [true, true, true, true, true, false, false]);
+eq("no Prax for Chrome: free score only, never a paid check", act({ ext: "none" }).action, "no-ext");
+eq("Prax for Chrome older than 0.9.6: free score only", act({ ext: "old" }).action, "old-ext");
+eq("extension state is checked before the key", act({ ext: "none", hasKey: false }).action, "no-ext");
+eq("a current extension checks as before", act({ ext: "ok" }).action, "check");
+eq("level 0 stays off without an extension", act({ ext: "none", level: 0 }).action, "off");
 
 // ---------- Walter (beta) ----------
 const w = { hasKey: true, ready: true, cap: 5000, used: 0, words: 40, rounds: 2, failing: true };
@@ -98,6 +104,8 @@ eq("gate: Pangram at or above the level", gate("article", 90, pass, H), { ok: tr
 eq("gate: Pangram below the level", gate("post", 90, fail, H), { ok: false, why: "below" });
 eq("gate: Pangram unusable, free score at level passes", gate("post", 90, localVerdict(92, 90, H, "cap-reached"), H), { ok: true, why: "" });
 eq("gate: Pangram unusable, free score under level", gate("post", 90, localVerdict(85, 90, H, "no-key"), H), { ok: false, why: "below" });
+eq("gate: no extension, free score at level passes (Not verified)", gate("post", 90, localVerdict(92, 90, H, "no-ext"), H), { ok: true, why: "" });
+eq("gate: old extension, free score under level is held back", gate("article", 90, localVerdict(80, 90, H, "old-ext"), H), { ok: false, why: "below" });
 eq("gate: free score too low to pay for a check", gate("post", 90, localVerdict(60, 90, H, "local-low"), H), { ok: false, why: "below" });
 eq("gate: a free verdict for another reason needs a check", gate("post", 90, localVerdict(95, 90, H, "confirm"), H), { ok: false, why: "check" });
 eq("gate label", gateLabel(90), "Fix to reach 90% first");
@@ -189,6 +197,34 @@ eq("Walter is only called through its adapter", [/WALTER\.humanize\(keys\.walter
 eq("the bridge never reads a checker key back", /checkers\.pangram\b(?!\))/.test(bridge.slice(bridge.indexOf("async function status"), bridge.indexOf("const ASK"))), false);
 eq("the route maps with the detector, not the extension", /DETECTORS\[service\]/.test(route), true);
 eq("the LinkedIn bar loads the marks", [manifest.content_scripts[0].js.includes("marks.js"), /"dom\.js", "marks\.js", "content\.js"/.test(bg)], [true, true]);
+
+// ---------- QA fixes (7 Nov): cache without text, versions, waits, trust, profile ----------
+throws("a score outside 0 to 1 is refused", () => mapPangram({ stage: "STAGE_SUCCESS", fraction_human: 1.7, windows: [] }), /out of range/);
+throws("a negative score is refused", () => mapPangram({ stage: "STAGE_SUCCESS", fraction_human: -0.1, windows: [] }), /out of range/);
+throws("a non-number score is refused", () => mapPangram({ stage: "STAGE_SUCCESS", fraction_human: Number.NaN, windows: [] }), /no score/);
+const ctext = "In my view the rail matters.  It is a pivotal shift that will reshape the landscape. Banks still need controls.";
+const cres: Result = { score: 61, words: 20, prediction: "Mixed", headline: "AI Assisted", version: "4.0", flagged: [{ text: "It is a pivotal shift that will reshape the landscape.", label: "AI-Generated", ai: 0.9, confidence: "High", start: 29, end: 83 }] };
+const cached = toCache(cres, ctext);
+eq("the cache holds no text, only offsets", [JSON.stringify(cached).includes("pivotal"), JSON.stringify(cached).includes("rail"), "text" in cached.flagged[0]], [false, false, false]);
+eq("cache offsets are into the normalised text", cached.flagged[0], { start: 29, end: 83, label: "AI-Generated", ai: 0.9, confidence: "High" });
+const back = fromCache(cached, ctext.replace("  ", " "))!;
+eq("the same text (other spacing) cuts the flagged sentence back out", [back.score, back.flagged.map((f) => f.text)], [61, ["It is a pivotal shift that will reshape the landscape."]]);
+eq("a sentence not found in the text is not cached", toCache({ ...cres, flagged: [{ ...cres.flagged[0], text: "Never written here." }] }, ctext).flagged, []);
+eq("bad cache rows give nothing", [fromCache(null, "x"), fromCache({ words: 3 } as never, "x")], [null, null]);
+eq("offsets outside the text are dropped", fromCache({ ...cached, flagged: [{ start: 5, end: 9999, label: "AI", ai: 1, confidence: "" }] }, ctext)!.flagged, []);
+eq("versions", [versionAtLeast("0.9.6", HUMANIZE_EXT), versionAtLeast("0.9.10", HUMANIZE_EXT), versionAtLeast("1.0", HUMANIZE_EXT), versionAtLeast("0.9.5", HUMANIZE_EXT), versionAtLeast("0.8.9", HUMANIZE_EXT), versionAtLeast("", HUMANIZE_EXT), versionAtLeast(undefined, HUMANIZE_EXT)], [true, true, true, false, false, false, false]);
+eq("no humanize ask waits more than 20 s", HUMANIZE_WAIT_MS <= 20000, true);
+const hook = read("src/components/humanize/use-humanize.ts");
+eq("every humanize ask from a page uses the 20 s limit", (hook.match(/askExtension<[^>]+>\("humanize"[\s\S]*?\}, (\w+)\)/g) ?? []).every((m) => /HUMANIZE_WAIT_MS\)$/.test(m)) && !/180000/.test(hook), true);
+eq("pages send the profile on screen", [/profile: ws\.id/.test(hook), /profile: String\(d\.profile/.test(bridge), /profile_id, kind, texts/.test(bg)], [true, true, true]);
+eq("the background hashes text the same way as Prax", [/replace\(\/\\s\+\/g, " "\)\.trim\(\)/.test(bg.slice(bg.indexOf("async function textHash"))), /hash: await textHash\(texts\[i\]\)/.test(bg)], [true, true]);
+eq("the route refuses a hash that does not match the text, and says the score is an accepted risk", [/String\(body\.hash \?\? ""\) !== hash/.test(route), /ACCEPTED RISK during the proof of concept/.test(route)], [true, true]);
+eq("the route caches offsets, not text", /result: toCache\(result, text\)/.test(route), true);
+eq("a rejected key points to Connections (where the key now lives), not the Extension page", [/401: "[^"]*Prax, Connections/.test(bg), /401: "[^"]*Extension page/.test(bg)], [true, false]);
+eq("Pangram polling stops before the 20 s page limit", /spent < 18000/.test(bg), true);
+eq("Walter's ready flag matches its adapter", [CHECKERS.walter.ready, /confirmed: false/.test(read("extension/walter.js"))], [false, true]);
+eq("031 checks the profile against the token's user", [/function ext_humanize_ws/, /has_role_of\(pid::uuid, tok_uid, 'editor'\)/, /pw := ext_humanize_ws\(a\.ws, a\.uid, p\)/g].map((r) => (sql.match(r) ?? []).length), [1, 1, 2]);
+eq("031 range-checks the score and requires a real hash", [/score out of range/.test(sql), /bad text hash/.test(sql)], [true, true]);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

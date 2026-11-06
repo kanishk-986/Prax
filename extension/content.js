@@ -205,7 +205,7 @@
       } else {
         const local = human(textOf(i) || state.drafts[i]?.text || "", range()).score;
         body = `<div class="big"><b>Human ${local}</b><span>free score · your level ${level}%</span></div>`;
-        const why = { "local-low": `Fix the house rules first. Pangram checks from a free score of ${d.need}.`, "no-key": "Add a Pangram key in Prax, Settings, Humanization, to verify.", "no-cap": "Enter your Pangram plan's monthly words in Prax Settings to verify.", "cap-reached": "This month's Pangram words are used up. Paid checks stop until next month." }[d.action];
+        const why = { "local-low": `Fix the house rules first. Pangram checks from a free score of ${d.need}.`, "no-key": "Add a Pangram key in Prax, Settings → Humanization, to verify.", "no-cap": "Enter your Pangram plan's monthly words in Prax, Settings → Humanization, to verify.", "cap-reached": "This month's Pangram words are used up. Paid checks stop until next month." }[d.action];
         body += why ? `<div class="note">${why}</div>` : !busy ? `<div class="row"><button class="b" data-hz-check="${i}">Check with Pangram${d.cost != null ? ` · about ${money(d.cost)}` : ""}</button><span class="note">Checks run when you copy, use or save.</span></div>` : "";
       }
       if (busy) body += `<div class="note">${busy}</div>`;
@@ -254,7 +254,7 @@
         let changes = [];
         if (walter) {
           const r = await send({ type: "humanize", op: "walter", kind: "comment", section: "linkedin_bar", texts: sents, rounds: h.rounds, failing: true });
-          if (!r.texts) throw new Error({ "no-cap": "Enter Walter's monthly words in Prax Settings first.", "cap-reached": "This month's Walter words are used up.", "not-ready": "Walter (beta) is waiting for its API to be confirmed.", "no-key": "Add a Walter key in Prax, Settings, Humanization." }[r.walter?.why] || "Walter is not available.");
+          if (!r.texts) throw new Error({ "no-cap": "Enter Walter's monthly words in Prax, Settings → Humanization, first.", "cap-reached": "This month's Walter words are used up.", "not-ready": "Walter (beta) is waiting for its API to be confirmed.", "no-key": "Add a Walter key in Prax, Settings → Humanization." }[r.walter?.why] || "Walter is not available.");
           changes = sents.map((b, k) => ({ before: b, after: String(r.texts[k] || "").trim() }));
         } else {
           const j = parseJSON(await send({ type: "draft", kind: "repair", rules: job.kind === "comment" ? "" : instr(), user: `DRAFT:\n${t}\n\nAn AI detector flagged these sentences as machine-written:\n${sents.map((s, k) => `${k + 1}. ${s}`).join("\n")}\n\nRewrite only these sentences so they read as a senior person wrote them: plain words, varied sentence length, one concrete detail where the draft allows it, no stock phrases. Keep each one's meaning and every fact; add no new facts. No dashes, no contractions, no hashtags.${h.rounds ? " This is the second try: change the rhythm and structure more, not only the words." : ""}\nReturn only JSON: {"changes": [{"before": "the exact sentence", "after": "the rewrite"}]}` }));
