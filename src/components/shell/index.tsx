@@ -1,4 +1,5 @@
 "use client";
+import { AccountMenu } from "@/components/account-menu";
 // The section shell every Prax area uses: an entry moment, a plain header, underline tabs, a guided tour,
 // and the Home building blocks. Patterns match the approved Content Studio and AI citations designs.
 import Link from "next/link";
@@ -151,6 +152,7 @@ export function Section({ id, title, status, actions, before, tabs, tab, onTab, 
             {before}
             {steps.length > 0 && <button type="button" className="btn h-10 px-3.5" onClick={tour.start}>Guide</button>}
             {actions}
+            <AccountMenu />
           </div>
         </div>
         {tabs && tab && onTab && <UnderlineTabs tabs={tabs} value={tab} onChange={onTab} label={title} />}

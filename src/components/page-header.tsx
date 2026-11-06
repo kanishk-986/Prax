@@ -1,3 +1,5 @@
+"use client";
+import { AccountMenu } from "@/components/account-menu";
 /** Plain header for pages without an entry moment (Settings, Extension). Same type as the shell's Section header. */
 export function PageHeader({ title, sub, children }: { title: string; sub?: string; children?: React.ReactNode }) {
   return (
@@ -6,7 +8,7 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: stri
         <h1 className="text-[26px] font-[650] tracking-[-0.02em]">{title}</h1>
         {sub && <p className="mt-1 text-[14px] text-muted">{sub}</p>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+      <div className="flex flex-wrap items-center gap-2">{children}<AccountMenu /></div>
     </div>
   );
 }

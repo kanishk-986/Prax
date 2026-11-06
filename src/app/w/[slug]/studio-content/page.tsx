@@ -1,4 +1,5 @@
 "use client";
+import { AccountMenu } from "@/components/account-menu";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Compass, Quote } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -88,6 +89,7 @@ export default function ContentStudio() {
               <button className="btn h-10 px-4" data-tour="pov" onClick={() => setPov(true)}><Quote size={14} /> Point of view</button>
               {editable && <button className="btn h-10 px-4" onClick={planCampaign}>Plan a campaign</button>}
               {editable && <button className="btn btn-primary h-10 px-4" onClick={() => { setSeed(null); setTab("write"); }}>Write a post</button>}
+              <AccountMenu />
             </div>
           </div>
           <div role="tablist" aria-label="Content Studio" data-tour="tabs" className="tabs-row">
