@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { useWorkspace, useSegments, today as todayYmd } from "@/lib/workspace";
 import { indexPeople, normName, warmPaths, type Warm } from "@/lib/network";
-import { doNext, heatOf, isClosed, stepStage, dueText, dueTone, fmtShort, avgDays, byCompany, type HeatBand, type Pipeline, type Prospect } from "@/lib/pipeline";
+import { doNext, heatOf, isClosed, stepStage, dueText, dueTone, fmtShort, avgDays, accountMap, sharedNextStep, lastTouch, type HeatBand, type Pipeline, type Prospect } from "@/lib/pipeline";
 import { Section, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
 import { LeadPanel } from "./lead-panel";
@@ -16,13 +16,14 @@ import type { PipelineApi, PipelineData } from "./types";
 const TOUR: TourStep[] = [
   { target: "header", title: "What Pipeline is for", body: "Everyone this profile is building a relationship with, and the one next step for each. Prax suggests and drafts; you send every comment and message yourself." },
   { target: "donext", title: "Do next", body: "The few people who need you now: overdue first, then today. Open one to see the action and finish it." },
-  { target: "tools", title: "Find people fast", body: "Search, or narrow to Overdue or Hot. Segment and owner sit under More filters. Group by company shows every contact at each bank together." },
-  { target: "list", title: "Everyone, by stage", body: "Each stage folds open or closed. A row shows the next action and how warm the person is. Click anyone to open their panel." },
+  { target: "tools", title: "Find people fast", body: "Search, or narrow to Overdue or Hot. Segment and owner sit under More filters. Group by company turns the list into the account map: every open account with all its contacts, their stages, warm paths and the next action for each." },
+  { target: "list", title: "Everyone, by stage", body: "Each stage folds open or closed. A row shows the next action and how warm the person is. When everyone in a stage has the same next step, the stage says it once and the rows show the last touch and the date. Click anyone to open their panel." },
   { target: "pipemenu", title: "Pipelines", body: "Switch pipelines here, start a new one from a template, and manage stages and lost reasons." },
   { target: "actions", title: "Add people", body: "Add people from Network or a CSV. Every change of stage asks for the next action and its date, so nothing falls off Today." },
 ];
 
 export type LeadInfo = { heat: ReturnType<typeof heatOf>; warm: Warm | null; warmText: string; comments: number; replies: number; lastComment: string };
+const WARM_SHORT = ["No warm path", "Connected", "Talked before", "Knows someone there"] as const;
 export const HEAT_DOT: Record<HeatBand, string> = { Hot: "#d64545", Warm: "#9e1c1c", Cold: "#c4c4c4" };
 const toneCls = (t: ReturnType<typeof dueTone>) => (t === "overdue" ? "font-semibold text-[#d64545]" : t === "today" ? "font-semibold text-ink" : "font-medium text-muted");
 const store = () => { try { return window.localStorage; } catch { return null; } };
@@ -37,6 +38,26 @@ function warmLine(w: Warm | null, company: string, hasExport: boolean): string {
   if (w.msgs) bits.push(`${w.msgs.count} ${w.msgs.count === 1 ? "message" : "messages"}; ${w.msgs.from === "us" ? "waiting on them" : "they wrote last"}.`);
   if (w.colleagues.length) bits.push(`You know ${w.colleagues.slice(0, 3).map((c) => c.name).join(", ")}${w.colleagues.length > 3 ? ` and ${w.colleagues.length - 3} more` : ""} at ${company}.`);
   return bits.join(" ") || "None found in the LinkedIn export yet.";
+}
+
+/** Heat and warm path for every lead, from comments, replies and the LinkedIn export. Shared with the lead page. */
+export function useLeadInfo(data: PipelineData, t: string) {
+  const idx = useMemo(() => indexPeople(data.network), [data.network]);
+  const info = useMemo(() => {
+    const lite = data.comments.map((c) => ({ author: c.author, reply: c.reply, day: c.day }));
+    const m = new Map<string, LeadInfo>();
+    for (const l of data.leads) {
+      const nn = normName(l.name);
+      const mine = data.comments.filter((c) => c.prospect_id === l.id || (!!nn && normName(c.author) === nn));
+      const w = data.network.length ? warmPaths({ id: l.id, name: l.name, company: l.company, role: l.role, stage: l.stage, segment: l.segment, linkedin: l.linkedin }, data.network, idx, lite) : null;
+      const lastComment = mine.map((c) => c.day).sort().pop() ?? "";
+      const touched = [lastComment, w?.msgs?.last ?? ""].filter(Boolean).sort().pop() ?? null;
+      const replies = mine.filter((c) => c.reply).length;
+      m.set(l.id, { heat: heatOf({ comments: mine.length, replies, warm: w?.level ?? 0, lastTouch: touched }, t), warm: w, warmText: warmLine(w, l.company, data.network.length > 0), comments: mine.length, replies, lastComment });
+    }
+    return m;
+  }, [data.leads, data.comments, data.network, idx, t]);
+  return info;
 }
 
 export function PipelineScreen({ data, api }: { data: PipelineData; api: PipelineApi }) {
@@ -56,21 +77,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
   const inPipe = useMemo(() => data.leads.filter((l) => pipeOf(l).id === P.id), [data.leads, pipeOf, P.id]);
 
   // ---------- heat and warm paths from real signals ----------
-  const idx = useMemo(() => indexPeople(data.network), [data.network]);
-  const info = useMemo(() => {
-    const lite = data.comments.map((c) => ({ author: c.author, reply: c.reply, day: c.day }));
-    const m = new Map<string, LeadInfo>();
-    for (const l of data.leads) {
-      const nn = normName(l.name);
-      const mine = data.comments.filter((c) => c.prospect_id === l.id || (!!nn && normName(c.author) === nn));
-      const w = data.network.length ? warmPaths({ id: l.id, name: l.name, company: l.company, role: l.role, stage: l.stage, segment: l.segment, linkedin: l.linkedin }, data.network, idx, lite) : null;
-      const lastComment = mine.map((c) => c.day).sort().pop() ?? "";
-      const lastTouch = [lastComment, w?.msgs?.last ?? ""].filter(Boolean).sort().pop() ?? null;
-      const replies = mine.filter((c) => c.reply).length;
-      m.set(l.id, { heat: heatOf({ comments: mine.length, replies, warm: w?.level ?? 0, lastTouch }, t), warm: w, warmText: warmLine(w, l.company, data.network.length > 0), comments: mine.length, replies, lastComment });
-    }
-    return m;
-  }, [data.leads, data.comments, data.network, idx, t]);
+  const info = useLeadInfo(data, t);
   const bandOf = useCallback((l: Prospect) => info.get(l.id)?.heat.band ?? "Cold", [info]);
 
   // ---------- filters ----------
@@ -84,9 +91,10 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
   const [menu, setMenu] = useState<"pipe" | "filters" | null>(null);
   const anyFilter = !!q || fOverdue || fHot || !!fSeg || !!fOwner;
   const clearFilters = () => { setQ(""); setFOverdue(false); setFHot(false); setFSeg(""); setFOwner(""); setMenu(null); };
-  const filtered = useMemo(() => inPipe.filter((l) => (!q || `${l.name} ${l.company} ${l.role}`.toLowerCase().includes(q.toLowerCase()))
-    && (!fOverdue || (!!l.next_date && l.next_date < t && !isClosed(P, l.stage))) && (!fHot || bandOf(l) === "Hot")
-    && (!fSeg || l.segment === fSeg) && (!fOwner || (fOwner === "none" ? !l.owner : l.owner === fOwner))), [inPipe, q, fOverdue, fHot, fSeg, fOwner, t, P, bandOf]);
+  const matches = useCallback((l: Prospect) => (!q || `${l.name} ${l.company} ${l.role}`.toLowerCase().includes(q.toLowerCase()))
+    && (!fOverdue || (!!l.next_date && l.next_date < t && !isClosed(pipeOf(l), l.stage))) && (!fHot || bandOf(l) === "Hot")
+    && (!fSeg || l.segment === fSeg) && (!fOwner || (fOwner === "none" ? !l.owner : l.owner === fOwner)), [q, fOverdue, fHot, fSeg, fOwner, t, pipeOf, bandOf]);
+  const filtered = useMemo(() => inPipe.filter(matches), [inPipe, matches]);
 
   // ---------- panels ----------
   const [sel, setSel] = useState<string | null>(null);
@@ -119,19 +127,17 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
 
   // ---------- Do next and groups ----------
   const dn = useMemo(() => doNext(inPipe, P, t), [inPipe, P, t]);
-  type Group = { key: string; label: string; sub: string; dim: boolean; people: Prospect[]; second: (l: Prospect) => string; closedByDefault: boolean };
-  const groups: Group[] = useMemo(() => {
-    if (!grouped) return P.stages.map((s) => {
-      const people = filtered.filter((l) => l.stage === s);
-      const avg = avgDays(people, now);
-      return { key: `s:${P.id}:${s}`, label: s, sub: avg == null ? "" : `Average ${avg} ${avg === 1 ? "day" : "days"} here`, dim: !people.length, people, second: (l: Prospect) => l.company, closedByDefault: !people.length || isClosed(P, s) };
-    }).filter((g) => !anyFilter || g.people.length);
-    return byCompany(filtered).map((g) => {
-      const lv = g.people.map((l) => info.get(l.id)?.warm?.level ?? 0);
-      const best = lv.some((x) => x === 1 || x === 2) ? "Direct path" : lv.some((x) => x === 3) ? "Warm path via a contact" : "No warm path yet";
-      return { key: `c:${g.company}`, label: g.company, sub: best, dim: false, people: g.people, second: (l: Prospect) => l.stage, closedByDefault: false };
-    });
-  }, [grouped, filtered, P, anyFilter, info, now]);
+  // A stage whose people all share one next step says it once in its header; the rows then show what differs (P18).
+  type Group = { key: string; label: string; sub: string; dim: boolean; people: Prospect[]; closedByDefault: boolean; shared: string | null };
+  const groups: Group[] = useMemo(() => grouped ? [] : P.stages.map((s) => {
+    const people = filtered.filter((l) => l.stage === s);
+    const avg = avgDays(people, now);
+    return { key: `s:${P.id}:${s}`, label: s, sub: avg == null ? "" : `Average ${avg} ${avg === 1 ? "day" : "days"} here`, dim: !people.length, people,
+      closedByDefault: !people.length || isClosed(P, s), shared: isClosed(P, s) ? null : sharedNextStep(people) };
+  }).filter((g) => !anyFilter || g.people.length), [grouped, filtered, P, anyFilter, now]);
+  // The account map (P19): every company with all its contacts across pipelines, their stages, warm paths and next actions.
+  const accounts = useMemo(() => !grouped ? [] : accountMap(data.leads.filter(matches).map((l) => ({ ...l, closed: isClosed(pipeOf(l), l.stage), warm: info.get(l.id)?.warm?.level ?? 0 })), t),
+    [grouped, data.leads, matches, pipeOf, info, t]);
   // Leads whose stage is not in this pipeline (renamed or removed) still show, so nobody disappears.
   const strays = grouped ? [] : filtered.filter((l) => !P.stages.includes(l.stage));
 
@@ -140,7 +146,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
   const entry = `${dn.overdue ? `${dn.overdue} overdue and ` : ""}${dn.today} due today, out of ${dn.open} open in ${P.name}.`;
 
   const heat = (b: HeatBand, cls: string) => <span className={`inline-flex shrink-0 items-center gap-[7px] text-meta ${cls}`}><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: HEAT_DOT[b] }} />{b}</span>;
-  const row = (l: Prospect, second: string) => {
+  const row = (l: Prospect, second: string, shared = false) => {
     const closed = isClosed(P, l.stage), b = bandOf(l), tone = dueTone(l.next_date, t);
     const lostLine = l.stage === P.lost_stage && l.lost_reason ? `${P.lost_stage}: ${l.lost_reason}` : "";
     return (
@@ -152,12 +158,52 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
         </span>
         <span className="min-w-0 flex-[1_1_160px] truncate text-body max-sm:hidden">{second}</span>
         <span className="flex min-w-0 flex-[2_1_240px] flex-col gap-0.5">
-          <span className={`text-body leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || l.next_action || "No next action set"}</span>
+          {shared ? <span className="text-body leading-snug">{touchOf(l).text}</span>
+            : <span className={`text-body leading-snug ${l.next_action || lostLine ? "" : "text-muted"}`}>{lostLine || l.next_action || "No next action set"}</span>}
           {closed ? <span className="text-meta text-muted">{l.stage === P.won_stage ? P.won_stage : l.next_date ? `Check in ${fmtShort(l.next_date)}` : P.lost_stage}</span>
             : <span className={`whitespace-nowrap text-meta ${toneCls(tone)}`}>{dueText(l.next_date, t)}</span>}
         </span>
         {heat(b, "flex-[0_0_72px] max-sm:hidden")}
       </button>
+    );
+  };
+
+  const touchOf = (l: Prospect) => { const i = info.get(l.id); return lastTouch({ lastComment: i?.lastComment, msgLast: i?.warm?.msgs?.last, msgFrom: i?.warm?.msgs?.from }, t); };
+  const multi = data.pipes.length > 1;
+  const account = (a: (typeof accounts)[number], i: number) => {
+    const key = `a:${a.company.toLowerCase()}`;
+    const open = gx[key] ?? a.open.length > 0;
+    const people = [...a.open, ...a.closed];
+    // Network connections at the company who are not leads yet: a warm way in for the whole account.
+    const known = [...new Map(people.flatMap((l) => info.get(l.id)?.warm?.colleagues ?? [])
+      .filter((c) => !people.some((l) => l.id === c.prospect_id || normName(l.name) === normName(c.name))).map((c) => [c.key, c] as const)).values()];
+    const path = a.warm === 1 ? "Direct connection" : a.warm === 2 ? "Talked before" : a.warm === 3 ? "Warm path via a contact" : "No warm path yet";
+    return (
+      <div key={key} className={i ? "border-t border-[#ececec]" : ""}>
+        <button type="button" aria-expanded={open} onClick={() => setGx({ ...gx, [key]: !open })} className="pl-quiet flex min-h-[54px] w-full flex-wrap items-center gap-x-2.5 gap-y-0.5 px-5 py-2 text-left">
+          <ChevronRight size={14} className={`pl-chev shrink-0 text-muted ${open ? "rotate-90" : ""}`} />
+          <span className={`truncate text-body font-semibold ${a.open.length ? "" : "text-muted"}`}>{a.company || "No company"}</span>
+          <span className="num text-meta text-muted">{people.length}</span>
+          {a.overdue > 0 && <span className="whitespace-nowrap text-meta font-semibold text-[#d64545]">{a.overdue} overdue</span>}
+          <span className="ml-auto text-meta text-muted max-sm:ml-6 max-sm:basis-full">{a.open.length ? `${a.stages.join(", ")} · ${path}` : `Closed · ${path}`}</span>
+        </button>
+        {open && <>
+          {people.map((l) => { const pl = pipeOf(l), closed = isClosed(pl, l.stage), w = info.get(l.id)?.warm?.level ?? 0; return (
+            <button key={l.id} type="button" onClick={() => openLead(l.id)} aria-label={`${l.name}, ${l.stage}`}
+              className={`pl-row flex w-full flex-wrap items-center gap-x-4 gap-y-1 border-t border-[#f0f0f0] py-3 pl-5 pr-5 text-left sm:pl-11 ${sel === l.id ? "bg-[#fff5f5]" : "bg-white"}`}>
+              <span className="flex min-w-0 flex-[1_1_200px] flex-col gap-0.5"><span className={`text-body font-semibold ${closed ? "text-muted" : ""}`}>{l.name}</span><span className="truncate text-meta text-muted">{l.role || "No role"}</span></span>
+              <span className="flex min-w-0 flex-[1_1_150px] flex-col gap-0.5 max-sm:flex-row max-sm:flex-wrap max-sm:gap-x-1.5"><span className="text-body max-sm:text-meta max-sm:font-semibold">{l.stage}</span><span className="truncate text-meta text-muted">{multi ? `${pl.name} · ` : ""}{WARM_SHORT[w]}</span></span>
+              <span className="flex min-w-0 flex-[2_1_240px] flex-col gap-0.5">
+                {l === a.next && people.length > 1 && <span className="text-meta font-semibold text-ink">Next for this account</span>}
+                <span className={`text-body leading-snug ${l.next_action ? "" : "text-muted"}`}>{closed && l.stage === pl.lost_stage && l.lost_reason ? `${pl.lost_stage}: ${l.lost_reason}` : l.next_action || "No next action set"}</span>
+                {closed ? <span className="text-meta text-muted">{l.stage === pl.won_stage ? pl.won_stage : l.next_date ? `Check in ${fmtShort(l.next_date)}` : pl.lost_stage}</span>
+                  : <span className={`whitespace-nowrap text-meta ${toneCls(dueTone(l.next_date, t))}`}>{dueText(l.next_date, t)}</span>}
+              </span>
+            </button>
+          ); })}
+          {known.length > 0 && <div className="border-t border-[#f0f0f0] py-2.5 pl-5 pr-5 text-meta text-muted sm:pl-11">Also in your network at {a.company}: {known.slice(0, 4).map((c) => c.name).join(", ")}{known.length > 4 ? ` and ${known.length - 4} more` : ""}</div>}
+        </>}
+      </div>
     );
   };
 
@@ -211,7 +257,7 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
         <section className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between gap-2.5">
             <span className="text-title font-semibold">Everyone</span>
-            <span className="text-meta text-muted">{filtered.length} {filtered.length === 1 ? "person" : "people"}{anyFilter ? " match" : ""}</span>
+            <span className="text-meta text-muted">{grouped ? `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"} across every pipeline` : `${filtered.length} ${filtered.length === 1 ? "person" : "people"}${anyFilter ? " match" : ""}`}</span>
           </div>
           <div data-tour="tools" className="flex flex-wrap items-center gap-2 rounded-xl">
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people and companies" aria-label="Search people and companies"
@@ -243,21 +289,23 @@ export function PipelineScreen({ data, api }: { data: PipelineData; api: Pipelin
                 const open = gx[g.key] ?? !g.closedByDefault;
                 return (
                   <div key={g.key} className={i ? "border-t border-[#ececec]" : ""}>
-                    <button type="button" aria-expanded={open} onClick={() => setGx({ ...gx, [g.key]: !open })} className="pl-quiet flex h-[46px] w-full items-center gap-2.5 px-5 text-left">
+                    <button type="button" aria-expanded={open} onClick={() => setGx({ ...gx, [g.key]: !open })} className="pl-quiet flex min-h-[46px] w-full flex-wrap items-center gap-x-2.5 px-5 py-2 text-left">
                       <ChevronRight size={14} className={`pl-chev shrink-0 text-muted ${open ? "rotate-90" : ""}`} />
                       <span className={`truncate text-body font-semibold ${g.dim ? "text-muted" : ""}`}>{g.label}</span>
                       <span className="num text-meta text-muted">{g.people.length}</span>
                       <span className="ml-auto hidden text-meta text-muted sm:inline">{g.sub}</span>
+                      {g.shared && <span className="basis-full pl-6 text-meta text-muted">Next step for everyone here: <span className="font-semibold text-ink">{g.shared}</span></span>}
                     </button>
-                    {open && g.people.slice().sort((a, b) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999")).map((l) => row(l, g.second(l)))}
+                    {open && g.people.slice().sort((a, b) => (a.next_date ?? "9999").localeCompare(b.next_date ?? "9999")).map((l) => row(l, l.company, !!g.shared))}
                   </div>
                 );
               })}
+              {accounts.map(account)}
               {strays.length > 0 && <div className="border-t border-[#ececec]">
                 <div className="flex h-[46px] items-center gap-2.5 px-5 text-body font-semibold">Stage not in {P.name}<span className="num text-meta font-normal text-muted">{strays.length}</span></div>
                 {strays.map((l) => row(l, l.stage))}
               </div>}
-              {!groups.length && !strays.length && (anyFilter
+              {!groups.length && !accounts.length && !strays.length && (anyFilter
                 ? <span className="flex flex-wrap items-center gap-3 p-5 text-body text-muted">No one matches these filters.<button type="button" className="btn h-8! px-3! text-meta font-semibold text-ink" onClick={clearFilters}>Clear filters</button></span>
                 : <span className="block p-5 text-body text-muted">No one in {P.name} yet. Add a lead or import from Network.</span>)}
             </>}

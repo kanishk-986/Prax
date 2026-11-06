@@ -312,6 +312,123 @@ export function collapseActivity<T extends { kind: string; text: string }>(rows:
     : { ...row, count, text: row.kind === "stage" ? row.text : split(row.text)[0], ...(tails.length && row.kind !== "stage" ? { detail: tails.join(", ") } : {}) });
 }
 
+// ---------- activity as sentences (D5) ----------
+export type ActivityIn = { kind: string; label: string };
+export type Sentence = { text: string; win: boolean; group: string; who: string; detail: string; person: boolean };
+const poss = (n: string) => (/s$/i.test(n) ? `${n}'` : `${n}'s`);
+const STAGE_LINES: Record<string, [(x: string) => string, boolean]> = {
+  "Target": [(x) => `${x} was added as a target`, false],
+  "Warming": [(x) => `${x} is warming up`, false],
+  "Requested": [(x) => `You sent ${x} a connection request`, false],
+  "Connected": [(x) => `${x} accepted your connection request`, true],
+  "In conversation": [(x) => `You and ${x} are in conversation`, true],
+  "Resource sent": [(x) => `You sent ${x} a resource`, false],
+  "Call booked": [(x) => `${x} booked a call with you`, true],
+  "Won": [(x) => `${x} is now a client`, true],
+  "Signed": [(x) => `${x} signed`, true],
+  "Committed": [(x) => `${x} committed`, true],
+  "Accepted": [(x) => `${x} accepted your pitch`, true],
+  "Delivered": [(x) => `You delivered the session for ${x}`, true],
+  "Parked": [(x) => `You parked ${x} for now`, false],
+  "Passed": [(x) => `${x} passed`, false],
+  "Declined": [(x) => `${x} declined`, false],
+};
+
+/** One activity row as a plain sentence. Stage moves ("Name → Stage") read as what happened; comments logged by
+ *  the extension name the person; Today ticks use the person from the task title when there is one. Wins are
+ *  replies, accepted requests, conversations, calls and closed deals. person is true when ref_id is a lead. */
+export function activitySentence(a: ActivityIn): Sentence {
+  const label = (a.label ?? "").trim();
+  const s = (text: string, o: Partial<Sentence> = {}): Sentence => ({ text, win: false, group: "", who: "", detail: "", person: false, ...o });
+  const title = label && label !== a.kind ? label : "";
+  if (a.kind === "stage") {
+    const i = label.lastIndexOf(" → ");
+    const who = i < 0 ? label : label.slice(0, i), to = i < 0 ? "" : label.slice(i + 3);
+    const line = STAGE_LINES[to];
+    return s(line ? line[0](who) : `${who} moved to ${to || "a new stage"}`, { win: !!line?.[1], person: true, who });
+  }
+  if (a.kind === "comment") {
+    const logged = /^Commented on (.+)$/.exec(label);
+    if (logged) return s(`You commented on ${poss(logged[1])} post`, { group: "comment", who: logged[1], person: true });
+    const who = /^Comment on (.+?)['’]s?\s+(?:latest\s+)?post/i.exec(title)?.[1] ?? "";
+    return s(who ? `You commented on ${poss(who)} post` : "You left a comment", { group: "comment", who, detail: who ? "" : title });
+  }
+  if (a.kind === "reply") {
+    const them = /^(.+) replied$/.exec(label);
+    if (them) return s(`${them[1]} replied to your comment`, { win: true, group: "replied", who: them[1], person: true });
+    return s("You answered the comments on your post", { group: "replyround", detail: title.replace(/^Reply to the comments on /i, "") });
+  }
+  if (a.kind === "request") {
+    const who = /^Send (.+?) a connection request/i.exec(title)?.[1].split(",")[0].trim() ?? "";
+    return s(who ? `You sent ${who} a connection request` : "You sent a connection request", { group: "request", who, detail: who ? "" : title });
+  }
+  if (a.kind === "dm" || a.kind === "inmail") {
+    const who = (a.kind === "dm" ? /^Message ([^:]+)/ : /^InMail ([^:]+)/).exec(title)?.[1].trim() ?? "";
+    const text = a.kind === "dm" ? (who ? `You messaged ${who}` : "You sent a message") : (who ? `You sent ${who} an InMail` : "You sent an InMail");
+    return s(text, { group: a.kind, who, detail: who ? "" : title });
+  }
+  if (a.kind === "post") return s("You published a post", { group: "post", detail: title });
+  if (a.kind === "custom") return s("You finished a task on Today", { group: "custom", detail: title });
+  return s(title || "Something changed in Prax");
+}
+
+const MANY: Record<string, (n: number) => string> = {
+  comment: (n) => `You commented on ${n} posts`,
+  replied: (n) => `${n} people replied to your comments`,
+  replyround: (n) => `You answered the comments on your posts ${n} times`,
+  request: (n) => `You sent ${n} connection requests`,
+  dm: (n) => `You sent ${n} messages`,
+  inmail: (n) => `You sent ${n} InMails`,
+  post: (n) => `You published ${n} posts`,
+  custom: (n) => `You finished ${n} tasks on Today`,
+};
+
+/** Activity rows as sentences, with back-to-back rows of the same action merged into one ("You commented on 4
+ *  posts", the names as the detail). A comment is often logged twice, once by the extension (with the name) and once
+ *  as a Today tick (without it), so a merged group counts the larger of the two, like commentDays. Identical stage
+ *  sentences in a row show once. Order and the newest row's fields are kept. */
+export function activityFeed<T extends ActivityIn>(rows: T[]): (T & Sentence & { count: number })[] {
+  type G = { row: T; s: Sentence; named: number; plain: number; names: string[]; details: string[] };
+  const out: G[] = [];
+  for (const r of rows) {
+    const s = activitySentence(r);
+    const last = out[out.length - 1];
+    if (last && ((s.group && last.s.group === s.group) || (!s.group && !last.s.group && last.s.text === s.text))) {
+      if (s.who) { last.named++; if (!last.names.includes(s.who)) last.names.push(s.who); } else last.plain++;
+      if (s.detail && !last.details.includes(s.detail)) last.details.push(s.detail);
+      if (!last.s.who && s.who) last.s = { ...last.s, who: s.who, text: s.text, person: s.person };
+      continue;
+    }
+    out.push({ row: r, s, named: s.who ? 1 : 0, plain: s.who ? 0 : 1, names: s.who ? [s.who] : [], details: s.detail ? [s.detail] : [] });
+  }
+  return out.map((g) => {
+    const count = g.s.group === "comment" ? Math.max(g.named, g.plain) : g.named + g.plain;
+    if (!g.s.group || count === 1) return { ...g.row, ...g.s, detail: g.s.detail || g.details[0] || "", count: 1 };
+    return { ...g.row, ...g.s, text: MANY[g.s.group]?.(count) ?? g.s.text, detail: (g.names.length ? g.names : g.details).join(", "), person: false, count };
+  });
+}
+
+// ---------- post reminders on Today (T6) ----------
+/** Planned times are written in Dubai time (Content Studio's "Time, Dubai"). The day and HH:MM there now. */
+export function dubaiNow(now = new Date()): { day: string; hm: string } {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(now).map((x) => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, hm: `${p.hour}:${p.minute}` };
+}
+export type PostTiming = "soon" | "now" | "late" | "later" | "dated" | "done";
+const mins = (hm: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(hm); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+/** Where a planned post is against the clock: soon (15 minutes before its time), now (from its time for an hour),
+ *  late (after that, or an earlier day), later, dated (today but no time set) or done (posted or on hold). */
+export function postTiming(p: { status: string; publish_date: string | null; planned_time?: string | null }, now: { day: string; hm: string }, windowMin = 60): PostTiming {
+  if (["Posted", "Published", "On hold"].includes(p.status) || !p.publish_date) return "done";
+  if (p.publish_date < now.day) return "late";
+  if (p.publish_date > now.day) return "later";
+  const at = mins(p.planned_time ?? ""), n = mins(now.hm);
+  if (at == null || n == null) return "dated";
+  const d = n - at;
+  return d < -15 ? "later" : d < 0 ? "soon" : d <= windowMin ? "now" : "late";
+}
+
 /** First name for greetings: the member's own profile name, else a readable email name ("kanishk.raj" gives
  *  "Kanishk"), else nothing. */
 export function firstName(name: string | null | undefined, email: string | null | undefined): string {

@@ -182,3 +182,75 @@ export function byCompany<T extends Pick<Prospect, "company">>(leads: T[]): { co
 export function avgDays(leads: Pick<Prospect, "stage_changed_at" | "created_at">[], now: string): number | null {
   return leads.length ? Math.round(leads.reduce((a, l) => a + daysIn(l, now), 0) / leads.length) : null;
 }
+
+// ---------- closed leads (Today, the Dashboard) ----------
+/** Stage names that close a lead in the templates: every won and lost stage. Kept as names so Today still works
+ *  before db/015 has run and for leads whose pipeline is not loaded. */
+export const CLOSED_STAGE_NAMES = ["Won", "Parked", "Signed", "Committed", "Delivered", "Done", "Passed", "Declined"];
+
+/** Whether a lead is closed: a closed stage name, or its own pipeline's won or lost stage (a lead without a known
+ *  pipeline sits in the first one, as on the Pipeline screen). When the lead's pipeline is missing, a stage that
+ *  is won or lost in any pipeline also counts. */
+export function isLeadClosed(lead: { stage: string; pipeline_id?: string | null }, pipes: Pick<Pipeline, "id" | "won_stage" | "lost_stage">[]): boolean {
+  if (CLOSED_STAGE_NAMES.includes(lead.stage)) return true;
+  const own = pipes.find((p) => p.id === lead.pipeline_id);
+  const p = own ?? pipes[0];
+  if (p && (lead.stage === p.won_stage || lead.stage === p.lost_stage)) return true;
+  return !own && pipes.some((x) => lead.stage === x.won_stage || lead.stage === x.lost_stage);
+}
+
+/** Open leads only, for Today's due strip and suggestions and the Dashboard. */
+export const openLeads = <T extends { stage: string; pipeline_id?: string | null }>(leads: T[], pipes: Pick<Pipeline, "id" | "won_stage" | "lost_stage">[]) => leads.filter((l) => !isLeadClosed(l, pipes));
+
+// ---------- stage groups (P18) ----------
+const stepKeyOf = (s: string) => s.trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "").toLowerCase();
+/** The next step every lead in a group shares (ignoring case, spaces and a final full stop), or null. Needs at least
+ *  two leads, all with the same non-empty action, so the stage header can say it once. */
+export function sharedNextStep(leads: { next_action: string | null }[]): string | null {
+  if (leads.length < 2) return null;
+  const first = (leads[0].next_action ?? "").trim();
+  if (!first) return null;
+  const k = stepKeyOf(first);
+  return leads.every((l) => stepKeyOf(l.next_action ?? "") === k) ? first.replace(/[.\s]+$/, "") : null;
+}
+
+/** "today", "yesterday", "3 days ago", or "on 5 Oct" after a month. */
+export function agoText(day: string, today: string): string {
+  const d = daysBetween(day.slice(0, 10), today);
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 30) return `${d} days ago`;
+  return `on ${new Date(day.slice(0, 10) + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+}
+
+/** The most recent touch with a lead, for rows that no longer repeat the shared next step: your last comment on
+ *  their posts, or the last message in the LinkedIn export (and who wrote it). */
+export function lastTouch(t: { lastComment?: string | null; msgLast?: string | null; msgFrom?: string | null }, today: string): { text: string; day: string | null } {
+  const c = t.lastComment || "", m = t.msgLast || "";
+  if (!c && !m) return { text: "No touch yet", day: null };
+  if (c >= m) return { text: `You commented ${agoText(c, today)}`, day: c.slice(0, 10) };
+  return { text: `${t.msgFrom === "us" ? "You wrote" : "They wrote"} ${agoText(m, today)}`, day: m.slice(0, 10) };
+}
+
+// ---------- account map (P19) ----------
+export type AccountLead = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; closed: boolean; warm: 0 | 1 | 2 | 3 };
+export type Account<T extends AccountLead> = { company: string; open: T[]; closed: T[]; next: T | null; overdue: number; warm: 0 | 1 | 2 | 3; stages: string[] };
+/** Direct connection beats talked before beats knowing someone there. */
+export const warmRank = (w: number) => (w === 1 ? 3 : w === 2 ? 2 : w === 3 ? 1 : 0);
+
+/** Leads grouped into accounts by company (case ignored). Open accounts first (most urgent next action, then most
+ *  contacts, then name); accounts with only closed contacts after them; people without a company last. Inside an
+ *  account, open contacts by due date. next is the most urgent open contact; warm the best path into the account. */
+export function accountMap<T extends AccountLead>(leads: T[], today: string): Account<T>[] {
+  const m = new Map<string, T[]>();
+  for (const l of leads) { const k = l.company.trim().toLowerCase(); const a = m.get(k); if (a) a.push(l); else m.set(k, [l]); }
+  const due = (l: T) => l.next_date ?? "9999";
+  const out = [...m.values()].map((people) => {
+    const open = people.filter((l) => !l.closed).sort((a, b) => due(a).localeCompare(due(b)) || a.name.localeCompare(b.name));
+    const closed = people.filter((l) => l.closed).sort((a, b) => a.name.localeCompare(b.name));
+    const warm = people.reduce<0 | 1 | 2 | 3>((w, l) => (warmRank(l.warm) > warmRank(w) ? l.warm : w), 0);
+    return { company: people[0].company.trim(), open, closed, next: open[0] ?? null, overdue: open.filter((l) => l.next_date && l.next_date < today).length, warm, stages: [...new Set(open.map((l) => l.stage))] };
+  });
+  return out.sort((a, b) => Number(!a.company) - Number(!b.company) || Number(!a.open.length) - Number(!b.open.length)
+    || (a.next?.next_date ?? "9999").localeCompare(b.next?.next_date ?? "9999") || (b.open.length + b.closed.length) - (a.open.length + a.closed.length) || a.company.localeCompare(b.company));
+}
