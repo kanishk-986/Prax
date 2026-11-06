@@ -444,3 +444,10 @@ Run `db/018_text_repair_v2.sql` before or after deploying (it changes data only)
 - **Q119.** The entry moment plays once a day, on the Dashboard only (local storage keeps the day); every other section, Content Studio, Settings and Extension open with a 150 ms fade. AI citations no longer plays an entry moment either. Tour cards sit next to their target (`tourPlace`, tested), follow scroll and resize, and say "Step N of M" without "completed"; same for Content Studio's tour.
 - **Checked** in Chrome (Playwright, `channel: chrome`) through a temporary preview route with the real components, sample data and a fake Supabase client (deleted): every section and tab except AI citations, sample and empty data, 1280 and 390 wide, viewer role on Strategy and Settings, the entry moment once a day, the content fade, the anchored tour and the phone ⋯ menu. Before and after screenshots: `/private/tmp/claude-503/-Users-kanishk-raj-claude-md/5ea672f0-465e-415c-b793-7822bc9d8b7c/scratchpad/polish/`. Not checked signed in against Supabase, and 018 has not been run on the live database.
 - Left for later: the audit's navigation in four groups and "Draft a comment" (item 9), activity rows as sentences, "This week at a glance" without numbers, Write a post's icon cards, Pipeline's repeated next-step sentence, and the empty Dashboard KPI row under Set up.
+
+## Decided 7 Nov 2026 (Q123 to Q125)
+
+- Q123: build every Not started and Partly done item in docs/BACKLOG.md now, in parallel agents, then recheck the backlog. "Needs user action" items are done last.
+- Q124: AI citations keeps Shashi and Antier as two separate headline numbers; no combined 70/30 score (AC13 declined).
+- Q125: step 4 order: Inbox, weekly report, Playbook (after the Strategy canvas lands), multi-profile overview.
+- Migration numbers reserved: 021 Strategy canvas, 022 Content Studio, 023 Dashboard/Today/Pipeline, 024 Network/Discovery/extension, 025 AI citations, 026 Inbox/weekly/overview.
