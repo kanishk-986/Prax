@@ -13,14 +13,14 @@ import { useExtension } from "@/lib/bridge";
 import { useCitationScope } from "@/lib/citation-profile";
 import { KpiTiles } from "@/components/shell";
 import { ProviderMark, ProviderLogo, KeyRow, useProviderUsage } from "@/components/provider-mark";
-import { providerName } from "@/lib/providers";
-import { buildPdf, downloadFile, type PdfDoc, type PdfSection } from "@/lib/pdf";
+import { providerName, providerOf, MARKS } from "@/lib/providers";
+import { buildPdf, downloadFile, type PdfDoc, type PdfMark, type PdfSection } from "@/lib/pdf";
 import {
   ENGINES, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
   subjectShare, detectPerson, weeklyTrend, sameDirection, promptGaps, gapTopic, keywordStats, runWeeks, runsInWeek, shiftWeek, audienceOf, AUDIENCE_LABEL, postProfile,
   type Engine, type Entity, type Run, type Question, type Facts, type PromptGap,
 } from "@/lib/citations";
-import { Card, Empty, Status, TrackedNames, cx, who, type EntRow } from "./ui";
+import { Card, Empty, Status, TrackedNames, usePeerSuggestions, cx, who, type EntRow } from "./ui";
 import s from "./citations.module.css";
 
 const shortDate = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -322,13 +322,14 @@ export function Company({ c, ents, editable, facts, onFacts }: { c: Ctx; ents: E
     { key: "c", label: `${w.company}, vendor prompts`, color: "#141414", values: trend.map((t) => t.company) },
     { key: "p", label: `${w.first}, expert prompts`, color: "#d64545", values: trend.map((t) => t.person) },
   ];
+  const peers = usePeerSuggestions(runs, qs, ents);
   const ran = runs.length > 0;
   if (!ran) return (
     <div id="tour-company" className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
       <Card title={`${w.company} in AI answers`}>
         <div className={s.rowsTop}><Empty title="Company results appear after the first run" body={`How often vendor prompts name ${w.company}, whether answers link its sites, its rank among peer firms and the gaps to close.`} /></div>
       </Card>
-      <TrackedNames ents={ents} pools={["company", "firms"]} editable={editable} />
+      <TrackedNames ents={ents} pools={["company", "firms"]} editable={editable} peers={peers} />
     </div>
   );
   return (
@@ -363,7 +364,7 @@ export function Company({ c, ents, editable, facts, onFacts }: { c: Ctx; ents: E
             </Card>
           </div>
         </div>
-        <TrackedNames ents={ents} pools={["company", "firms"]} editable={editable} />
+        <TrackedNames ents={ents} pools={["company", "firms"]} editable={editable} peers={peers} />
       </div>
     </div>
   );
@@ -385,6 +386,11 @@ export function KeywordsPanel({ c, value, onPick }: { c: Ctx; value: string; onP
 }
 
 // ---------------- weekly report ----------------
+// Provider marks in the PDF, keyed by the full and the short names the report tables use; a dot when there is no mark.
+const PDF_MARKS: Record<string, PdfMark> = Object.fromEntries(ENGINES.flatMap((e) => {
+  const p = providerOf(e.id), m = p ? MARKS[p.id] : null, mark: PdfMark = { path: m?.path ?? null, color: m?.color ?? "#5f5f5f" };
+  return [[e.name, mark], [engineLabel(e.id), mark]];
+}));
 export function buildWeekReport(c: Ctx, week: string, profile: string, facts: Partial<Facts>): PdfDoc {
   const { qs, person, company, selfAll, rivals, ctx } = c;
   const w = names(c);
@@ -425,7 +431,7 @@ export function buildWeekReport(c: Ctx, week: string, profile: string, facts: Pa
     { title: "Appendix: every prompt", tables: [{ head: ["Prompt", "For", ...usedEngines.map((e) => engineLabel(e.id))], widths: [.42, .14, ...usedEngines.map(() => .44 / Math.max(1, usedEngines.length))], rows: qs.filter((q) => q.status === "active").map((q) => [qName(q), AUDIENCE_LABEL[audienceOf(q)], ...usedEngines.map((e) => cell(q, e.id))]) }] },
     { title: "Method and data quality", paras: ["Each prompt is asked through each AI tool's API with web search on, from the user's browser with their own keys. Answers and sources are stored; keys are not.", `${w.first} counts as named only by the full name next to context (${w.company}, the role or one of the topics); other matches wait for review. Branded prompts are left out of scores. Failed runs are not counted as misses. Repeats use the majority answer.`, `This week: ${now.length} runs, ${now.length - failed} completed. Results reflect API answers with web search, which can differ from the consumer apps.`] },
   ];
-  return { kicker: "AI CITATIONS REPORT", title: `${w.person} and ${w.company} in AI answers`, subtitle: `${label}. How often AI tools name, link and rank ${w.first} and ${w.company} when buyers ask.`, coverMeta: [["Prepared for", `${profile}`], ["Period", label], ["Runs", `${now.length} on ${usedEngines.length} AI tools`], ["Method", "API with web search"]], footer: `Prax - AI citations report - ${label} - Confidential`, coverNote: "Confidential. Prepared from API answers with web search, run from the user's browser with their own keys.", sections };
+  return { kicker: "AI CITATIONS REPORT", title: `${w.person} and ${w.company} in AI answers`, subtitle: `${label}. How often AI tools name, link and rank ${w.first} and ${w.company} when buyers ask.`, coverMeta: [["Prepared for", `${profile}`], ["Period", label], ["Runs", `${now.length} on ${usedEngines.length} AI tools`], ["Method", "API with web search"]], footer: `Prax - AI citations report - ${label} - Confidential`, coverNote: "Confidential. Prepared from API answers with web search, run from the user's browser with their own keys.", sections, marks: PDF_MARKS };
 }
 
 export function Report({ c, onShare, facts }: { c: Ctx; onShare: () => void; facts: Partial<Facts> }) {

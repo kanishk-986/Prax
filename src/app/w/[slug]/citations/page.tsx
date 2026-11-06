@@ -7,7 +7,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { AlertsCard, NextMoves, ProfileCard, QuickSetup, Suggested, SetsBar, Actions, DraftTest, AskPanel, FactsDrawer, ShareDialog, CommentTargets, buildSnapshot, judgeRun, type RecRow, type SetRow } from "./extras";
 import { KeysModal, Home, FirstRun, Gaps, Company, Report, KeywordsPanel, Tour, makeTour, type Ctx } from "./studio";
 import { ProfileChip, ProfileMenu, DeleteProfile, useProfileActions } from "./profiles";
-import { Card, Empty, Status, Side, TrackedNames, cx, who, type EntRow } from "./ui";
+import { Card, Empty, Status, Side, TrackedNames, usePeerSuggestions, cx, who, type EntRow } from "./ui";
 import { EntryMoment, useTour, type TourStep } from "@/components/shell";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
@@ -712,6 +712,7 @@ function Competitors({ ents, runs, qs, self, editable, w }: { ents: EntRow[]; ru
   const rivals = ents.filter((e) => e.kind === "competitor" && e.status !== "suggested");
   const board = [self, ...rivals].map((e) => ({ e, sov: shareOfVoice(runs, qs, e, self), per: LIVE.map((x) => shareOfVoice(runs, qs, e, self, x.id)) })).sort((a, b) => b.sov.named - a.sov.named);
   const top = Math.max(1, ...board.map((b) => b.sov.named));
+  const peers = usePeerSuggestions(runs, qs, ents);
   return (
     <div className="flex flex-col gap-4">
       <Card title="Leaderboard" meta={runs.length ? "Latest run, branded prompts left out" : undefined}>
@@ -731,7 +732,7 @@ function Competitors({ ents, runs, qs, self, editable, w }: { ents: EntRow[]; ru
           </div>
         )}
       </Card>
-      <TrackedNames ents={ents} pools={["person", "company", "firms", "experts"]} editable={editable} className="lg:grid-cols-3" />
+      <TrackedNames ents={ents} pools={["person", "company", "firms", "experts"]} editable={editable} peers={peers} className="lg:grid-cols-3" />
     </div>
   );
 }

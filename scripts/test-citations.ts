@@ -1,10 +1,11 @@
 // Checks AI citation parsing, detection and maths against sample responses shaped like each provider's API.
 // Run: node scripts/test-citations.ts
 import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, detectPerson, personContext, audienceOf, subjectShare, keywordStats, weeklyTrend, sameDirection, promptGaps, gapTopic, runWeeks, parsePerplexity,
-  liveProfiles, archivedProfiles, currentProfile, profileScope, scoped, withProfile, postProfile, inProfile, profileName, nextSort, deleteConfirmed, migrateRows, NO_PROFILE,
+  peopleIn, suggestPeerExperts, liveProfiles, archivedProfiles, currentProfile, profileScope, scoped, withProfile, postProfile, inProfile, profileName, nextSort, deleteConfirmed, migrateRows, NO_PROFILE,
   type Entity, type Run, type Question, type Profile } from "../src/lib/citations.ts";
 import { readFileSync } from "node:fs";
-import { buildPdf } from "../src/lib/pdf.ts";
+import { buildPdf, svgPathToPdf, pdfRgb } from "../src/lib/pdf.ts";
+import { MARKS } from "../src/lib/providers.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -289,6 +290,67 @@ eq("SQL delete checks owner and the typed name", /has_role\(p\.workspace_id, 'ow
 eq("SQL uses has_role for RLS", (sql17.match(/has_role\(workspace_id/g) ?? []).length >= 5, true);
 eq("SQL is re-runnable", /create table if not exists citation_profiles/.test(sql17) && /add column if not exists profile_id/.test(sql17) && /drop trigger if exists/.test(sql17), true);
 eq("SQL names the default profile like profileName", /concat_ws\(', '/.test(sql17), true);
+
+// ---------- provider marks in the PDF (AC21) ----------
+eq("SVG lines, relative and absolute, and close", svgPathToPdf("M0 0h10v10H0z"), "0 0 m 10 0 l 10 10 l 0 10 l h");
+eq("implicit lineto after moveto, compact numbers", svgPathToPdf("m1 1 2 2-.5.5"), "1 1 m 3 3 l 2.5 3.5 l");
+const half = svgPathToPdf("M0 0A5 5 0 0 1 10 0");
+eq("a half circle arc becomes two cubics ending at the end point", [(half.match(/ c/g) ?? []).length, half.endsWith("10 0 c")], [2, true]);
+eq("compact arc flags", svgPathToPdf("M0 0a5 5 0 0110 0").endsWith("10 0 c"), true);
+eq("quadratic becomes a cubic", svgPathToPdf("M0 0Q3 3 6 0"), "0 0 m 2 2 4 2 6 0 c");
+eq("every provider path converts to finite numbers", Object.values(MARKS).filter(Boolean).every((m) => { const o = svgPathToPdf(m!.path); return o.length > 50 && !/NaN|Infinity/.test(o); }), true);
+eq("hex colour to PDF rgb", pdfRgb("#D97757"), "0.851 0.467 0.341");
+const marked = pdfText(buildPdf({ ...doc, marks: { ChatGPT: { path: MARKS.openai!.path, color: MARKS.openai!.color }, Grok: { color: "#5f5f5f" } }, sections: [{ title: "Tools", tables: [{ head: ["AI tool", "ChatGPT"], widths: [0.5, 0.5], rows: [["ChatGPT", "1"], ["ChatGPT, Grok", "2"], ["Other", "3"]] }] }] }));
+eq("marks drawn: head in white, body in colour, dot fallback", [(marked.match(/ cm /g) ?? []).length, marked.includes("q 1 1 1 rg"), marked.includes("q 0 0 0 rg"), marked.includes("q 0.373 0.373 0.373 rg")], [3, true, true, true]);
+eq("names stay as text beside the marks", [marked.includes("(ChatGPT) Tj"), marked.includes("(Grok) Tj"), marked.includes("(Other) Tj")], [true, true, true]);
+
+// ---------- suggested peer experts (AC15) ----------
+eq("full name beside a role counts", peopleIn("Rina Okafor, CEO of Ledgerline, says rails matter."), ["Rina Okafor"]);
+eq("role before the name, firm name dropped", peopleIn("Standard Chartered CEO Bill Winters spoke on tokenisation."), ["Bill Winters"]);
+eq("markdown list with a dash and bold", peopleIn("1. **Omar Haddad** - Head of Digital Assets at Gulf Bank\n2. **Lena Vogel** (co-founder, Tokenrail)"), ["Omar Haddad", "Lena Vogel"]);
+eq("honorific counts, particles kept", peopleIn("Dr Aisha bin Rashid has written on CBDCs."), ["Aisha bin Rashid"]);
+eq("is the ... role counts", peopleIn("Marco De Luca is the managing partner at a fund."), ["Marco De Luca"]);
+eq("no role nearby: not counted", peopleIn("Rina Okafor wrote a paper on stablecoins."), []);
+eq("first name alone never counts", peopleIn("Rina, CEO of Ledgerline, agrees."), []);
+eq("firms and places are not people", peopleIn("Abu Dhabi Global Market, the regulator, and Ledgerline Labs, a vendor, lead. Middle East Partners, a partner firm."), []);
+eq("role in another sentence does not count", peopleIn("Rina Okafor writes often. The CEO of Ledgerline agrees."), []);
+eq("possessive still finds the role", peopleIn("As chief economist Rina Okafor's view matters."), ["Rina Okafor"]);
+eq("four-word runs are not one name", peopleIn("Jane Mary Ann Doe, CEO of Acme."), []);
+
+const sq: Question[] = [
+  { id: "x1", question: "Which experts speak on stablecoin rails?", topic: "t", region: "UAE", language: "English", status: "active", audience: "expert" },
+  { id: "x2", question: "Who leads tokenisation at Gulf banks?", topic: "t", region: "UAE", language: "English", status: "active", audience: "leadership" },
+  { id: "x3", question: "Who builds stablecoin rails?", topic: "t", region: "UAE", language: "English", status: "active", audience: "vendor" },
+  { id: "x4", question: "What does Omar Haddad say about rails?", topic: "t", region: "UAE", language: "English", status: "active", audience: "expert" },
+  { id: "x5", question: "Archived expert prompt", topic: "t", region: "UAE", language: "English", status: "archived", audience: "expert" },
+];
+const s0 = "2026-11-05T09:00:00Z", s1 = "2026-11-05T09:05:00Z";
+const sr: Run[] = [
+  run("a1", "x1", "openai", s0, "Rina Okafor, CEO of Ledgerline. Omar Haddad, head of digital assets at Gulf Bank."),
+  run("a2", "x1", "gemini", s0, "Omar Haddad (managing director) and Lena Vogel, co-founder of Tokenrail."),
+  run("a3", "x2", "openai", s0, "Omar Haddad, chief digital officer, leads it. Shashi Pal, co-founder of Antier, too."),
+  run("a4", "x2", "claude", s0, "Lena Vogel, co-founder of Tokenrail, and Omar Haddad, head of digital."),
+  run("a5", "x3", "openai", s0, "Vendor prompt: Piet Smit, CEO of Railco. Piet Smit again."),
+  run("a6", "x3", "gemini", s0, "Piet Smit, CEO of Railco."),
+  run("a7", "x4", "openai", s0, "Omar Haddad, head of digital, and Rina Okafor, CEO of Ledgerline."),
+  run("a8", "x5", "openai", s0, "Piet Smit, CEO of Railco. Mia Chen, CTO."),
+  run("a9", "x5", "gemini", s0, "Mia Chen, CTO of Railco."),
+  run("b1", "x1", "claude", s0, "Mia Chen, CTO of Railco."),
+  run("b2", "x1", "claude", s1, "No names here."),
+  run("b3", "x1", "claude", s1, "Nothing either.", [], "failed"),
+  run("c1", "x2", "gemini", s0, "Mia Chen, CTO of Railco.", [], "failed"),
+  run("c2", "x2", "gemini", s0, "Mia Chen, CTO of Railco."),
+];
+const trackedEnts: Entity[] = [{ id: "p", kind: "self", subject: "person", name: "Shashi Pal", aliases: ["Shashi Pal"], domains: [] }, { id: "r", kind: "competitor", subject: "person", name: "Rina Okafor", aliases: ["Rina Okafor"], domains: [] }];
+const sug = suggestPeerExperts(sr, sq, trackedEnts);
+eq("ranked by answers, then AI tools; tracked, vendor, archived, failed and one-offs left out", sug.map((x) => [x.name, x.answers, x.engines]), [["Omar Haddad", 4, ["openai", "gemini", "claude"]], ["Lena Vogel", 2, ["gemini", "claude"]]]);
+eq("the prompt's own name is not suggested from it", sug[0].answers, 4);
+eq("dismissed names are left out, any case", suggestPeerExperts(sr, sq, trackedEnts, ["omar  haddad"]).map((x) => x.name), ["Lena Vogel"]);
+eq("min and limit", [suggestPeerExperts(sr, sq, trackedEnts, [], { min: 1 }).map((x) => x.name), suggestPeerExperts(sr, sq, trackedEnts, [], { min: 1, limit: 1 }).length], [["Omar Haddad", "Lena Vogel", "Mia Chen"], 1]);
+eq("a suggested row already stored is not offered twice", suggestPeerExperts(sr, sq, [...trackedEnts, { name: "Lena Vogel", aliases: ["Lena Vogel"] }]).map((x) => x.name), ["Omar Haddad"]);
+eq("majority of repeats: one of two repeats is not enough", suggestPeerExperts([run("m1", "x1", "openai", s0, "Ana Ruiz, CEO of Coinrail."), run("m2", "x1", "openai", s1, "No one."), run("m3", "x2", "openai", s0, "Ana Ruiz, CEO of Coinrail.")], sq, []).map((x) => x.name), []);
+const sql25 = readFileSync(new URL("../db/025_citations_backlog.sql", import.meta.url), "utf8");
+eq("025 adds dismissed_peers, re-runnable, deletes nothing", [/add column if not exists dismissed_peers text\[\]/.test(sql25), /\b(delete|drop table|truncate)\b/i.test(sql25)], [true, false]);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -1,13 +1,15 @@
 "use client";
 // Shared AI citations parts: the card, empty state and status marks, and the tracked names manager (edit the person
 // and company, add and remove peer firms and peer experts) with its side panel, remove confirm and Undo toasts.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { useCitationScope } from "@/lib/citation-profile";
-import { withProfile, type Entity } from "@/lib/citations";
+import { ProviderLogo } from "@/components/provider-mark";
+import { providerName } from "@/lib/providers";
+import { withProfile, suggestPeerExperts, type Entity, type Run, type Question, type PeerSuggestion } from "@/lib/citations";
 import s from "./citations.module.css";
 
 export const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
@@ -168,9 +170,66 @@ function summary(e: Entity) {
   return [others.length ? `Also ${others.join(", ")}` : "", e.domains.join(", ")].filter(Boolean).join(" · ") || "No sites yet";
 }
 
-/** The tracked names, grouped. Company view shows the company and peer firms; Competitors shows all four. */
-export function TrackedNames({ ents, pools, editable, id, className }: { ents: EntRow[]; pools: Pool[]; editable: boolean; id?: string; className?: string }) {
+// ---------------- suggested peer experts (AC15) ----------------
+export type Peers = { list: PeerSuggestion[]; dismiss: (name: string) => void };
+const NONE: string[] = [];
+/** People the AI names most on expert and leadership prompts who are not tracked yet. Dismissed names are kept on the
+ *  tracked profile (db/025); before 025 runs, or without a profile, a dismissal lasts until the page reloads. */
+export function usePeerSuggestions(runs: Run[], qs: Question[], ents: Entity[]): Peers {
+  const prof = useCitationScope();
   const toast = useToast();
+  const [hidden, setHidden] = useState<string[]>([]);
+  const stored = prof.current?.dismissed_peers ?? NONE;
+  const list = useMemo(() => suggestPeerExperts(runs, qs, ents, [...stored, ...hidden]), [runs, qs, ents, stored, hidden]);
+  const pid = prof.current?.id, reload = prof.reload;
+  async function save(next: string[]) {
+    if (!pid) return "no profile";
+    const { error } = await supabase().from("citation_profiles").update({ dismissed_peers: next }).eq("id", pid);
+    if (!error) reload();
+    return error?.message;
+  }
+  function dismiss(name: string) {
+    setHidden((h) => [...h, name]); haptic();
+    const before = stored;
+    save([...new Set([...stored, name])]).then((err) => toast(err ? `${name} hidden until the page reloads` : `${name} dismissed`, async () => {
+      setHidden((h) => h.filter((x) => x !== name));
+      if (!err) await save(before.filter((x) => x !== name));
+    }));
+  }
+  return { list, dismiss };
+}
+
+function SuggestedPeer({ p, full, editable, onApprove, onDismiss }: { p: PeerSuggestion; full: boolean; editable: boolean; onApprove: () => void; onDismiss: () => void }) {
+  const tools = p.engines.map((e) => providerName(e, true)).join(", ");
+  return (
+    <div className={cx(s.row, "bg-[#fafafa]")}>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{p.name}</span><span className={cx(s.pill, s.pLine)}>Suggested</span></div>
+        <div className={cx(s.small, "mt-1 flex flex-wrap items-center gap-x-2 gap-y-1")}>
+          <span className={s.tnum}>Named in {p.answers} answers</span>
+          <span className="inline-flex items-center gap-1" title={tools} aria-label={`on ${tools}`}>{p.engines.map((e) => <ProviderLogo key={e} id={e} size={12} />)}</span>
+        </div>
+      </div>
+      {editable && <div className="flex shrink-0 gap-1">
+        <button className={cx(s.btn, s.sm)} disabled={full} title={full ? `Up to ${MAX_PEERS} peer experts` : undefined} onClick={onApprove} aria-label={`Approve ${p.name}`}>Approve</button>
+        <button className={cx(s.btn, s.ghost, s.sm)} onClick={onDismiss} aria-label={`Dismiss ${p.name}`}>Dismiss</button>
+      </div>}
+    </div>
+  );
+}
+
+/** The tracked names, grouped. Company view shows the company and peer firms; Competitors shows all four. Suggested
+ *  peer experts show under Peer experts, or in their own card where the experts pool is not shown. */
+export function TrackedNames({ ents, pools, editable, id, className, peers }: { ents: EntRow[]; pools: Pool[]; editable: boolean; id?: string; className?: string; peers?: Peers }) {
+  const toast = useToast();
+  const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
+  async function approve(p: PeerSuggestion) {
+    const { data, error } = await supabase().from("citation_entities").insert(withProfile({ workspace_id: ws.id, kind: "competitor", subject: "person", status: "active", name: p.name, aliases: [p.name], domains: [], sort: Date.now() % 100000 }, scope)).select("id").single();
+    if (error) { toast(error.message); return; }
+    haptic();
+    toast(`${p.name} is now a peer expert`, async () => { await supabase().from("citation_entities").delete().eq("id", data.id); });
+  }
   const [panel, setPanel] = useState<{ pool: Pool; e: EntRow | null } | null>(null);
   const [gone, setGone] = useState<EntRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -190,9 +249,10 @@ export function TrackedNames({ ents, pools, editable, id, className }: { ents: E
     if (error) { toast(error.message); return; }
     haptic(); toast(status === "active" ? `${e.name} is now tracked` : `${e.name} back in suggestions`, () => { supabase().from("citation_entities").update({ status: status === "active" ? "suggested" : "active" }).eq("id", e.id).then(); });
   }
-  const groups: { title: string; pools: Pool[] }[] = [];
+  const groups: { title: string; pools: Pool[]; only?: boolean }[] = [];
   if (pools.includes("person") || pools.includes("company")) groups.push({ title: "Tracked", pools: pools.filter((p) => p === "person" || p === "company") });
   pools.filter((p) => p === "firms" || p === "experts").forEach((p) => groups.push({ title: p === "firms" ? "Peer firms" : "Peer experts", pools: [p] }));
+  if (!pools.includes("experts") && peers?.list.length) groups.push({ title: "Suggested peer experts", pools: ["experts"], only: true });
   return (
     <div id={id} className={cx("grid items-start gap-4", className)}>
       {groups.map((g) => {
@@ -200,6 +260,13 @@ export function TrackedNames({ ents, pools, editable, id, className }: { ents: E
         const rows = g.pools.flatMap((p) => members(p).map((e) => ({ p, e })));
         const tracked = rows.filter((r) => r.e.status !== "suggested"), suggested = rows.filter((r) => r.e.status === "suggested");
         const full = peer && tracked.length >= MAX_PEERS;
+        const offered = g.pools[0] === "experts" ? peers?.list ?? [] : [];
+        if (g.only) return (
+          <Card key={g.title} title={g.title} meta={`${tracked.length} of ${MAX_PEERS} tracked`}>
+            <p className={cx(s.small, "px-[18px] pb-2")}>Named most often on expert and leadership prompts. Not tracked until approved.</p>
+            <div className={s.rows}>{offered.map((p) => <SuggestedPeer key={p.name} p={p} full={full} editable={editable} onApprove={() => approve(p)} onDismiss={() => peers?.dismiss(p.name)} />)}</div>
+          </Card>
+        );
         return (
           <Card key={g.title} title={g.title} meta={peer ? `${tracked.length} of ${MAX_PEERS}` : undefined}
             action={peer && editable ? <button className={cx(s.btn, s.sm)} disabled={full} title={full ? `Up to ${MAX_PEERS} keeps the comparison readable` : undefined} onClick={() => setPanel({ pool: g.pools[0], e: null })}>{g.pools[0] === "firms" ? "Add peer firm" : "Add peer expert"}</button> : undefined}>
@@ -216,13 +283,14 @@ export function TrackedNames({ ents, pools, editable, id, className }: { ents: E
                   </div>}
                 </div>
               ))}
-              {!tracked.length && <Empty title={g.pools[0] === "firms" ? "No peer firms" : g.pools[0] === "experts" ? "No peer experts" : "Nothing tracked"} body={g.pools[0] === "experts" ? "Add the people buyers might hear from instead. Prax never guesses names." : g.pools[0] === "firms" ? "Add the firms buyers compare you with. Gaps and rank need at least one." : undefined} />}
+              {!tracked.length && <Empty title={g.pools[0] === "firms" ? "No peer firms" : g.pools[0] === "experts" ? "No peer experts" : "Nothing tracked"} body={g.pools[0] === "experts" ? (offered.length ? "Approve a suggestion below, or add someone by hand." : "Add the people buyers might hear from instead. Suggestions appear here once answers name the same person twice.") : g.pools[0] === "firms" ? "Add the firms buyers compare you with. Gaps and rank need at least one." : undefined} />}
               {suggested.map(({ e }) => (
                 <div key={e.id} className={cx(s.row, "bg-[#fafafa]")}>
                   <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="font-semibold">{e.name}</span><span className={cx(s.pill, s.pLine)}>Suggested</span></div><div className={cx(s.small, "mt-0.5 truncate")}>Not tracked until approved</div></div>
                   {editable && <div className="flex shrink-0 gap-1"><button className={cx(s.btn, s.sm)} disabled={full} onClick={() => setStatus(e, "active")}>Approve</button><button className={cx(s.btn, s.ghost, s.sm)} onClick={() => setGone(e)}>Dismiss</button></div>}
                 </div>
               ))}
+              {offered.map((p) => <SuggestedPeer key={p.name} p={p} full={full} editable={editable} onApprove={() => approve(p)} onDismiss={() => peers?.dismiss(p.name)} />)}
             </div>
           </Card>
         );

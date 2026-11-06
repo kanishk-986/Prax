@@ -534,6 +534,82 @@ export function keywordStats(runs: Run[], questions: Question[], person: Entity 
   return [...by.entries()].map(([keyword, v]) => ({ keyword, ...v })).sort((a, b) => b.prompts - a.prompts || a.keyword.localeCompare(b.keyword));
 }
 
+// ---------- suggested peer experts (AC15) ----------
+// After runs, the people the AI names most often on expert and leadership prompts, and who are not tracked yet, are
+// offered as Suggested peer experts. A name counts only as a full name (two or three capitalised words) set right
+// beside a role: "Rina Okafor, CEO of Ledgerline", "Rina Okafor (co-founder)", "CEO Rina Okafor", "Dr Rina Okafor",
+// "Rina Okafor is the head of". A first or last name alone, a name with no role beside it, and anything that reads
+// like a firm or a place never counts. Prax only proposes: nothing is tracked until someone approves it.
+const NAME_TOKEN = "\\p{Lu}(?:['\u2019]\\p{Lu})?\\p{Ll}+(?:\\p{Lu}\\p{Ll}+)?(?:-\\p{Lu}\\p{Ll}+)*";
+const PARTICLES = ["bin", "bint", "al", "el", "van", "von", "de", "da", "del", "der", "di", "du", "le", "la"];
+const NAME_RUN = new RegExp(`(?<![\\p{L}\\p{N}])${NAME_TOKEN}(?:[ \\t]+(?:(?:${PARTICLES.join("|")})[ \\t]+)?(?:\\p{Lu}\\.[ \\t]*)?${NAME_TOKEN}){1,5}(?![\\p{L}\\p{N}])`, "gu");
+const ROLE_WORDS = "co-?founder|founder|ceo|cto|cfo|coo|cio|cso|cmo|cpo|chief|head|partner|director|president|chair(?:man|woman|person)?|governor|minister|professor|analyst|economist|author|researcher|vp|executive|adviser|advisor|investor|entrepreneur|strategist|officer|lead|leader|manager|commissioner|secretary|ambassador|scientist|fellow|editor|journalist|specialist|principal";
+const HONORIFICS = "dr|prof|mr|mrs|ms|sir|dame|sheikh|sheikha";
+const ROLE_AFTER = new RegExp(`^\\s*(?:,|\\(|[\u2013\u2014-]|:|is|was|serves as|who is|who leads|who heads|who runs)\\s*(?:(?:the|a|an|its|their|former|current)\\s+)?(?:[\\p{L}&.'\u2019-]+\\s+){0,3}?(?:${ROLE_WORDS})(?![\\p{L}])`, "iu");
+const ROLE_BEFORE = new RegExp(`(?<![\\p{L}])(?:${ROLE_WORDS}|${HONORIFICS})\\.?\\s*,?\\s*$`, "iu");
+const HON_SET = new Set(HONORIFICS.split("|"));
+// Role words, sentence starters and words that belong to firms, bodies and places end (or open) a run of capitalised
+// words, so "Standard Chartered CEO Bill Winters" yields only Bill Winters.
+const NOT_NAME = new Set(("ceo cto cfo coo cio cso cmo cpo chief head founder cofounder co-founder partner director president chairman chairwoman chairperson chair governor minister professor analyst economist author researcher vp executive adviser advisor investor entrepreneur strategist officer lead leader manager commissioner secretary ambassador scientist fellow editor journalist specialist principal managing senior deputy vice general " +
+  "the a an in at for of on by to from with and or but this that these those his her their our its some many most other both key top major leading notable also several according while when where which who as if after before during since under over read see note sources source why how what yes no here there then today " +
+  "bank banks capital group labs lab inc ltd llc plc partners ventures holdings solutions technologies technology tech network foundation exchange authority association council institute university college school fund forum markets market finance financial digital " +
+  "global regional international asia asian africa african europe european america american arabia arab emirates kingdom dubai dhabi abu saudi qatar bahrain kuwait oman india indian singapore london street coin chain pay payments protocol blockchain crypto ledger web monetary central reserve federal national royal " +
+  "ministry department office agency commission board committee services service systems system platform company corporation corp media news journal times review report insights research consulting advisory union east west north south middle new united world economic trade").split(/\s+/));
+const isInitial = (t: string) => /^\p{Lu}\.$/u.test(t);
+const nameTokens = (n: string) => n.split(/\s+/).filter((t) => !PARTICLES.includes(t) && !isInitial(t));
+
+/** Full names set beside a role in one answer, in the order they appear. */
+export function peopleIn(answer: string): string[] {
+  const text = answer.replace(/[*_#`]/g, "");
+  const out: string[] = [];
+  for (const m of text.matchAll(NAME_RUN)) {
+    const parts = [...m[0].matchAll(/\S+/g)].map((p) => ({ t: p[0], low: p[0].toLowerCase(), at: (m.index ?? 0) + (p.index ?? 0) }));
+    let i = 0, honorific = false;
+    while (i < parts.length && (NOT_NAME.has(parts[i].low) || HON_SET.has(parts[i].low))) { if (HON_SET.has(parts[i].low)) honorific = true; i++; }
+    let j = i;
+    while (j < parts.length && !NOT_NAME.has(parts[j].low) && !HON_SET.has(parts[j].low)) j++;
+    const kept = parts.slice(i, j);
+    while (kept.length && (PARTICLES.includes(kept[kept.length - 1].t) || isInitial(kept[kept.length - 1].t))) kept.pop();
+    const name = kept.map((p) => p.t).join(" ");
+    const n = nameTokens(name).length;
+    if (n < 2 || n > 3) continue;
+    const start = kept[0].at, end = kept[kept.length - 1].at + kept[kept.length - 1].t.length;
+    const lineStart = Math.max(text.lastIndexOf("\n", start - 1), text.lastIndexOf(". ", start - 1) + 1, 0);
+    const before = text.slice(Math.max(lineStart, start - 48), start);
+    const after = text.slice(end).replace(/^['\u2019]s(?![\p{L}])/u, "").split(/[\n!?]|\.(?:\s|$)/)[0].slice(0, 120);
+    if (honorific || ROLE_BEFORE.test(before) || ROLE_AFTER.test(after)) out.push(name);
+  }
+  return out;
+}
+
+export type PeerSuggestion = { name: string; answers: number; engines: Engine[] };
+/** Each prompt and AI tool counts once (its latest batch, named in more than half of the usable repeats). Names already
+ *  tracked, suggested or dismissed, the profile's own person and names written into the prompt are left out. Most
+ *  named first, then on more AI tools, then by name; at least `min` answers. */
+export function suggestPeerExperts(runs: Run[], questions: Question[], tracked: Pick<Entity, "name" | "aliases">[], dismissed: string[] = [], opts: { min?: number; limit?: number } = {}): PeerSuggestion[] {
+  const { min = 2, limit = 8 } = opts;
+  const key = (x: string) => x.trim().toLowerCase().replace(/\s+/g, " ");
+  const known = new Set([...tracked.flatMap((e) => [e.name, ...e.aliases]), ...dismissed].map(key).filter(Boolean));
+  const qs = new Map(questions.filter((q) => q.status === "active" && audienceOf(q) !== "vendor").map((q) => [q.id, q]));
+  const by = new Map<string, { name: string; answers: number; engines: Set<Engine> }>();
+  latestBatches(runs).forEach(({ now }, k) => {
+    const q = qs.get(k.split("|")[0]);
+    if (!q) return;
+    const usable = now.filter((r) => r.status !== "failed");
+    if (!usable.length) return;
+    const tally = new Map<string, { name: string; n: number }>();
+    for (const r of usable) for (const name of new Set(peopleIn(r.answer))) { const t = tally.get(key(name)) ?? { name, n: 0 }; t.n++; tally.set(key(name), t); }
+    tally.forEach(({ name, n }, id) => {
+      if (n * 2 <= usable.length || known.has(id) || findMatches(q.question, [name]).length) return;
+      const e = by.get(id) ?? { name, answers: 0, engines: new Set<Engine>() };
+      e.answers++; e.engines.add(now[0].engine); by.set(id, e);
+    });
+  });
+  return [...by.values()].filter((e) => e.answers >= min)
+    .sort((a, b) => b.answers - a.answers || b.engines.size - a.engines.size || a.name.localeCompare(b.name))
+    .slice(0, limit).map((e) => ({ name: e.name, answers: e.answers, engines: ENGINES.map((x) => x.id).filter((id) => e.engines.has(id)) }));
+}
+
 // ---------- weeks and trend ----------
 /** Monday (local) of the week a date falls in, as YYYY-MM-DD. */
 export function weekStartOf(d: Date | string) {
@@ -611,7 +687,7 @@ export function gapTopic(g: PromptGap, first = "the profile") {
 // A workspace can track several people, each with their company and LinkedIn profile. A profile holds its own
 // entities, prompts, runs, facts, recommendations, prompt groups and share links. Each user picks the one they look
 // at; a pick that is gone or archived falls back to the first live profile.
-export type Profile = { id: string; name: string; archived_at: string | null; sort: number; created_at: string };
+export type Profile = { id: string; name: string; archived_at: string | null; sort: number; created_at: string; dismissed_peers?: string[] | null };
 /** Matches no row: what queries use when profiles exist but none is live, so nothing from another profile shows. */
 export const NO_PROFILE = "00000000-0000-0000-0000-000000000000";
 

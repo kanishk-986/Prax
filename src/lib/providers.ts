@@ -6,7 +6,7 @@
 // - Name: the full name ("Anthropic Claude", "OpenAI ChatGPT", "Google Gemini", "Perplexity") in rows, pickers
 //   and key windows; the short name ("Claude", "ChatGPT", "Gemini", "Perplexity") in dense cells, logs and legends.
 // - Logo: the unaltered mark in its brand colour on light surfaces, in white on dark surfaces. 16px beside a row
-//   name, 14px inline in tables and logs. The PDF uses names only.
+//   name, 14px inline in tables and logs. The PDF report draws the same paths beside the names (src/lib/pdf.ts).
 // - Key state in plain words with a dot: "Connected in this browser" or "No key in this browser". A key is never
 //   shown back; at most "Saved ····".
 
