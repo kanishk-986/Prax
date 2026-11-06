@@ -375,11 +375,11 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 
 | C1 | Connections section: 20 to 25 tools by section, tool pages with connect, usage by section, routes, caps; replaces Extension; scattered key forms removed | 7 Nov Q135 to Q141 | In progress |
 | T1 | Prax hidden from Google (noindex, robots) | 7 Nov Q142 | Not started |
-| T2 | Invite-only access: owner invites by email in Settings → Team; sign-up off | 7 Nov Q143 | Not started (SMTP needs user action) |
+| T2 | Invite-only access: owner adds email in Settings → Team, copies the invite link; sign-up off | 7 Nov Q143 | Not started |
 | T3 | Private demo copy per tester; Shashi workspace owner-only (RLS verified) | 7 Nov Q144 | Not started |
 | T4 | "Set up my own profile" wizard and workspace switcher | 7 Nov Q145 | Not started |
 | T5 | Tours in every section, replay from "?" | 7 Nov Q146 | Not started |
 | T6 | In-app searchable Guide, one page per section, screenshots, PDF download | 7 Nov Q147 | Not started |
 | T7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
 | T8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
-| T9 | Premium invite and auth emails (Resend on a Prax domain), Join Prax page, welcome email | 7 Nov Q150 to Q153 | Not started (domain needs owner action) |
+| T9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |

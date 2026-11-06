@@ -680,3 +680,9 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Q152: same design for reset, email change, plus one welcome email (three first steps, Guide link). Nothing else.
 - Q153: the invite link opens a login-style "Join Prax" page showing the inviter, with password and confirm, then lands in the tester's demo copy with the first tour. Expired or used links get a clear page, not an error.
 - Before live: test invites screenshotted in Gmail web and phone, Outlook, dark mode.
+
+## Free tier only during the proof of concept (7 Nov 2026)
+
+- Prax is a proof of concept: no domain, no paid services until the owner decides to invest. Everything must work on free tiers (Vercel Hobby, Supabase Free); paid tools in Connections stay optional, bring-your-own-key.
+- Replaces Q150: no Resend or custom domain. Supabase's built-in email only sends to members of the project's own team, so it can't reach testers. Invites therefore work by **Copy invite link**: the owner adds the tester's email in Settings → Team, Prax creates the account server-side (Supabase admin generateLink, type invite), and shows a one-time link the owner copies and sends on WhatsApp or by email themselves. The link opens the premium "Join Prax" page (Q153 unchanged).
+- The premium email templates (Q151, Q152) are designed and saved in the repo, ready to switch on when a domain exists. Not sent now.
