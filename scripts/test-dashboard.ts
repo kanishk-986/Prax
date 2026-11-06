@@ -2,7 +2,7 @@
 // agenda grouping, the row action, Needs you ranking and the copy helpers. Run: node scripts/test-dashboard.ts
 import {
   plusDays, mondayOf, daysBetween, SKIP, isSkipped, skipNote, unskipNote, progressOf, deltaOf, weekOverWeek, dailySeries, countAt,
-  groupOf, typeLabel, agenda, primaryAction, commentDays, weeklyCommentTarget, prefillToday, pageName, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder, collapseActivity, firstName, greeting,
+  groupOf, typeLabel, agenda, primaryAction, commentDays, weeklyCommentTarget, prefillToday, pageName, urgency, rankNeeds, whenLabel, weekSentence, relTime, countBetween, pointsDelta, settleOrder, collapseActivity, firstName, greeting, activitySentence, activityFeed, postTiming, dubaiNow,
 } from "../src/lib/dashboard.ts";
 
 let fails = 0;
@@ -211,6 +211,51 @@ eq("no quota, no target", weeklyCommentTarget(0), 0);
   eq("the workspace root is the Dashboard", pageName("/w/s", "s", nav), "Dashboard");
   eq("outside links stay as they are", pageName("https://www.linkedin.com/feed/", "s", nav), "https://www.linkedin.com/feed/");
   eq("empty stays empty", pageName("", "s", nav), "");
+}
+
+// ---------- D5: activity as sentences ----------
+{
+  const t = (kind: string, label: string) => activitySentence({ kind, label });
+  eq("accepted request is a win", [t("stage", "Thomas Pinter → Connected").text, t("stage", "Thomas Pinter → Connected").win], ["Thomas Pinter accepted your connection request", true]);
+  eq("call booked is a win", t("stage", "Hessa Al Marri → Call booked").text, "Hessa Al Marri booked a call with you");
+  eq("parked is not a win", [t("stage", "Omar Saleh → Parked").text, t("stage", "Omar Saleh → Parked").win], ["You parked Omar Saleh for now", false]);
+  eq("a custom stage", t("stage", "Ana Ruiz → Pilot").text, "Ana Ruiz moved to Pilot");
+  eq("signed is a win", t("stage", "Ana Ruiz → Signed").win, true);
+  eq("their reply is a win", [t("reply", "Hessa Al Marri replied").text, t("reply", "Hessa Al Marri replied").win], ["Hessa Al Marri replied to your comment", true]);
+  eq("a logged comment names the person", t("comment", "Commented on Arjun Mehta").text, "You commented on Arjun Mehta's post");
+  eq("possessive of a name ending in s", t("comment", "Commented on James").text, "You commented on James' post");
+  eq("a Today comment tick with a person", t("comment", "Comment on Daniel Okafor's latest post").text, "You commented on Daniel Okafor's post");
+  eq("a Today comment tick without a title", [t("comment", "comment").text, t("comment", "comment").detail], ["You left a comment", ""]);
+  eq("a request tick", t("request", "Send Rania Khoury, Qasr Digital Bank, a connection request").text, "You sent Rania Khoury a connection request");
+  eq("a message tick", t("dm", "Message Arjun Mehta: share the note").text, "You messaged Arjun Mehta");
+  eq("a reply round", t("reply", "reply").text, "You answered the comments on your post");
+  eq("a custom task keeps its title as detail", [t("custom", "Pitch the panel").text, t("custom", "Pitch the panel").detail], ["You finished a task on Today", "Pitch the panel"]);
+  const feed = activityFeed([
+    { kind: "comment", label: "Commented on Daniel Okafor" }, { kind: "comment", label: "comment" },
+    { kind: "comment", label: "Commented on Hessa Al Marri" }, { kind: "comment", label: "comment" },
+    { kind: "stage", label: "Hessa Al Marri → Connected" }, { kind: "stage", label: "Hessa Al Marri → Connected" },
+    { kind: "request", label: "request" },
+  ]);
+  eq("a logged comment and its tick count once", [feed[0].text, feed[0].count, feed[0].detail], ["You commented on 2 posts", 2, "Daniel Okafor, Hessa Al Marri"]);
+  eq("identical stage rows show once", [feed[1].text, feed.length], ["Hessa Al Marri accepted your connection request", 3]);
+  eq("a single row keeps its sentence", feed[2].text, "You sent a connection request");
+  eq("one comment logged and ticked reads as one", activityFeed([{ kind: "comment", label: "Commented on Ann Lee" }, { kind: "comment", label: "comment" }])[0].text, "You commented on Ann Lee's post");
+}
+
+// ---------- T6: post reminders at the planned time ----------
+{
+  const p = (d: string | null, time: string, status = "Ready") => ({ status, publish_date: d, planned_time: time });
+  const now = { day: T, hm: "09:00" };
+  eq("at its time it is due now", postTiming(p(T, "09:00"), now), "now");
+  eq("ten minutes before is soon", postTiming(p(T, "09:10"), now), "soon");
+  eq("an hour before is later", postTiming(p(T, "10:00"), now), "later");
+  eq("within the hour after is still now", postTiming(p(T, "08:00"), now), "now");
+  eq("more than an hour after is late", postTiming(p(T, "07:30"), now), "late");
+  eq("an earlier day is late", postTiming(p("2026-11-05", "18:00"), now), "late");
+  eq("no time set is dated", postTiming(p(T, ""), now), "dated");
+  eq("posted is done", postTiming(p(T, "09:00", "Posted"), now), "done");
+  eq("on hold is done", postTiming(p(T, "09:00", "On hold"), now), "done");
+  eq("Dubai clock is UTC+4", dubaiNow(new Date("2026-11-06T22:30:00Z")), { day: "2026-11-07", hm: "02:30" });
 }
 
 console.log(fails ?`\n${fails} failed` : "\nall passed");

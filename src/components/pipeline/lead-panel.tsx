@@ -1,7 +1,9 @@
 "use client";
 // The lead panel: the next action and its buttons first, then the stage bar with days per stage, then
-// collapsible sections. Full view widens it with every section open. Nothing here sends anything on LinkedIn.
+// collapsible sections. Full view opens the lead page (/pipeline/[id]), which shows the same parts in the same
+// order with every section open. Nothing here sends anything on LinkedIn.
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { X, ExternalLink, Check } from "lucide-react";
 import { useWorkspace, useSegments, today as todayYmd } from "@/lib/workspace";
 import { companyOf, whoLine } from "@/lib/persona";
@@ -20,15 +22,16 @@ const ago = (iso: string, t: string) => {
 const SECS = ["timeline", "warm", "plan", "heat", "notes", "msg", "details"] as const;
 type Sec = (typeof SECS)[number];
 
-export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialogOpen, logged }: {
+export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialogOpen, logged, page = false }: {
   lead: Prospect; pipe: Pipeline; info?: LeadInfo; data: PipelineData; api: PipelineApi; onMove: (to: string) => void; onClose: () => void; dialogOpen: boolean; logged: number;
+  /** The full lead page: inline instead of a side panel, the name in the page header, every section open. */
+  page?: boolean;
 }) {
   const segs = useSegments();
   const { ws, can } = useWorkspace();
   const editable = can("editor");
   const toast = useToast();
   const t = todayYmd();
-  const [wide, setWide] = useState(false);
   const [open, setOpen] = useState<Partial<Record<Sec, boolean>>>({});
   const [detail, setDetail] = useState<LeadDetail | null>(null);
   const [draft, setDraft] = useState("");
@@ -40,9 +43,10 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
   useEffect(() => { setDetail(null); setDraft(""); setOpen({}); setNotes(lead.notes ?? ""); }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { reload(); }, [lead.id, logged]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
+    if (page) return;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !dialogOpen) onClose(); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
-  }, [onClose, dialogOpen]);
+  }, [onClose, dialogOpen, page]);
 
   const closed = isClosed(pipe, lead.stage);
   const next = stepStage(pipe, lead.stage, 1);
@@ -123,16 +127,18 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
 
   const lostLine = lead.stage === pipe.lost_stage && lead.lost_reason ? `${pipe.lost_stage}: ${lead.lost_reason}` : "";
   const tone = dueTone(lead.next_date, t);
+  const Wrap = page ? "div" : "aside";
   return (
     <>
-      <div className="fixed inset-0 z-[54] bg-[rgba(20,20,20,.22)]" onClick={onClose} />
-      <aside role="dialog" aria-label={lead.name} className={`pl-slide fixed inset-y-0 right-0 z-[55] flex flex-col gap-[18px] overflow-y-auto bg-white px-6 py-[22px] shadow-[-12px_0_30px_rgba(20,20,20,.12)] transition-[width] duration-200 max-sm:px-4 ${wide ? "w-[min(860px,100vw)]" : "w-[min(480px,100vw)]"}`}>
-        <span className="flex items-start gap-3">
+      {!page && <div className="fixed inset-0 z-[54] bg-[rgba(20,20,20,.22)]" onClick={onClose} />}
+      <Wrap role={page ? undefined : "dialog"} aria-label={page ? undefined : lead.name} className={page ? "flex flex-col gap-[18px] rounded-2xl border border-line bg-white px-6 py-[22px] max-sm:px-4"
+        : "pl-slide fixed inset-y-0 right-0 z-[55] flex w-[min(480px,100vw)] flex-col gap-[18px] overflow-y-auto bg-white px-6 py-[22px] shadow-[-12px_0_30px_rgba(20,20,20,.12)] max-sm:px-4"}>
+        {!page && <span className="flex items-start gap-3">
           <span className="flex min-w-0 flex-1 flex-col gap-[3px]"><span className="text-page font-semibold">{lead.name}</span><span className="text-body text-muted">{[lead.role, lead.company].filter(Boolean).join(" · ") || "No role or company"}</span></span>
           {lead.linkedin && <a href={lead.linkedin} target="_blank" rel="noopener" className="btn h-8! w-8! shrink-0 p-0!" aria-label="Open LinkedIn profile"><ExternalLink size={14} /></a>}
-          <button type="button" className="btn h-8! shrink-0 whitespace-nowrap px-2.5! text-meta font-semibold max-sm:hidden!" onClick={() => setWide(!wide)}>{wide ? "Side view" : "Full view"}</button>
+          <Link href={`/w/${ws.slug}/pipeline/${lead.id}`} className="btn h-8! shrink-0 whitespace-nowrap px-2.5! text-meta font-semibold">Full view</Link>
           <button type="button" className="btn h-8! w-8! shrink-0 p-0!" onClick={onClose} aria-label="Close"><X size={14} /></button>
-        </span>
+        </span>}
 
         <div className="flex flex-col gap-2.5 rounded-[14px] bg-[#f7f7f7] p-[18px]">
           <span className="text-meta font-semibold text-muted">Next action</span>
@@ -159,15 +165,16 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
 
         <div className="flex flex-col border-t border-[#ececec]">
           {SECS.map((k) => {
-            const o = wide || !!open[k];
+            const o = page || !!open[k];
             return (
               <div key={k} className="border-b border-[#ececec]">
+                {page ? <h2 className="flex min-h-[46px] items-center gap-2.5 px-1.5 text-body font-semibold">{LABEL[k]}<span className="ml-auto max-w-[60%] truncate text-meta font-normal text-muted">{summary[k]}</span></h2> : (
                 <button type="button" aria-expanded={o} onClick={() => setOpen({ ...open, [k]: !open[k] })} className="pl-quiet flex min-h-[46px] w-full items-center gap-2.5 rounded-md px-1.5 text-left">
                   <svg className={`pl-chev shrink-0 ${o ? "rotate-90" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f5f5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
                   <span className="text-body font-semibold">{LABEL[k]}</span>
                   <span className="ml-auto max-w-[60%] truncate text-meta text-muted">{summary[k]}</span>
-                </button>
-                {o && <div className="flex flex-col gap-2.5 pb-4 pl-[30px] pr-1.5 pt-0.5">
+                </button>)}
+                {o && <div className={`flex flex-col gap-2.5 pb-4 pr-1.5 pt-0.5 ${page ? "pl-1.5" : "pl-[30px]"}`}>
                   {k === "timeline" && (!detail ? <span className="h-16 animate-pulse rounded-lg bg-surface-2" /> : (
                     <ol className="ml-1 flex flex-col border-l-2 border-[#ececec]">
                       {evs.map((e, i) => (
@@ -220,7 +227,7 @@ export function LeadPanel({ lead, pipe, info, data, api, onMove, onClose, dialog
           })}
         </div>
         {closed && lead.stage === pipe.won_stage && <span className="text-meta text-muted">Won. The next action stays on Today until you mark it done.</span>}
-      </aside>
+      </Wrap>
     </>
   );
 }

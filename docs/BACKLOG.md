@@ -17,10 +17,10 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | D1 | Command-centre Dashboard: greeting with the member's name, one sentence on the week, Needs you now ranked by urgency, recent activity, LinkedIn reach | 5 Nov 21:10 "do the 4 pointers"; Handoff "Dashboard and Today redesign" | Live |
 | D2 | Five headline tiles, including "named in X% of AI answers" with the week-on-week change | Q98 | Live |
 | D3 | Discovery Studio in "This week at a glance" and new Discovery topics in Needs you now | Q97 | Live |
-| D4 | "This week at a glance" without the repeated numbers (audit: it repeats the tiles) | Polish pass "Left for later"; 6 Nov 03:44 reply | Not started |
-| D5 | Activity rows written as sentences ("Alok commented on X's post"), not "Comment done" labels | Polish pass "Left for later" | Not started |
-| D6 | Hide the empty KPI row under the "Set up <name>'s profile" card on a new profile | Polish pass "Left for later" | Not started |
-| D7 | Bug: on the demo profile the Network glance line says "No LinkedIn export uploaded yet" although the demo has network data (`page.tsx` line 204 reads the import count, the seed writes people) | 6 Nov 04:24 live check, "I'll fix it in the next pass" | Not started |
+| D4 | "This week at a glance" without the repeated numbers (audit: it repeats the tiles) | Polish pass "Left for later"; 6 Nov 03:44 reply | Built not live (glance lines say what is next) |
+| D5 | Activity rows written as sentences ("Alok commented on X's post"), not "Comment done" labels | Polish pass "Left for later" | Built not live (activity as sentences, wins highlighted) |
+| D6 | Hide the empty KPI row under the "Set up <name>'s profile" card on a new profile | Polish pass "Left for later" | Built not live |
+| D7 | Bug: on the demo profile the Network glance line says "No LinkedIn export uploaded yet" although the demo has network data (`page.tsx` line 204 reads the import count, the seed writes people) | 6 Nov 04:24 live check, "I'll fix it in the next pass" | Built not live (count used a missing id column; fixed) |
 | D8 | LinkedIn MCP button: first removed (Q118), then put back at the user's request as "LinkedIn MCP" with the LinkedIn mark, no "Coming soon"; a click explains it is on the way | Q118; 6 Nov 03:37 "can we put only LinkedIn MCP button" | Live |
 | D9 | LinkedIn MCP that actually connects (read LinkedIn data through an MCP) | 6 Nov 01:12 Q121 "i want to make cis mcp etc in the future" | Not started |
 | D10 | Weekly report: one page covering posts, replies, stage moves, AI citations movement and next week's plan (step 4 "weekly report"; Claude's "Weekly review" suggestion) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Not started |
@@ -36,8 +36,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | T3 | A skip counts as cleared on Today but not as done on the Dashboard | Q96 | Live |
 | T4 | Rows filled with real people and posts (Pipeline Do next, Discovery LinkedIn findings, own posts) instead of "Comment 1: who or what" | Audit item 6 (Q117) | Live |
 | T5 | Campaign tasks on Today: comment tasks on target accounts' posts, weekly approval session, fast-response and event tasks, message tasks only after someone engages | Q51 to Q54 | Live |
-| T6 | Reminder on Today at a post's planned time | Q33 "plus a reminder on Today at the planned time" | Partly done: a post shows in the Due strip on its date; there is no reminder at the planned time |
-| T7 | Today ignores closed stages of custom pipelines (Signed, Committed, Delivered, Done, Passed, Declined); today it only excludes Won and Parked by name, so due check-ins on closed leads still show | 5 Nov 22:52 "small fix for later"; Handoff Pipeline section | Not started |
+| T6 | Reminder on Today at a post's planned time | Q33 "plus a reminder on Today at the planned time" | Built not live (Dubai-time reminder on Today) |
+| T7 | Today ignores closed stages of custom pipelines (Signed, Committed, Delivered, Done, Passed, Declined); today it only excludes Won and Parked by name, so due check-ins on closed leads still show | 5 Nov 22:52 "small fix for later"; Handoff Pipeline section | Built not live (all closed stages excluded) |
 | T8 | Weekly AI citations run reminder (once a week) | Q60 item 16 | Live |
 | T9 | First-hour block after posting (60 minutes, replies ready) | Q62 | Declined by user |
 
@@ -47,7 +47,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 |---|---|---|---|
 | P1 | No drag and drop; one screen with Do next (5 most urgent) and everyone grouped by stage | 5 Nov 17:55 "I do not want drag and drop"; Q36, Q101 | Live |
 | P2 | Lead panel: next action first with Done and Move to the next stage, then stage bar with days in stage, then timeline, warm path, touch plan, notes | Q36, Q105 | Live |
-| P3 | Full lead page opened from the panel | Q36 "the full lead page opens from it" | Partly done: "Full view" widens the side panel with every section open; there is no separate lead page or link to one |
+| P3 | Full lead page opened from the panel | Q36 "the full lead page opens from it" | Built not live (full lead page) |
 | P4 | Several pipelines per profile with templates (Outreach, Bank partners, Investors, Events and speakers, Blank); stage editor | Q37 | Live |
 | P5 | Activity timeline per lead, logged automatically | Q38.1 | Live |
 | P6 | Lead heat (hot, warm, cold dot; breakdown only in the panel) | Q38.2, Q103 | Live |
@@ -62,8 +62,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | P15 | Import from CSV or from Network | Q38.10 | Live |
 | P16 | Read-only Board view | Q104 | Declined by user (removed) |
 | P17 | Keyboard shortcuts to move stages, not shown on screen | Q36, Q106 | Live |
-| P18 | Remove Pipeline's repeated next-step sentence | Polish pass "Left for later" | Not started |
-| P19 | Account map as its own view (step 4); Claude said it would be built once inside Pipeline | Step 4 list; Q38 note | Partly done: only the Group by company toggle; no account map with contacts, warm paths and stage per bank |
+| P18 | Remove Pipeline's repeated next-step sentence | Polish pass "Left for later" | Built not live |
+| P19 | Account map as its own view (step 4); Claude said it would be built once inside Pipeline | Step 4 list; Q38 note | Built not live (account map) |
 
 ## Network
 

@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import {
   heatOf, doNext, moveGate, mapStage, daysPerStage, stepStage, planFor, dueText, newPipelineName, byCompany, avgDays,
+  isLeadClosed, openLeads, CLOSED_STAGE_NAMES, sharedNextStep, lastTouch, agoText, accountMap,
   TEMPLATES, OUTREACH_STAGES, FALLBACK_PIPELINE, type Pipeline,
 } from "../src/lib/pipeline.ts";
 
@@ -97,6 +98,46 @@ eq("average of none", avgDays([], "2026-11-06T10:00:00Z"), null);
 eq("due text", [dueText("2026-11-05", T), dueText("2026-11-03", T), dueText(T, T), dueText("2026-11-07", T), dueText(null, T)], ["1 day overdue", "3 days overdue", "Today", "Tomorrow", "No date"]);
 eq("later dates read as a day", dueText("2026-11-09", T), "Mon 9 Nov");
 eq("group by company, biggest first", byCompany([{ company: "B" }, { company: "A" }, { company: "B" }, { company: "" }]).map((g) => `${g.company}:${g.people.length}`), ["B:2", "A:1", "No company:1"]);
+
+// ---------- T7: closed stages of every pipeline stay off Today ----------
+const pipes = TEMPLATES.map((x, i) => ({ id: x.key, won_stage: x.won, lost_stage: x.lost, name: x.name, sort: i }));
+eq("every template's won and lost stage is a closed name", TEMPLATES.flatMap((x) => [x.won, x.lost]).every((s) => CLOSED_STAGE_NAMES.includes(s)), true);
+for (const s of ["Won", "Parked", "Signed", "Committed", "Delivered", "Done", "Passed", "Declined"]) eq(`${s} is closed`, isLeadClosed({ stage: s, pipeline_id: "outreach" }, pipes), true);
+eq("an open stage is open", isLeadClosed({ stage: "Pilot", pipeline_id: "banks" }, pipes), false);
+const custom = [...pipes, { id: "c", won_stage: "Live", lost_stage: "Lost", name: "Custom", sort: 9 }];
+eq("a custom pipeline's won stage is closed", isLeadClosed({ stage: "Live", pipeline_id: "c" }, custom), true);
+eq("a custom pipeline's lost stage is closed", isLeadClosed({ stage: "Lost", pipeline_id: "c" }, custom), true);
+eq("the same name is open in a pipeline where it is not flagged", isLeadClosed({ stage: "Live", pipeline_id: "banks" }, custom), false);
+eq("no pipeline id: the first pipeline's flags apply", isLeadClosed({ stage: "Target", pipeline_id: null }, pipes), false);
+eq("unknown pipeline: flagged closed anywhere counts", isLeadClosed({ stage: "Live", pipeline_id: "gone" }, custom), true);
+eq("before db/015 (fallback pipeline only)", [isLeadClosed({ stage: "Signed" }, [FALLBACK_PIPELINE]), isLeadClosed({ stage: "Call booked" }, [FALLBACK_PIPELINE])], [true, false]);
+eq("openLeads keeps only open leads", openLeads([{ id: 1, stage: "Signed", pipeline_id: "banks" }, { id: 2, stage: "Intro", pipeline_id: "investors" }, { id: 3, stage: "Passed", pipeline_id: "investors" }, { id: 4, stage: "Live", pipeline_id: "c" }], custom).map((l) => l.id), [2]);
+
+// ---------- P18: one shared next step per stage ----------
+eq("same step for everyone", sharedNextStep([{ next_action: "Comment on a recent post" }, { next_action: "comment on a recent post." }, { next_action: " Comment on a  recent post" }]), "Comment on a recent post");
+eq("one different step: none shared", sharedNextStep([{ next_action: "Comment on a recent post" }, { next_action: "Send the request" }]), null);
+eq("a single lead never shares", sharedNextStep([{ next_action: "Comment on a recent post" }]), null);
+eq("empty steps are not shared", sharedNextStep([{ next_action: "" }, { next_action: "" }]), null);
+eq("a missing step breaks it", sharedNextStep([{ next_action: "Call" }, { next_action: null }]), null);
+eq("ago text", [agoText(T, T), agoText("2026-11-05", T), agoText("2026-11-01", T)], ["today", "yesterday", "5 days ago"]);
+eq("ago text after a month names the day", agoText("2026-09-20", T).startsWith("on 20 "), true);
+eq("last touch: comment newer", lastTouch({ lastComment: "2026-11-04", msgLast: "2026-10-30", msgFrom: "them" }, T), { text: "You commented 2 days ago", day: "2026-11-04" });
+eq("last touch: their message newer", lastTouch({ lastComment: "2026-10-01", msgLast: "2026-11-05", msgFrom: "them" }, T), { text: "They wrote yesterday", day: "2026-11-05" });
+eq("last touch: our message", lastTouch({ msgLast: T, msgFrom: "us" }, T).text, "You wrote today");
+eq("last touch: none", lastTouch({}, T), { text: "No touch yet", day: null });
+
+// ---------- P19: the account map ----------
+const AL = (id: string, company: string, stage: string, next_date: string | null, closed = false, warm: 0 | 1 | 2 | 3 = 0) => ({ id, name: id, company, stage, next_action: `Step ${id}`, next_date, closed, warm });
+const acc = accountMap([AL("a", "Qasr Bank", "Warming", "2026-11-09", false, 3), AL("b", "qasr bank ", "Connected", "2026-11-04", false, 1), AL("c", "Tamrah", "Target", "2026-11-10"),
+  AL("d", "Closed Co", "Won", null, true), AL("e", "", "Target", "2026-11-01"), AL("f", "Tamrah", "Parked", null, true)], T);
+eq("accounts: open by urgency, closed-only after, no company last", acc.map((a) => a.company), ["Qasr Bank", "Tamrah", "Closed Co", ""]);
+eq("company match ignores case and spaces", acc[0].open.map((l) => l.id), ["b", "a"]);
+eq("next is the most urgent open contact", acc[0].next?.id, "b");
+eq("overdue count per account", acc[0].overdue, 1);
+eq("best warm path wins (direct over a colleague)", acc[0].warm, 1);
+eq("stages of open contacts", acc[0].stages, ["Connected", "Warming"]);
+eq("closed contacts kept apart", [acc[1].open.map((l) => l.id), acc[1].closed.map((l) => l.id)], [["c"], ["f"]]);
+eq("a closed-only account has no next", acc[2].next, null);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 if (fails) process.exit(1);

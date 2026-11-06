@@ -3,15 +3,16 @@
 // (Comment, Post, Follow up, Connect, Other). Each row has one action, Done and Skip. J and K move, X ticks, S skips.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Check, Link2, Trash2, ArrowUpRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Check, Link2, Trash2, ArrowUpRight, X } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, addDays, fmtDay, isWeekday, KINDS } from "@/lib/workspace";
 import { Section, ProgressRing, CountUp, reveal, useFlip, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
-import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primaryAction, whenLabel, settleOrder, GROUPS, groupOf, prefillToday, pageName, type Suggestion, type PrefillLead, type PrefillFinding, type PrefillPost } from "@/lib/dashboard";
+import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primaryAction, whenLabel, settleOrder, GROUPS, groupOf, prefillToday, pageName, postTiming, dubaiNow, type PostTiming, type Suggestion, type PrefillLead, type PrefillFinding, type PrefillPost } from "@/lib/dashboard";
 import { NAV } from "@/components/sidebar";
 import { openDraft } from "../studio/draft";
+import { openLeads, FALLBACK_PIPELINE, type Pipeline } from "@/lib/pipeline";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 /** What a task type means, shown when hovering or focusing its type label. */
@@ -19,14 +20,14 @@ const hintFor = (it: { kind: string; idx: number }) => KINDS.find((k) => k.key =
 const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "");
 
 type Item = { id: string; day: string; kind: string; idx: number; title: string; done: boolean; link: string; note: string; done_at: string | null; prospect_id: string | null };
-type Due = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null };
-type DuePost = { id: string; title: string; format: string; status: string; publish_date: string | null };
+type Due = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; pipeline_id?: string | null };
+type DuePost = { id: string; title: string; format: string; status: string; publish_date: string | null; planned_time?: string };
 
 const TODAY_TOUR: TourStep[] = [
   { target: "header", title: "What Today is for", body: "The plan for one day: the comments, posts, follow-ups and connections that move the pipeline. Prax suggests the work; you do the posting and sending on LinkedIn yourself." },
   { target: "days", title: "Other days", body: "Step back or forward a day. Each day keeps its own plan, built from the daily quota the first time it is opened." },
   { target: "progress", title: "Progress", body: "The ring fills as you clear the day. Done and skipped both clear an item; only done counts on the dashboard." },
-  { target: "due", title: "Due and overdue", body: "Pipeline follow-ups whose date has arrived and posts whose planned date has come. Overdue ones are marked in red." },
+  { target: "due", title: "Due and overdue", body: "Pipeline follow-ups whose date has arrived and posts whose planned date has come. Overdue ones are marked in red. When a post's planned time arrives, a reminder shows at the top and the post is marked Due now." },
   { target: "agenda", title: "The plan, in order", body: "Comment first, then posts, follow-ups, connection requests and anything else. Each group shows how much of it is done." },
   { target: "row", title: "One task", body: "The type, and who or what it concerns: Prax fills it with the next person from Pipeline's Do next, or a LinkedIn post from Discovery. One action opens where the work is done; comment rows also have Draft, which writes the comment in Prax. Then Done or Skip. Undo is in the message bottom right." },
   { target: "add", title: "One-off tasks", body: "Add anything that is not part of the daily quota. It sits under Other." },
@@ -42,11 +43,16 @@ export default function Today() {
   const [focus, setFocus] = useState(0);
   const [justDone, setJustDone] = useState<string | null>(null);
   const t = today();
-  const due = useLive<Due>("prospects", ws.id, { filter: (q) => q.lte("next_date", t).not("stage", "in", "(Won,Parked)").order("next_date") });
+  // Closed leads stay off Today in every pipeline: the won and lost stage of each (db/015) plus the closed names.
+  const pipes = useLive<Pipeline>("pipelines", ws.id);
+  const pipeList = useMemo(() => (pipes.rows.length ? pipes.rows : [FALLBACK_PIPELINE]), [pipes.rows]);
+  const dueAll = useLive<Due>("prospects", ws.id, { filter: (q) => q.lte("next_date", t).order("next_date") });
+  const due = useMemo(() => ({ rows: openLeads(dueAll.rows, pipeList) }), [dueAll.rows, pipeList]);
   const duePosts = useLive<DuePost>("posts", ws.id, { filter: (q) => q.lte("publish_date", t).not("status", "in", "(Posted,Published,\"On hold\")").order("publish_date") });
   // Real people and posts for the empty rows: Pipeline's open leads (Do next order), Discovery's LinkedIn findings
   // from the last week, and the profile's own posts from the last week for reply rounds.
-  const leads = useLive<PrefillLead>("prospects", ws.id, { filter: (q) => q.not("stage", "in", "(Won,Parked)") });
+  const allLeads = useLive<PrefillLead & { pipeline_id?: string | null }>("prospects", ws.id);
+  const leads = useMemo(() => ({ rows: openLeads(allLeads.rows, pipeList) }), [allLeads.rows, pipeList]);
   const finds = useLive<PrefillFinding>("discovery_findings", ws.id, { filter: (q) => q.gte("found_at", addDays(t, -7)) });
   const ownPosts = useLive<PrefillPost>("posts", ws.id, { filter: (q) => q.gte("publish_date", addDays(t, -7)).in("status", ["Posted", "Published"]) });
   const suggest = useMemo(() => (day === t ? prefillToday(rows, { leads: leads.rows, findings: finds.rows, posts: ownPosts.rows, slug: ws.slug, today: t }) : {}), [rows, leads.rows, finds.rows, ownPosts.rows, ws.slug, t, day]);
@@ -145,8 +151,24 @@ export default function Today() {
     if (data) { setRows((rs) => [...rs, data as Item]); setTimeout(() => document.getElementById(`t-${(data as Item).id}`)?.focus(), 50); }
   }
 
-  const dueCount = due.rows.length + duePosts.rows.length;
   const isToday = day === t;
+  // Post reminders (T6): planned times are Dubai time. The clock ticks every 20 seconds while Today is open; when a
+  // post's time arrives a toast says so once, and the banner stays until it is posted or dismissed.
+  const [clockNow, setClockNow] = useState(() => dubaiNow());
+  useEffect(() => { const id = setInterval(() => setClockNow(dubaiNow()), 20000); return () => clearInterval(id); }, []);
+  const timing = useMemo(() => Object.fromEntries(duePosts.rows.map((p) => [p.id, postTiming(p, clockNow)])) as Record<string, PostTiming>, [duePosts.rows, clockNow]);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const seen = useRef<Record<string, PostTiming>>({});
+  useEffect(() => {
+    for (const p of duePosts.rows) {
+      const was = seen.current[p.id], now = timing[p.id];
+      if (was && was !== "now" && now === "now") toast(`Time to post: ${p.title || "Untitled post"}`, undefined, { info: true });
+      seen.current[p.id] = now;
+    }
+  }, [timing, duePosts.rows, toast]);
+  const remind = isToday ? duePosts.rows.filter((p) => (timing[p.id] === "now" || timing[p.id] === "soon") && !dismissed.has(p.id)) : [];
+
+  const dueCount = due.rows.length + duePosts.rows.length;
   const firstOpen = ordered.find((r) => !r.done && !isSkipped(r.note)) ?? ordered[0];
   return (
     <Section id="today" title="Today" status={fmtDay(day, { weekday: "long", day: "numeric", month: "long" }) + (isToday ? "" : " · not today")}
@@ -183,7 +205,8 @@ export default function Today() {
           </section>
         )}
 
-        <DueStrip slug={ws.slug} t={t} people={due.rows} posts={duePosts.rows} />
+        {remind.map((p) => <PostReminder key={p.id} post={p} timing={timing[p.id]} slug={ws.slug} onDismiss={() => setDismissed((d) => new Set(d).add(p.id))} />)}
+        <DueStrip slug={ws.slug} t={t} people={due.rows} posts={duePosts.rows} timing={timing} />
 
         {prog.total === 0 && !editable ? (
           <div className="panel p-10 text-center text-body text-muted">No plan for this day yet. An editor opens it to build the quota.</div>
@@ -244,11 +267,28 @@ function GroupBar({ i, label, done, skipped, total, onJump }: { i: number; label
   );
 }
 
-function DueStrip({ slug, t, people, posts }: { slug: string; t: string; people: Due[]; posts: DuePost[] }) {
+/** The reminder at a post's planned time: one quiet panel with a red dot, the post, and where to open it. */
+function PostReminder({ post, timing, slug, onDismiss }: { post: DuePost; timing: PostTiming; slug: string; onDismiss: () => void }) {
+  return (
+    <section role="status" className="panel reveal flex flex-wrap items-center gap-x-4 gap-y-2 px-[18px] py-3.5">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+      <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
+        <span className="text-body font-semibold">{timing === "now" ? "Time to post" : "Posting soon"}: {post.title || "Untitled post"}</span>
+        <span className="text-meta text-muted">Planned for {post.planned_time}, Dubai time · {post.format} · {post.status}. You post it on LinkedIn yourself.</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        <Link href={`/w/${slug}/studio-content?tab=plan`} className="btn h-9 whitespace-nowrap px-3.5">Open the post <ChevronRight size={14} /></Link>
+        <button type="button" className="btn btn-ghost h-9 w-9 p-0" aria-label="Dismiss the reminder" onClick={onDismiss}><X size={14} /></button>
+      </span>
+    </section>
+  );
+}
+
+function DueStrip({ slug, t, people, posts, timing }: { slug: string; t: string; people: Due[]; posts: DuePost[]; timing: Record<string, PostTiming> }) {
   const cards = [
-    ...people.map((p) => ({ key: p.id, due: p.next_date!, kind: "Follow up", title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: p.next_action || p.stage, href: `/w/${slug}/pipeline?p=${p.id}` })),
-    ...posts.map((p) => ({ key: p.id, due: p.publish_date!, kind: "Post", title: p.title || "Untitled post", sub: `${p.format} · ${p.status}`, href: `/w/${slug}/studio-content?tab=plan` })),
-  ].sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+    ...people.map((p) => ({ key: p.id, due: p.next_date!, kind: "Follow up", title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: p.next_action || p.stage, href: `/w/${slug}/pipeline?p=${p.id}`, now: false, at: "" })),
+    ...posts.map((p) => ({ key: p.id, due: p.publish_date!, kind: "Post", title: p.title || "Untitled post", sub: `${p.format} · ${p.status}${p.planned_time && p.publish_date === t ? ` · planned ${p.planned_time}` : ""}`, href: `/w/${slug}/studio-content?tab=plan`, now: timing[p.id] === "now", at: p.planned_time ?? "" })),
+  ].sort((a, b) => Number(b.now) - Number(a.now) || (a.due < b.due ? -1 : a.due > b.due ? 1 : 0) || a.at.localeCompare(b.at));
   const overdue = cards.filter((c) => c.due < t).length;
   return (
     <section data-tour="due" {...reveal(1)} className={`panel ${reveal(1).className}`}>
@@ -259,10 +299,11 @@ function DueStrip({ slug, t, people, posts }: { slug: string; t: string; people:
       {cards.length === 0 ? <p className="border-t border-line px-[18px] py-4 text-body text-muted">Nothing due or overdue. Follow-ups and posts show here on their date.</p> : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 border-t border-line p-3">
           {cards.map((c) => { const late = c.due < t; return (
-            <Link key={c.key} href={c.href} className="hover-lift flex min-w-0 flex-col gap-1 rounded-xl border border-line bg-surface px-3.5 py-3">
+            <Link key={c.key} href={c.href} className={`hover-lift flex min-w-0 flex-col gap-1 rounded-xl border bg-surface px-3.5 py-3 ${c.now ? "border-ink" : "border-line"}`}>
               <span className="flex items-center justify-between gap-2">
                 <span className="text-meta font-semibold text-muted">{c.kind}</span>
-                <span className={`num text-meta ${late ? "font-semibold text-[#9e1c1c]" : "text-muted"}`}>{whenLabel(c.due, t)}</span>
+                {c.now ? <span className="flex items-center gap-1.5 whitespace-nowrap text-meta font-semibold text-ink"><span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />Due now</span>
+                  : <span className={`num text-meta ${late ? "font-semibold text-[#9e1c1c]" : "text-muted"}`}>{whenLabel(c.due, t)}</span>}
               </span>
               <span className="line-clamp-2 text-body font-semibold leading-snug">{c.title}</span>
               <span className="line-clamp-2 text-meta text-muted">{c.sub}</span>
