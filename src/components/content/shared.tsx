@@ -42,8 +42,9 @@ export function ChannelFlag({ p, long }: { p: { channel?: string }; long?: boole
   return <span className="pill" style={{ background: "#ececec", color: "#141414" }} title={line}>{long ? line : "Company content"}</span>;
 }
 
-export const logActivity = (wsId: string, kind: string, label: string, refId?: string | null) =>
-  supabase().from("activity").insert({ workspace_id: wsId, kind, label, ref_id: refId ?? null });
+// Async on purpose: a Supabase query is only sent once it is awaited, and most callers log without awaiting.
+export const logActivity = async (wsId: string, kind: string, label: string, refId?: string | null) =>
+  await supabase().from("activity").insert({ workspace_id: wsId, kind, label, ref_id: refId ?? null });
 
 /** Generated Today items are kind "custom" with a fixed index band, so re-running never duplicates them. */
 export const upsertToday = (rows: { day: string; kind: string; idx: number; title: string; link?: string; note?: string }[], wsId: string) =>
