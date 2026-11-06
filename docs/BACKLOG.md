@@ -374,12 +374,12 @@ No agreed feature was dropped. Seventeen items had no row: most are fixes alread
 | H1 | Humanization: Pangram judge, own level per profile and per type, cost rules, Walter optional | 7 Nov Q128 to Q134 | In progress |
 
 | C1 | Connections section: 20 to 25 tools by section, tool pages with connect, usage by section, routes, caps; replaces Extension; scattered key forms removed | 7 Nov Q135 to Q141 | In progress |
-| N1 | Prax hidden from Google (noindex, robots) | 7 Nov Q142 | Not started |
-| N2 | Invite-only access: owner adds email in Settings → Team, copies the invite link; sign-up off | 7 Nov Q143 | Not started |
-| N3 | Private demo copy per tester; Shashi workspace owner-only (RLS verified) | 7 Nov Q144 | Not started |
-| N4 | "Set up my own profile" wizard and workspace switcher | 7 Nov Q145 | Not started |
-| N5 | Tours in every section, replay from "?" | 7 Nov Q146 | Not started |
-| N6 | In-app searchable Guide, one page per section, screenshots, PDF download | 7 Nov Q147 | Not started |
-| N7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
-| N8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
-| N9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |
+| TS1 | Prax hidden from Google (noindex, robots) | 7 Nov Q142 | Not started |
+| TS2 | Invite-only access: owner adds email in Settings → Team, copies the invite link; sign-up off | 7 Nov Q143 | Not started |
+| TS3 | Private demo copy per tester; Shashi workspace owner-only (RLS verified) | 7 Nov Q144 | Not started |
+| TS4 | "Set up my own profile" wizard and workspace switcher | 7 Nov Q145 | Not started |
+| TS5 | Tours in every section, replay from "?" | 7 Nov Q146 | Not started |
+| TS6 | In-app searchable Guide, one page per section, screenshots, PDF download | 7 Nov Q147 | Not started |
+| TS7 | Send feedback button and owner-only feedback list | 7 Nov Q148 | Not started |
+| TS8 | Brand-new-user walkthrough and QA supervisor sign-off | 7 Nov Q149 | Not started |
+| TS9 | Copy invite link (free, no email), Join Prax page; premium email templates saved for later | 7 Nov Q150 to Q153, free-tier rule | Not started |

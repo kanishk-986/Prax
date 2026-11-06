@@ -661,7 +661,7 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Keys stay in the extension (chrome.storage); never sent to Prax.
 - Migration number: 032.
 
-## Tester onboarding, tours, guide, feedback, agreed 7 Nov 2026 (Q142 to Q149); backlog rows N1 to N9
+## Tester onboarding, tours, guide, feedback, agreed 7 Nov 2026 (Q142 to Q149); backlog rows TS1 to TS9
 
 - Q142: testers get the link directly; Prax stays out of Google (noindex, robots disallow).
 - Q143: invite only. The owner adds an email in Settings → Team; the tester gets an email, sets a password and logs in. Public sign-up stays off. Depends on SMTP for reliable email.
