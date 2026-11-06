@@ -660,3 +660,14 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Data tools are for web, news and company data only, never LinkedIn scraping (no-automation rule).
 - Keys stay in the extension (chrome.storage); never sent to Prax.
 - Migration number: 032.
+
+## Tester onboarding, tours, guide, feedback, agreed 7 Nov 2026 (Q142 to Q149)
+
+- Q142: testers get the link directly; Prax stays out of Google (noindex, robots disallow).
+- Q143: invite only. The owner adds an email in Settings → Team; the tester gets an email, sets a password and logs in. Public sign-up stays off. Depends on SMTP for reliable email.
+- Q144: each tester gets their own private copy of the demo profile (Layla Haddad), editable without affecting anyone else. Shashi's workspace is visible only to the owner and members the owner adds. Verify the RLS before live.
+- Q145: a "Set up my own profile" button creates an empty workspace with a setup wizard: name and LinkedIn URL, goals and audience, topics, connect an AI tool in Connections, install Prax for Chrome. Switch between demo and own workspace from the account menu.
+- Q146: audit every section; add an anchored first-visit tour wherever one is missing; replay from a "?" button in each section header.
+- Q147: an in-app, searchable Guide section (Set up group), one page per section: purpose, step by step, every button and menu, settings, the logic behind it, common problems, real screenshots. "?" links to its page. The whole guide downloads as a PDF.
+- Q148: a "Send feedback" button saves page, note and an optional screenshot to a list only the owner sees.
+- Q149: order: Connections and humanize deploy first; Agent A does access, demo copy and setup (Q143 to Q145); Agent B does tours and guide (Q146, Q147), written last; then a brand-new-user walkthrough. A QA supervisor agent checks every stage to done. Deploys still need the owner's "deploy".
