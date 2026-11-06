@@ -11,6 +11,7 @@ import { Section, ProgressRing, CountUp, reveal, useFlip, type TourStep } from "
 import { useToast, haptic } from "@/components/toaster";
 import { agenda, progressOf, isSkipped, skipNote, unskipNote, typeLabel, primaryAction, whenLabel, settleOrder, GROUPS, groupOf, prefillToday, pageName, type Suggestion, type PrefillLead, type PrefillFinding, type PrefillPost } from "@/lib/dashboard";
 import { NAV } from "@/components/sidebar";
+import { openDraft } from "../studio/draft";
 
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 /** What a task type means, shown when hovering or focusing its type label. */
@@ -27,7 +28,7 @@ const TODAY_TOUR: TourStep[] = [
   { target: "progress", title: "Progress", body: "The ring fills as you clear the day. Done and skipped both clear an item; only done counts on the dashboard." },
   { target: "due", title: "Due and overdue", body: "Pipeline follow-ups whose date has arrived and posts whose planned date has come. Overdue ones are marked in red." },
   { target: "agenda", title: "The plan, in order", body: "Comment first, then posts, follow-ups, connection requests and anything else. Each group shows how much of it is done." },
-  { target: "row", title: "One task", body: "The type, and who or what it concerns: Prax fills it with the next person from Pipeline's Do next, or a LinkedIn post from Discovery. One action opens where the work is done; then Done or Skip. Undo is in the message bottom right." },
+  { target: "row", title: "One task", body: "The type, and who or what it concerns: Prax fills it with the next person from Pipeline's Do next, or a LinkedIn post from Discovery. One action opens where the work is done; comment rows also have Draft, which writes the comment in Prax. Then Done or Skip. Undo is in the message bottom right." },
   { target: "add", title: "One-off tasks", body: "Add anything that is not part of the daily quota. It sits under Other." },
   { target: "keys", title: "Keyboard", body: "J and K move between tasks, X marks done, S skips. Command K jumps anywhere in Prax." },
 ];
@@ -342,6 +343,10 @@ function Row({ it, i, slug, sug, tour, focused, pop, editable, onToggle, onSkip,
             {it.done && <span className="num whitespace-nowrap text-meta text-faint">{it.done_at ? `Done ${clock(it.done_at)}` : "Done"}</span>}
           </span>
           <span className="flex shrink-0 items-center justify-end gap-0.5 sm:w-[112px]">
+            {it.kind === "comment" && !cleared && (
+              <button type="button" className="btn btn-ghost h-8 whitespace-nowrap px-2 text-meta" aria-label={`Draft a comment for ${shown || typeLabel(it)}`}
+                onClick={() => { const post = /\/(posts|feed\/update)\//.test(sug?.href ?? "") ? sug!.href : ""; openDraft({ itemId: it.id, title: shown, link: it.link || post, prospectId: it.prospect_id ?? sug?.prospect_id ?? null }); }}>Draft</button>
+            )}
             {editable && !it.done && (
               <button type="button" onClick={onSkip} className={`btn btn-ghost h-8 whitespace-nowrap px-2 text-meta ${skipped || focused ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"}`}>{skipped ? "Undo skip" : "Skip"}</button>
             )}

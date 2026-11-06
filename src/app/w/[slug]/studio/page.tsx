@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Upload, Plus, X, Copy, Bookmark, Trash2, Download, ChevronDown, AudioLines, Star } from "lucide-react";
+import { Upload, Plus, X, Copy, Bookmark, Trash2, Download, ChevronDown, AudioLines, Star, PenLine } from "lucide-react";
+import { openDraft } from "./draft";
 import { unzipSync, strFromU8 } from "fflate";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
@@ -17,17 +18,21 @@ import {
   type Studio, type Style, type Playbook, type Tuning, type Safety, type Fingerprint,
 } from "@/lib/studio";
 
-const TABS = ["Home", "Voice Lab", "Styles", "Playbooks", "Tuning", "Rewrite Lab", "Library", "Safety"] as const;
+// Home leads with drafting; every setting the drafts follow sits under one Voice and rules tab.
+const TABS = ["Home", "Voice and rules", "Library"] as const;
 type Tab = (typeof TABS)[number];
+const RULES = ["Voice Lab", "Styles", "Playbooks", "Tuning", "Rewrite Lab", "Safety"] as const;
+type Rule = (typeof RULES)[number];
 type Field = keyof Studio;
 type Save = <K extends Field>(field: K, value: Studio[K], msg?: string) => Promise<boolean>;
 const STUDIO_TOUR: TourStep[] = [
-  { target: "header", title: "How every draft is written", body: "Comment Studio holds the voice, the styles, the rules per kind of post and the limits. The extension reads them each time LinkedIn loads.", tab: "Home" },
+  { target: "header", title: "Comments, in this profile's voice", body: "Comment Studio drafts comments and holds the voice, the styles, the rules per kind of post and the limits. The extension reads the same settings each time LinkedIn loads.", tab: "Home" },
+  { target: "draft", title: "Draft a comment", body: "Paste a LinkedIn post and get two or three drafts with their Human and Impact scores. Copy one, save it, or log it as done on Today. Prax never posts. Command K and Today's comment rows open the same panel.", tab: "Home" },
   { target: "kpis", title: "This week at a glance", body: "Drafts written this week, the average Human and Impact scores over 30 days, and how many drafts are saved.", tab: "Home" },
   { target: "voice", title: "Voice status", body: "Whether a voice fingerprint is in use. Without one, drafts follow the comment rules only.", tab: "Home" },
-  { target: "styles", title: "Top styles", body: "The styles used most in the last 30 days. Turn styles on or off in the Styles tab.", tab: "Home" },
-  { target: "start", title: "Start something", body: "Build or refresh the voice, test a draft in Rewrite Lab, or open the saved drafts.", tab: "Home" },
-  { target: "header", title: "Everything else lives in the tabs", body: "Playbooks set rules per kind of post, Tuning sets length and scoring, Safety sets the limits. Press Guide to see this again.", tab: "Home" },
+  { target: "styles", title: "Top styles", body: "The styles used most in the last 30 days. Turn styles on or off under Voice and rules, Styles.", tab: "Home" },
+  { target: "rules", title: "Voice and rules", body: "Voice Lab, Styles, Playbooks, Tuning, Rewrite Lab and Safety: everything every draft follows, in one tab.", tab: "Voice and rules" },
+  { target: "header", title: "Saved drafts", body: "The Library keeps the drafts you saved, here or on LinkedIn. Press Guide to see this again.", tab: "Home" },
 ];
 
 type U = { at: string; kind: string; style: string; human: number | null; impact: number | null };
@@ -36,6 +41,8 @@ export default function StudioPage() {
   const { ws } = useWorkspace();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("Home");
+  const [rule, setRule] = useState<Rule>("Voice Lab");
+  const openRule = (r: Rule) => { setRule(r); setTab("Voice and rules"); };
   const [studio, setStudio] = useState<Studio | null>(null);
 
   useEffect(() => {
@@ -65,12 +72,14 @@ export default function StudioPage() {
   const on = studio?.styles.filter((s) => s.on).length ?? 0;
 
   return (
-    <Section id="studio" title="Comment Studio" status="How every Prax draft is written for this profile: the voice, the styles, the rules per kind of post, and the limits."
+    <Section id="studio" title="Comment Studio" status={`Draft comments in ${possessive(firstNameOf(ws))} voice, and set the voice, styles, rules and limits every draft follows.`}
       entryStatus={`${stats.week} drafts this week. ${fp?.summary ? "Voice fingerprint in use." : "No voice fingerprint yet."}`}
+      actions={tab !== "Home" ? <button type="button" className="btn h-10 px-3.5" onClick={() => openDraft()}><PenLine size={14} /> Draft a comment</button> : undefined}
       tabs={TABS.map((t) => ({ id: t, label: t, count: t === "Library" ? saved.rows.length : undefined }))} tab={tab} onTab={(t) => setTab(t as Tab)} steps={STUDIO_TOUR}>
       {!studio ? <div className="card h-64 animate-pulse bg-surface-2" />
         : tab === "Home" ? (
           <div className="flex flex-col gap-4">
+            <DraftStart />
             <KpiTiles tour="kpis" items={[
               { label: "Drafts this week", value: stats.week, sub: "written with the extension" },
               { label: "Average Human", value: stats.human ?? "None", sub: stats.human == null ? "no scored drafts yet" : "last 30 days" },
@@ -80,7 +89,7 @@ export default function StudioPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <section data-tour="voice" className="panel flex flex-col gap-3 p-[18px]">
                 <h2 className="text-body font-semibold">Voice</h2>
-                <p className="text-body leading-relaxed text-ink-2">{fp?.summary ? fp.summary : "No voice fingerprint yet. Drafts follow the comment rules in Settings until one is built in Voice Lab."}</p>
+                <p className="text-body leading-relaxed text-ink-2">{fp?.summary ? fp.summary : "No voice fingerprint yet. Drafts follow the comment rules in Settings until one is built in Voice and rules, Voice Lab."}</p>
                 <p className="text-meta text-muted">{on} of {studio.styles.length} styles on</p>
               </section>
               <section data-tour="styles" className="rounded-2xl border border-line bg-surface p-[18px]">
@@ -93,20 +102,49 @@ export default function StudioPage() {
             </div>
             <DraftModelRow href={`/w/${ws.slug}/extension`} />
             <StartCards tour="start" items={[
-              { title: fp?.summary ? "Refresh the voice" : "Build the voice", sub: "Add posts and comments he wrote; Prax learns how he sounds.", icon: AudioLines, primary: !fp?.summary, onClick: () => setTab("Voice Lab") },
-              { title: "Test a rewrite", sub: "Paste a draft and see it rewritten and scored.", icon: Star, onClick: () => setTab("Rewrite Lab") },
+              { title: fp?.summary ? "Refresh the voice" : "Build the voice", sub: `Add posts and comments ${firstNameOf(ws)} wrote; Prax learns how they sound.`, icon: AudioLines, onClick: () => openRule("Voice Lab") },
+              { title: "Test a rewrite", sub: "Paste a draft and see it rewritten and scored.", icon: Star, onClick: () => openRule("Rewrite Lab") },
               { title: "Open saved drafts", sub: "Copy or export what is kept in the Library.", icon: Bookmark, onClick: () => setTab("Library") },
             ]} />
           </div>
         )
-        : tab === "Voice Lab" ? <VoiceLab studio={studio} save={save} />
-        : tab === "Styles" ? <Styles studio={studio} save={save} />
-        : tab === "Playbooks" ? <Playbooks studio={studio} save={save} />
-        : tab === "Tuning" ? <TuningTab studio={studio} save={save} />
-        : tab === "Rewrite Lab" ? <RewriteLab studio={studio} />
         : tab === "Library" ? <Library />
-        : <SafetyTab studio={studio} save={save} />}
+        : (
+          <div className="flex flex-col gap-4">
+            <div data-tour="rules" role="tablist" aria-label="Voice and rules" className="flex w-full flex-wrap gap-1.5">
+              {RULES.map((r) => <button key={r} type="button" role="tab" aria-selected={rule === r} onClick={() => setRule(r)} className={`pl-chip small ${rule === r ? "on" : ""}`}>{r}</button>)}
+            </div>
+            {rule === "Voice Lab" ? <VoiceLab studio={studio} save={save} />
+              : rule === "Styles" ? <Styles studio={studio} save={save} />
+              : rule === "Playbooks" ? <Playbooks studio={studio} save={save} />
+              : rule === "Tuning" ? <TuningTab studio={studio} save={save} />
+              : rule === "Rewrite Lab" ? <RewriteLab studio={studio} />
+              : <SafetyTab studio={studio} save={save} />}
+          </div>
+        )}
     </Section>
+  );
+}
+
+/** The first thing on Home: paste a post here and the Draft a comment panel opens and starts writing. */
+function DraftStart() {
+  const { ws } = useWorkspace();
+  const [post, setPost] = useState("");
+  const go = (auto: boolean) => openDraft({ post, auto });
+  return (
+    <section data-tour="draft" className="panel flex flex-col gap-3 p-[18px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="text-title font-semibold">Draft a comment</h2>
+        <span className="text-meta text-muted">Two or three drafts in {possessive(firstNameOf(ws))} voice. Prax never posts.</span>
+      </div>
+      <textarea value={post} onChange={(e) => setPost(e.target.value)} rows={3} aria-label="The LinkedIn post"
+        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && post.trim().length >= 40) go(true); }}
+        placeholder="Paste a LinkedIn post, its text or its link" className="field h-auto min-h-[88px] py-2 text-body leading-relaxed" />
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className="btn btn-primary h-10 px-4" onClick={() => go(post.trim().length >= 40)}><PenLine size={14} /> {post.trim() ? "Write drafts" : "Draft a comment"}</button>
+        <span className="text-meta text-muted">Opens the drafting panel. Choose a style there, then copy, save or log the one you post.</span>
+      </div>
+    </section>
   );
 }
 
@@ -130,7 +168,7 @@ function Toggle({ on, onChange, label, sub, disabled }: { on: boolean; onChange:
     <label className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-0">
       <span><span className="block text-body font-medium">{label}</span>{sub && <span className="block text-meta text-muted">{sub}</span>}</span>
       <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)} className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-accent" : "bg-line-strong"}`}>
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+        <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
       </button>
     </label>
   );
@@ -281,7 +319,7 @@ function Styles({ studio, save }: { studio: Studio; save: Save }) {
             <div className="min-w-0 flex-1"><div className="text-body font-semibold">{s.name || "Untitled style"}{s.custom && <span className="chip ml-2">Custom</span>}</div><div className="text-meta text-muted">{s.desc}</div></div>
             {editable && <button className="btn h-7 px-2.5 text-meta" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? "Done" : "Tweak"}</button>}
             <button type="button" role="switch" aria-checked={s.on} aria-label={`${s.name} on`} disabled={!editable} onClick={() => toggle(s.id)} className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${s.on ? "bg-accent" : "bg-line-strong"}`}>
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${s.on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+              <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${s.on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
             </button>
           </div>
           {open === s.id ? (

@@ -118,7 +118,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
   if (!people.length) return (
     <section data-tour="known" className="panel flex flex-col gap-4 p-6">
       <h2 className="text-title font-semibold">Not started: import the LinkedIn export to see who {firstNameOf(ws)} already knows</h2>
-      <p className="max-w-[640px] text-body leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people he does not know yet. Import his connections once and Prax shows, for every prospect, whether he is connected, has talked before, or knows someone there.</p>
+      <p className="max-w-[640px] text-body leading-relaxed text-ink-2">A warm route converts far better than a cold request and saves LinkedIn&apos;s weekly invite limit for people {firstNameOf(ws)} does not know yet. Import {possessive(firstNameOf(ws))} connections once and Prax shows, for every prospect, whether {firstNameOf(ws)} is connected, has talked before, or knows someone there.</p>
       <ol className="ml-4 list-decimal space-y-1 text-body text-ink-2">
         <li>On LinkedIn: Me, Settings &amp; Privacy, Data privacy, Get a copy of your data.</li>
         <li>Choose the larger archive, or pick Connections, Messages, Invitations, Shares and Comments.</li>
@@ -130,7 +130,7 @@ function NetworkHome({ people, idx, prospects, comments, imports, onImport }: { 
 
   const route = (w: Warm, p: ProspectLite) => {
     if (w.linked?.is_connection) return { text: `Connected${w.linked.connected_on ? ` since ${fmtDay(w.linked.connected_on, { month: "short", year: "numeric" })}` : ""}${w.msgs ? `, ${w.msgs.count} messages` : ""}`, cta: "Message them", url: w.linked.url || p.linkedin };
-    if (w.msgs || w.comments.replies) return { text: w.msgs ? `Talked before: ${w.msgs.count} messages, ${w.msgs.from === "us" ? "waiting on them" : "they wrote last"}` : `Replied to his comments ${w.comments.replies} time${w.comments.replies > 1 ? "s" : ""}`, cta: "Message them", url: w.linked?.url || p.linkedin };
+    if (w.msgs || w.comments.replies) return { text: w.msgs ? `Talked before: ${w.msgs.count} messages, ${w.msgs.from === "us" ? "waiting on them" : "they wrote last"}` : `Replied to our comments ${w.comments.replies} time${w.comments.replies > 1 ? "s" : ""}`, cta: "Message them", url: w.linked?.url || p.linkedin };
     const c = w.colleagues[0];
     if (c) return { text: `Knows ${c.name}${c.position ? `, ${c.position}` : ""}, at ${p.company}${w.colleagues.length > 1 ? `, and ${w.colleagues.length - 1} more` : ""}`, cta: "Ask for an intro", url: c.url };
     return { text: "No warm route yet. Comment on their posts before any request.", cta: "Comment on their posts first", url: p.linkedin };

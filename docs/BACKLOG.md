@@ -166,7 +166,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CM5 | Impact score next to Human score, in Engagement too | Q28 | Live |
 | CM6 | Safety: daily draft limit, VIP authors, read existing comments | Q29 | Live |
 | CM7 | Sign-off line only in messages and connection notes, never comments | Q30 | Live |
-| CM8 | "Draft a comment" entry point inside the app (the core daily task has none today) | Audit item 9; Q117 "item 9 follows" | Not started |
+| CM8 | "Draft a comment" entry point inside the app (the core daily task has none today) | Audit item 9; Q117 "item 9 follows" | Built not live (Draft a comment panel from Comment Studio, Today and ⌘K) |
 | CM9 | Comment voice for a second profile | Handoff "Known gaps" | Needs user action (write it in Settings per profile) |
 
 ## Engagement
@@ -248,7 +248,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | L7 | Sign out top right (account menu) and in the sidebar | 6 Nov 00:34 | Live |
 | L8 | No built-in Shashi: add a profile, its name and strategy in Settings, archive, restore, delete; demo how a profile is added and removed | 5 Nov 23:39; 6 Nov 01:01 | Live |
 | L9 | Demo profile (Layla Haddad) with four weeks of history, marked Demo | Q120 | Live (SQL run) |
-| L10 | Leftover "he" and "his" in tour and help text (about 9 strings in Profile Studio, Network, Discovery) | Handoff profile-agnostic; 6 Nov 01:01 "it taken shashi sir as default" | Partly done: names removed, some pronouns remain |
+| L10 | Leftover "he" and "his" in tour and help text (about 9 strings in Profile Studio, Network, Discovery) | Handoff profile-agnostic; 6 Nov 01:01 "it taken shashi sir as default" | Built not live (pronouns replaced) |
 
 ## Design system
 
@@ -263,7 +263,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | DZ7 | Search menu: aligned icons and labels, no red half-ring | 6 Nov 00:07, 00:22 | Live |
 | DZ8 | 19 audit fixes (sidebar highlight, contrast, encoding, tabs, layouts) | Q100 | Live |
 | DZ9 | Polish pass: one red action, one card style, honest empty states, Geist, type scale, radii, layout at 1280 | Q117 items 1 to 8 and 10 | Live |
-| DZ10 | Sidebar in four groups (15 flat items today) | Audit item 9; Q117 | Not started |
+| DZ10 | Sidebar in four groups (15 flat items today) | Audit item 9; Q117 | Built not live (Do, Create, Grow, Set up) |
 | DZ11 | Rerun the design audit, aiming for 8 of 10 | Q117 | Declined by user (6 Nov 01:01 "no need to re-audit") |
 | DZ12 | Deep audit subagent from every angle | Q112 | Live (done: 5 of 10 report) |
 | DZ13 | Check on a real phone (all phone checks so far were a 390 px frame) | 5 Nov 22:52 "Not done yet" item 3 | Not started |
