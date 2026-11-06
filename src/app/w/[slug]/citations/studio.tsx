@@ -9,6 +9,8 @@ import { useWorkspace } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { useExtension } from "@/lib/bridge";
 import { useCitationScope } from "@/lib/citation-profile";
+import { ProviderMark, KeyRow, KeyState, ModelId, useProviderUsage } from "@/components/provider-mark";
+import { providerName } from "@/lib/providers";
 import { buildPdf, downloadFile, type PdfDoc, type PdfSection } from "@/lib/pdf";
 import {
   ENGINES, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
@@ -20,7 +22,7 @@ import s from "./citations.module.css";
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 const shortDate = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const when = (t: string) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const engineLabel = (e: string) => ({ openai: "ChatGPT", gemini: "Gemini", claude: "Claude", perplexity: "Perplexity" }[e] ?? e);
+const engineLabel = (e: string) => providerName(e, true);
 export type Ctx = { runs: Run[]; qs: Question[]; person?: Entity; company?: Entity; selfAll: Entity; rivals: Entity[]; experts: Entity[]; firms: Entity[]; ctx: string[] };
 
 // ---------------- entry moment ----------------
@@ -53,47 +55,31 @@ export function Intro({ line }: { line: string }) {
 }
 
 // ---------------- keys ----------------
-const KEYS: { id: Engine; name: string; hint: string; ph: string }[] = [
-  { id: "openai", name: "OpenAI", hint: "for ChatGPT", ph: "sk-..." },
-  { id: "gemini", name: "Google", hint: "for Gemini", ph: "AIza..." },
-  { id: "claude", name: "Anthropic", hint: "for Claude", ph: "sk-ant-..." },
-  { id: "perplexity", name: "Perplexity", hint: "for Perplexity Sonar", ph: "pplx-..." },
-];
 export function KeysModal({ onClose }: { onClose: () => void }) {
   const { status, send } = useExtension();
   const toast = useToast();
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const saved = (e: Engine) => !!status?.searchKeys?.[e];
-  async function save() {
-    setBusy(true); let n = 0;
-    try { for (const k of KEYS) { const v = (draft[k.id] ?? "").trim(); if (v) { await send("settings", { searchKey: { provider: k.id, key: v } }); n++; } } }
-    catch (e) { toast((e as Error).message); }
-    setBusy(false); setDraft({});
-    if (n) { haptic(); toast(`${n} key${n > 1 ? "s" : ""} saved in this browser`); onClose(); } else toast("No key entered");
+  const usage = useProviderUsage();
+  async function save(e: Engine, key: string) {
+    try { await send("settings", { searchKey: { provider: e, key } }); haptic(); toast(`${providerName(e)} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
-  async function remove(k: typeof KEYS[number]) {
-    try { await send("settings", { clearSearchKey: k.id }); haptic(); toast(`${k.name} key removed from this browser`); } catch (e) { toast((e as Error).message); }
+  async function remove(e: Engine) {
+    try { await send("settings", { clearSearchKey: e }); haptic(); toast(`${providerName(e)} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
   }
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center bg-black/35 p-4" onMouseDown={onClose}>
-      <div className={cx(s.box, "w-full max-w-[520px] p-6 shadow-2xl")} role="dialog" aria-label="Connect AI keys" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
+      <div className={cx(s.box, "max-h-[calc(100dvh-32px)] w-full max-w-[620px] overflow-y-auto shadow-2xl")} role="dialog" aria-label="Connect AI keys" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 p-6 pb-3">
           <div><h2 className="text-[17px] font-semibold">Connect AI keys</h2><p className={s.small}>Each key is saved only in this browser, inside the Prax extension. It goes only to that provider, never to Prax, and is never shown again.</p></div>
           <button className={cx(s.btn, s.sm)} onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
-        {status && !status.installed ? <p className="mt-4 text-[13.5px] text-[#d64545]">The Prax extension is not installed in this browser. Install it from the Extension page first.</p> : (
-          <div className="mt-4 grid gap-3">{KEYS.map((k) => (
-            <div key={k.id} className="grid gap-1.5 border-t border-[#ececec] pt-3">
-              <div className="flex items-center justify-between gap-2"><label htmlFor={`key-${k.id}`} className="text-[13.5px] font-semibold">{k.name} <span className="font-normal text-faint">{k.hint}</span></label><span className={cx(s.pill, saved(k.id) ? s.pDark : s.pLine)}>{saved(k.id) ? "Saved" : "Not connected"}</span></div>
-              <div className="flex gap-2">
-                <input id={`key-${k.id}`} className={s.field} type="password" autoComplete="off" placeholder={saved(k.id) ? "Saved. Paste a new key to replace it" : k.ph} value={draft[k.id] ?? ""} onChange={(e) => setDraft({ ...draft, [k.id]: e.target.value })} />
-                {saved(k.id) && <button className={cx(s.btn, "text-[#d64545]")} onClick={() => remove(k)}>Remove</button>}
-              </div>
-            </div>
-          ))}</div>
+        {status && !status.installed ? <p className="px-6 pb-2 text-[13.5px] text-[#9e1c1c]">The Prax extension is not installed in this browser. Install it from the Extension page first.</p> : (
+          <div className="@container border-t border-[#ececec]">{ENGINES.map((e) => {
+            const u = usage.of(e.id), extra = !!status?.extraKeys?.includes(e.id);
+            return <KeyRow key={e.id} id={e.id} connected={!!status?.searchKeys?.[e.id]} model={u.lastModel || e.model} usage={u} disabled={!status?.installed}
+              note={status?.searchKeys?.[e.id] && !extra ? "Uses your drafting key" : undefined} removable={extra} onSave={(k) => save(e.id, k)} onRemove={() => remove(e.id)} />;
+          })}</div>
         )}
-        <div className="mt-5 flex justify-end gap-2"><button className={s.btn} onClick={onClose}>Cancel</button><button className={cx(s.btn, s.red)} disabled={busy || !status?.installed} onClick={save}>{busy ? "Saving" : "Save to this browser"}</button></div>
+        <div className="flex justify-end gap-2 border-t border-[#ececec] px-6 py-4"><button className={s.btn} onClick={onClose}>Done</button></div>
       </div>
     </div>
   );
@@ -198,7 +184,7 @@ export function Home({ c, onTab, onOpenRun, onKeys, onRun, cards }: { c: Ctx; on
               <tbody>{ENGINES.map((e) => {
                 const p = subjectShare(runs, qs, "person", person, company, ctx, ["expert", "leadership"], e.id), co = subjectShare(runs, qs, "company", company, company, ctx, ["vendor", "leadership"], e.id);
                 const key = !!status?.searchKeys?.[e.id];
-                return <tr key={e.id}><td><b>{e.name}</b><div className={s.small}>{key ? `${e.model} with web search` : "Add a key to run"}</div></td><td className={s.num}>{p.total ? `${p.named} of ${p.total}` : "–"}</td><td className={s.num}>{co.total ? `${co.named} of ${co.total}` : "–"}</td><td>{key ? <span className={cx(s.pill, s.pDark)}>Key saved</span> : <button className={cx(s.btn, s.sm, s.red)} onClick={onKeys}>Connect</button>}</td></tr>;
+                return <tr key={e.id}><td><ProviderMark id={e.id} /><div className={cx(s.small, "pl-6")}>{key ? <><ModelId model={e.model} /> with web search</> : "Add a key to run"}</div></td><td className={s.num}>{p.total ? `${p.named} of ${p.total}` : "–"}</td><td className={s.num}>{co.total ? `${co.named} of ${co.total}` : "–"}</td><td>{key ? <KeyState on className="pt-0.5 text-[12.5px]" /> : <button className={cx(s.btn, s.sm, s.red)} onClick={onKeys}>Connect</button>}</td></tr>;
               })}</tbody>
             </table>
           </div>
@@ -207,7 +193,7 @@ export function Home({ c, onTab, onOpenRun, onKeys, onRun, cards }: { c: Ctx; on
             {latest.length ? latest.map((r) => { const [t, pc] = outcome(r); const q = qs.find((x) => x.id === r.question_id); return (
               <button key={r.id} onClick={() => onOpenRun(r.id)} className="flex w-full items-start gap-3 border-t border-[#ececec] px-4 py-3 text-left hover:bg-[#fafafa]">
                 <span className={cx(s.num, "w-[92px] shrink-0 pt-0.5 text-[11.5px] text-faint")}>{when(r.run_at)}</span>
-                <span className="min-w-0 flex-1"><b>{engineLabel(r.engine)}</b> <span className={cx(s.small, "block truncate")}>{q?.question ?? ""}</span></span>
+                <span className="min-w-0 flex-1"><ProviderMark id={r.engine} short /> <span className={cx(s.small, "block truncate")}>{q?.question ?? ""}</span></span>
                 <span className={cx(s.pill, pc)}>{t}</span>
               </button>
             ); }) : <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ececec] px-4 py-5"><span className={s.small}>Nothing has run yet.</span><span className="flex gap-2"><button className={cx(s.btn, s.sm)} onClick={onKeys}>Connect AI keys</button><button className={cx(s.btn, s.sm, s.red)} onClick={onRun}>Run prompts</button></span></div>}

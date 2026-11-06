@@ -13,6 +13,7 @@ import { useCitationProfile, useCitationScope, CitationProfileProvider } from "@
 import { useWorkspace, fmtDay, ymd } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, useExtension } from "@/lib/bridge";
+import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import {
   ENGINES, ESTIMATE, COUNTRY, LANGUAGES, parseEngine, statusOf, detect, isBranded, shareOfVoice, citationGaps, linkedinCited, latestBatches, aggregate, promptFor, findMatches, recommend, sentimentOf,
   detectPerson, personContext, promptGaps, audienceOf, AUDIENCE_LABEL, scoped, withProfile, postProfile, profileName, nextSort, archivedProfiles,
@@ -254,7 +255,7 @@ function Setup({ editable, fresh, onDone }: { editable: boolean; fresh: boolean;
     <aside data-tour="next" className={cx(s.box, "min-w-0 p-5")}>
       <h2 className="text-[15px] font-semibold">What happens next</h2>
       <ol className="mt-3 grid gap-3">
-        {[["Pick the prompts", "Start from 20 buyer questions or write your own."], ["Connect an AI key", "Claude, OpenAI, Gemini or Perplexity. The key stays in your browser."], ["Run and read the answers", "Each answer shows whether Shashi and Antier are named and linked, and which sites the AI trusted."]].map(([t, d], i) => (
+        {[["Pick the prompts", "Start from 20 buyer questions or write your own."], ["Connect an AI key", "Anthropic Claude, OpenAI ChatGPT, Google Gemini or Perplexity. The key stays in your browser."], ["Run and read the answers", "Each answer shows whether Shashi and Antier are named and linked, and which sites the AI trusted."]].map(([t, d], i) => (
           <li key={t} className="flex gap-3"><span className="num grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#141414] text-[12px] font-semibold text-white">{i + 1}</span><span><b className="block text-[13.5px]">{t}</b><span className={s.small}>{d}</span></span></li>
         ))}
       </ol>
@@ -373,7 +374,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
           {ENGINES.map((e) => (
             <label key={e.id} className={cx(s.box, "flex items-center gap-3 p-3", (!e.live || !ready(e.id)) && "opacity-60")}>
               <input type="checkbox" disabled={!e.live || !ready(e.id) || !!prog} checked={chosen.includes(e.id)} onChange={(ev) => setPick(ev.target.checked ? [...chosen, e.id] : chosen.filter((x) => x !== e.id))} />
-              <span className="flex-1"><span className="block font-semibold">{e.name}</span><span className={s.small}>{!e.live ? "Not connected yet" : ready(e.id) ? ESTIMATE[e.id].note : "No key in this browser"}</span></span>
+              <span className="flex min-w-0 flex-1 flex-col gap-1"><ProviderMark id={e.id} /><span className={s.small}>{!e.live ? "Not connected yet" : ready(e.id) ? <><KeyState on className="text-[12.5px]" /><span className="block">{ESTIMATE[e.id].note}</span></> : <KeyState on={false} className="text-[12.5px]" />}</span></span>
               {e.live && !ready(e.id) && <button type="button" className={cx(s.btn, s.sm)} onClick={onKeys}>Connect</button>}
             </label>
           ))}
@@ -432,7 +433,7 @@ function Evidence({ run, q, self, rivals, c, facts, editable, onJudged, onClose 
     <div className={s.scrim} onMouseDown={onClose}>
       <aside className={s.drawer} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Answer and sources">
         <div className="flex items-start justify-between gap-3">
-          <div><div className={s.small}>{engineName(run.engine)} · {run.model || "model unknown"} · API with web search · {when(run.run_at)}</div><h2 className="mt-1 text-[17px] font-semibold">{q?.question ?? run.question_text}</h2></div>
+          <div><div className={cx(s.small, "flex flex-wrap items-center gap-x-1.5")}><ProviderMark id={run.engine} short className="text-[#141414]" /> · {run.model ? <ModelId model={run.model} /> : "model unknown"} · API with web search · <span className={s.num}>{when(run.run_at)}</span></div><h2 className="mt-1 text-[17px] font-semibold">{q?.question ?? run.question_text}</h2></div>
           <button className={cx(s.btn, s.sm)} onClick={onClose} aria-label="Close"><X size={14} /></button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -571,7 +572,7 @@ function Runs({ rows, qById, self, manual, onOpen }: { rows: RunRow[]; qById: Ma
               <tr key={r.id}>
                 <td className={cx(s.num, "whitespace-nowrap text-[12px]")}>{when(r.run_at)}</td>
                 <td className="max-w-[380px]"><button className="text-left font-medium hover:underline" onClick={() => onOpen(r)}>{qById.get(r.question_id)?.question ?? r.question_text}</button></td>
-                <td className={s.small}>{engineName(r.engine)}<br /><span className={s.faint}>{r.model}</span></td>
+                <td className={s.small}><ProviderMark id={r.engine} short className="text-[#141414]" /><br /><ModelId model={r.model} className={cx(s.faint, "text-[11.5px]")} /></td>
                 <td>{r.status === "failed" ? <span className={cx(s.pill, s.pDark)} title={r.error}>Failed</span> : <span className={cx(s.pill, d.named ? s.pRed : s.pLine)}>{d.named ? `Named${d.position ? ` #${d.position}` : ""}` : "Not named"}</span>}{r.status === "failed" && r.error && <div className={cx(s.small, "mt-1 max-w-[260px]")}>{r.error}</div>}</td>
                 <td className={s.num}>{r.citation_sources?.length ?? 0}</td>
                 <td className={cx(s.num, "text-[12px]")}>{r.input_tokens ? `${(r.input_tokens / 1000).toFixed(1)}k / ${(r.output_tokens / 1000).toFixed(1)}k` : "–"}</td>

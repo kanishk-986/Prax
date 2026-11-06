@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today as todayYmd, addDays, weekStart } from "@/lib/workspace";
 import { useExtension } from "@/lib/bridge";
+import { ProviderMark, KeyState } from "@/components/provider-mark";
 import { ENGINES, ESTIMATE, type Engine } from "@/lib/citations";
 import { Section, type TourStep, type TabDef } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
@@ -103,7 +104,7 @@ export default function DiscoveryStudio() {
 
   const band = useCallback((f: Finding) => bandOf(f, settings.weights, settings.bands), [settings]);
   const total = useCallback((f: Finding) => totalScore(f.scores, settings.weights), [settings]);
-  const engines = LIVE_ENGINES.map((e) => ({ id: e.id, name: e.name.split(" ")[0], ready: !!ext?.searchKeys?.[e.id] }));
+  const engines = LIVE_ENGINES.map((e) => ({ id: e.id, name: e.name, model: e.model, ready: !!ext?.searchKeys?.[e.id] }));
 
   // The Digest for the chosen week, with the merge decisions made on it.
   const digest = useMemo(() => {
@@ -337,8 +338,10 @@ function RunPanel({ d, plan, links, chosen, setChosen, runner, saveWindow, onClo
       <span className="flex items-center gap-2.5 text-[13.5px] text-muted"><span className="w-5" />LinkedIn inbox<span className="text-[12px] text-faint">{d.findings.filter((f) => f.found_by.includes("linkedin")).length} posts you sent, already in</span></span>
       <span className="label text-ink">AI tools</span>
       {d.engines.map((e) => (
-        <span key={e.id} className="flex items-center gap-2.5 text-[13.5px]" style={{ color: e.ready ? "#141414" : "#8c8c8c" }}>
-          <Box on={chosen.includes(e.id as Engine)} onClick={() => e.ready && setChosen(chosen.includes(e.id as Engine) ? chosen.filter((x) => x !== e.id) : [...chosen, e.id as Engine])} label={e.name} />{e.name}{!e.ready && <span className="ml-auto text-[12px]">No key in this browser</span>}
+        <span key={e.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13.5px]">
+          <Box on={chosen.includes(e.id as Engine)} onClick={() => e.ready && setChosen(chosen.includes(e.id as Engine) ? chosen.filter((x) => x !== e.id) : [...chosen, e.id as Engine])} label={e.name} />
+          <ProviderMark id={e.id} bold={false} className={e.ready ? "" : "opacity-70"} />
+          <KeyState on={e.ready} className="ml-auto text-[12px]" />
         </span>
       ))}
       <span className="label text-ink">Window</span>

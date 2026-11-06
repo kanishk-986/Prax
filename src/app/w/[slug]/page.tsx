@@ -10,8 +10,10 @@ import { useCitationProfile } from "@/lib/citation-profile";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
 import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
 import { LinkedInMcpButton } from "@/components/linkedin-mcp";
+import { ProviderLogo } from "@/components/provider-mark";
+import { providerName } from "@/lib/providers";
 import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
-import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
+import { ENGINES, personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
 type Prospect = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; created_at: string };
@@ -117,7 +119,9 @@ export default function Dashboard() {
     // Week on week: the share from each week's own runs only, so a week without runs gives no change.
     const wkNow = weekStartOf(new Date());
     const pctOf = (w: string) => subjectShare(runsInWeek(runs, w), cq.rows, "person", person, company, ctx, ["expert", "leadership"]).pct;
-    return { active, share, gaps, change: pointsDelta(pctOf(wkNow), pctOf(shiftWeek(wkNow, -1))), lastDays: last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null, last };
+    // The AI tools that answered in the window, in the citations order, shown as small marks.
+    const engines = ENGINES.map((e) => e.id).filter((e) => runs.some((r) => r.engine === e));
+    return { active, share, gaps, engines, change: pointsDelta(pctOf(wkNow), pctOf(shiftWeek(wkNow, -1))), lastDays: last ? Math.floor((Date.now() - Date.parse(last)) / 864e5) : null, last };
   }, [cq.rows, ents.rows, runs]);
 
   const reach = useMemo(() => {
@@ -196,7 +200,7 @@ export default function Dashboard() {
                 line={disc.ranked ? `Digest ready: ${disc.ranked} topics · ${disc.sent} sent to Content Studio${disc.rising ? ` · ${disc.rising} rising` : ""}` : "No Digest for this week yet"} />
               <Glance href={`${base}/citations`} name="AI citations" alert={cit.gaps > 0}
                 line={!cit.active ? "No prompts set up yet" : cit.share.total ? `Shashi named in ${cit.share.named} of ${cit.share.total} prompts · ${cit.gaps} gaps` : "No answers in the last 28 days"}
-                aside={cit.last ? <span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span> : undefined} />
+                aside={cit.last ? <span className="flex shrink-0 items-center gap-2.5"><span className="flex items-center gap-1.5" role="img" aria-label={`Answers from ${cit.engines.map((e) => providerName(e)).join(", ")}`}>{cit.engines.map((e) => <span key={e} title={providerName(e)}><ProviderLogo id={e} size={13} /></span>)}</span><span className="num text-[11.5px] text-faint">{cit.lastDays === 0 ? "ran today" : `ran ${fmtDay(cit.last.slice(0, 10), { day: "numeric", month: "short" })}`}</span></span> : undefined} />
             </Panel>
           </div>
         </div>

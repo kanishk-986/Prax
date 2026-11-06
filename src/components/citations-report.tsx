@@ -1,6 +1,8 @@
 "use client";
 // The AI citations report: plain language, printable, and the same view a share link shows.
 // It renders a snapshot only, so a share link never reaches live data or anything else in Prax.
+import { ProviderMark } from "@/components/provider-mark";
+import { providerOf } from "@/lib/providers";
 
 export type ReportSnapshot = {
   generated_at: string;
@@ -30,7 +32,7 @@ export function ReportView({ r, expires }: { r: ReportSnapshot; expires?: string
       <p>AI tools named Shashi or Antier in <b>{r.headline.named} of {r.headline.total}</b> answers ({pct(r.headline.named, r.headline.total)}), and linked to his sites in {r.headline.linked}. Questions that already name him and runs that failed are left out. His LinkedIn was cited {r.linkedin} time{r.linkedin === 1 ? "" : "s"}.</p>
       <table className="mt-3 w-full border-collapse text-[13px]">
         <thead><tr className="bg-[#141414] text-left text-[12px] text-white"><th className="px-3 py-2">Engine</th><th className="px-3 py-2">Named</th></tr></thead>
-        <tbody>{r.engines.map((e) => <tr key={e.name} className="border-t border-[#ececec]"><td className="px-3 py-2 font-medium">{e.name}</td><td className="px-3 py-2">{e.total ? `${e.named} of ${e.total}` : "Not run"}</td></tr>)}</tbody>
+        <tbody>{r.engines.map((e) => <tr key={e.name} className="border-t border-[#ececec]"><td className="px-3 py-2 font-medium">{providerOf(e.name) ? <ProviderMark id={providerOf(e.name)!.id} /> : e.name}</td><td className="px-3 py-2">{e.total ? `${e.named} of ${e.total}` : "Not run"}</td></tr>)}</tbody>
       </table>
 
       {r.leaderboard.length > 1 && <>

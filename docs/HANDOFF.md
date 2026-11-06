@@ -1,5 +1,14 @@
 # Prax handoff, 5 November 2026
 
+## AI providers and keys (6 Nov 2026, branch `provider-branding`, not deployed)
+
+- One source: `src/lib/providers.ts` (names, logos, default models, usage maths, display rules in its header comment). `src/components/provider-mark.tsx` has `ProviderLogo`, `ProviderMark`, `KeyDot`, `KeyState`, `ModelId`, `KeyRow` (the key ledger row), `DraftModelRow` and `useProviderUsage`. `src/components/provider-keys.tsx` holds the Extension page's AI model and AI search key cards. `extension/marks.js` is the plain JS copy for the side panel; `node scripts/test-providers.ts` checks both copies match.
+- Logos: simple-icons (CC0) paths, unaltered. Claude, Google Gemini, Perplexity from 16.36.0 in their simple-icons colours; OpenAI from 15.22.0 (the last release with it) in black per OpenAI's brand page. xAI Grok has no mark (no CC0 or downloadable official asset), so it shows its name with an empty slot.
+- Rules: full name ("Anthropic Claude", "OpenAI ChatGPT", "Google Gemini", "Perplexity") in rows and pickers, short name in dense cells and logs; brand colour on light surfaces, white on dark; 16px in rows, 14px inline; the PDF uses names only. Key state is "Connected in this browser" or "No key in this browser" with a dot; keys are never read back, at most "Saved ····". One action per row: Connect or Replace key; Remove key sits inside the replace form.
+- Usage per provider comes from `ext_usage` for the signed-in user (last used, this month's calls and tokens; cost only for models in `PRICE`), otherwise "None".
+- Where: Extension page (AI model card, Keys for AI search ledger, usage table), AI citations (Connect AI keys window, Home engines table and recent activity, run panel, answer evidence, Runs table, draft test, share report, engine names in the PDF via `ENGINES`), Discovery Studio (run panel, AI tools panel, search log), Content Studio (image key block), Comment Studio Home (Drafts are written by row), Dashboard (AI citations line shows the marks of the tools that answered), extension side panel (AI keys in this browser card). Extension 0.8.1; only `panel.*`, `marks.js` and the manifest changed.
+- Checked in a temporary preview route with sample data and a fake bridge at 1440 and 390 wide, and the side panel with stubbed Chrome APIs. Not checked signed in against Supabase, or as an installed extension.
+
 ## What exists and is live
 
 **Web app** (https://prax-gamma.vercel.app)

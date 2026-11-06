@@ -1,25 +1,19 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Download, Check, Circle, KeyRound, Plug, Gauge, Moon, ExternalLink } from "lucide-react";
+import { Download, Check, Circle, Plug, Gauge, Moon, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, ymd, addDays, today, fmtDay } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
-import { useExtension, LATEST_EXT, type ExtStatus } from "@/lib/bridge";
+import { useExtension, LATEST_EXT } from "@/lib/bridge";
+import { ProviderMark, ModelId } from "@/components/provider-mark";
+import { DraftModel, SearchKeys } from "@/components/provider-keys";
+import { PROVIDERS, PRICE, usageFor, providerOf } from "@/lib/providers";
 
 type Tok = { token_hash: string; label: string; created_at: string; last_used: string | null; user_id: string };
 type Use = { id: number; at: string; kind: string; provider: string; model: string; input_tokens: number; output_tokens: number; user_id: string };
 type Log = { id: string; day: string; source: string };
-
-const PROVIDERS = [
-  { id: "claude", name: "Claude (Anthropic)", model: "claude-opus-5-5", console: "https://console.anthropic.com" },
-  { id: "openai", name: "OpenAI", model: "gpt-5", console: "https://platform.openai.com/usage" },
-  { id: "grok", name: "Grok (xAI)", model: "grok-4", console: "https://console.x.ai" },
-  { id: "gemini", name: "Gemini (Google)", model: "gemini-2.5-pro", console: "https://aistudio.google.com" },
-];
-// List prices per million tokens (input, output) for the Claude models; other providers show tokens only.
-const PRICE: Record<string, [number, number]> = { "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5], "claude-fable-5-1": [10, 50] };
 
 const hex = (b: ArrayBuffer | Uint8Array) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
 
@@ -31,9 +25,7 @@ export default function ExtensionPage() {
   const toks = useLive<Tok>("ext_tokens", ws.id, { order: "created_at" });
   const usage = useLive<Use>("ext_usage", ws.id, { order: "at", asc: false, filter: (q) => q.gte("at", addDays(today(), -60)) });
   const logs = useLive<Log>("comment_log", ws.id, { filter: (q) => q.gte("day", addDays(today(), -30)) });
-  const [form, setForm] = useState({ provider: "", apiKey: "", model: "" });
   const [busy, setBusy] = useState(false);
-  const provider = form.provider || status?.provider || "claude";
   const welcome = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("welcome");
 
   async function connect() {
@@ -48,12 +40,6 @@ export default function ExtensionPage() {
     } catch (e) { toast((e as Error).message); }
     setBusy(false);
   }
-  async function saveAI() {
-    try {
-      await send("settings", { provider, model: form.model, ...(form.apiKey ? { apiKey: form.apiKey } : {}) });
-      setForm({ provider: "", apiKey: "", model: "" }); haptic(); toast("AI settings saved in this browser");
-    } catch (e) { toast((e as Error).message); }
-  }
   async function revoke(h: string) {
     const { error } = await supabase().from("ext_tokens").delete().eq("token_hash", h);
     if (error) toast(error.message); else { haptic(); toast("Browser disconnected"); toks.reload(); }
@@ -63,8 +49,10 @@ export default function ExtensionPage() {
     const month = ymd(new Date()).slice(0, 7);
     const m = usage.rows.filter((u) => u.at.slice(0, 7) === month);
     const by: Record<string, { n: number; i: number; o: number; cost: number | null }> = {};
+    const prov: Record<string, string> = {};
     m.forEach((u) => {
       const k = u.model || u.provider || "unknown";
+      if (!prov[k]) prov[k] = u.provider;
       const p = PRICE[u.model];
       const r = (by[k] ||= { n: 0, i: 0, o: 0, cost: p ? 0 : null });
       r.n++; r.i += u.input_tokens; r.o += u.output_tokens;
@@ -72,9 +60,12 @@ export default function ExtensionPage() {
     });
     const days = Array.from({ length: 14 }, (_, i) => addDays(today(), i - 13)).map((d) => ({ d, n: usage.rows.filter((u) => ymd(new Date(u.at)) === d).length }));
     const cost = Object.values(by).reduce((s, r) => s + (r.cost ?? 0), 0);
-    return { drafts: m.length, inTok: m.reduce((s, u) => s + u.input_tokens, 0), outTok: m.reduce((s, u) => s + u.output_tokens, 0), by, days, cost, priced: Object.values(by).some((r) => r.cost != null),
+    // Per provider for the key rows: this user's calls only, since keys live in each person's own browser.
+    const mine = usage.rows.filter((u) => u.user_id === userId);
+    const of = (id: string) => usageFor(mine, id, month);
+    return { of, prov, drafts: m.length, inTok: m.reduce((s, u) => s + u.input_tokens, 0), outTok: m.reduce((s, u) => s + u.output_tokens, 0), by, days, cost, priced: Object.values(by).some((r) => r.cost != null),
       logged: logs.rows.filter((l) => l.source === "extension").length };
-  }, [usage.rows, logs.rows]);
+  }, [usage.rows, logs.rows, userId]);
 
   const installed = status?.installed;
   const steps: [string, boolean][] = [
@@ -84,7 +75,7 @@ export default function ExtensionPage() {
   ];
   const mine = toks.rows.filter((t) => t.user_id === userId);
   const max = Math.max(1, ...stats.days.map((d) => d.n));
-  const prov = PROVIDERS.find((p) => p.id === provider);
+  const prov = providerOf(status?.provider || "claude") ?? PROVIDERS.claude;
 
   return (
     <div className="mx-auto max-w-[980px]">
@@ -136,24 +127,9 @@ export default function ExtensionPage() {
           )}
         </section>
 
-        <section className="card p-5">
-          <h2 className="flex items-center gap-2 text-[14px] font-semibold"><KeyRound size={15} /> AI model</h2>
-          <p className="mt-1 text-[12px] text-muted">Your own key. It is saved inside the extension in this browser and sent only to the provider. Prax never stores it.</p>
-          <fieldset disabled={!installed} className="mt-3 grid gap-3">
-            <label className="flex flex-col gap-1"><span className="label">Provider</span>
-              <select id="x-provider" className="field" value={provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}>{PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-            <label className="flex flex-col gap-1"><span className="label">API key</span>
-              <input id="x-key" type="password" autoComplete="off" className="field" placeholder={status?.hasKey ? "Saved in this browser. Type to replace." : "Paste your key"} value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} /></label>
-            <label className="flex flex-col gap-1"><span className="label">Model</span>
-              <input id="x-model" className="field" placeholder={status?.model || prov?.model} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></label>
-            <div className="flex gap-2">
-              <button className="btn btn-primary" onClick={saveAI}>Save</button>
-              {status?.hasKey && <button className="btn btn-ghost hover:text-bad" onClick={() => send("settings", { clearKey: true }).then(() => toast("Key removed from this browser"), (e: Error) => toast(e.message))}>Remove key</button>}
-            </div>
-          </fieldset>
-        </section>
+        <DraftModel status={status} send={send} usage={stats.of} />
 
-        <SearchKeys status={status} send={send} />
+        <SearchKeys status={status} send={send} usage={stats.of} />
 
         <section className="card p-5">
           <h2 className="flex items-center gap-2 text-[14px] font-semibold"><Moon size={15} /> On LinkedIn</h2>
@@ -169,7 +145,7 @@ export default function ExtensionPage() {
           <div className="mt-3 grid grid-cols-3 gap-3">
             <div><div className="label">Drafts this month</div><div className="num text-[20px] font-semibold">{stats.drafts}</div></div>
             <div><div className="label">Tokens in / out</div><div className="num text-[15px] font-semibold">{(stats.inTok / 1000).toFixed(1)}k / {(stats.outTok / 1000).toFixed(1)}k</div></div>
-            <div><div className="label">Est. cost</div><div className="num text-[20px] font-semibold">{stats.priced ? `$${stats.cost.toFixed(2)}` : "n/a"}</div></div>
+            <div><div className="label">Est. cost</div><div className="num text-[20px] font-semibold">{stats.priced ? `$${stats.cost.toFixed(2)}` : "None"}</div></div>
           </div>
           <div className="mt-4 flex h-14 items-end gap-1" role="img" aria-label="Drafts per day, last 14 days">
             {stats.days.map((d) => <div key={d.d} title={`${fmtDay(d.d)}: ${d.n}`} className="flex-1 rounded-sm bg-accent" style={{ height: `${Math.max(4, (d.n / max) * 100)}%`, opacity: d.n ? 0.85 : 0.18 }} />)}
@@ -177,43 +153,13 @@ export default function ExtensionPage() {
           <div className="mt-1 flex justify-between text-[11px] text-faint"><span>{fmtDay(stats.days[0].d, { day: "numeric", month: "short" })}</span><span>today</span></div>
           {Object.keys(stats.by).length > 0 && (
             <table className="mt-3 w-full text-[12px]"><tbody>{Object.entries(stats.by).map(([k, r]) => (
-              <tr key={k} className="border-t border-line"><td className="py-1.5">{k}</td><td className="num text-right text-muted">{r.n} runs</td><td className="num text-right">{r.cost != null ? `$${r.cost.toFixed(2)}` : `${((r.i + r.o) / 1000).toFixed(1)}k tok`}</td></tr>
+              <tr key={k} className="border-t border-line"><td className="py-1.5"><span className="flex min-w-0 items-center gap-2"><ProviderMark id={stats.prov[k] || k} short bold={false} className="w-[86px] shrink-0" /><ModelId model={k} className="truncate text-muted" /></span></td><td className="num text-right text-muted">{r.n} {r.n === 1 ? "call" : "calls"}</td><td className="num text-right">{r.cost != null ? `$${r.cost.toFixed(2)}` : `${((r.i + r.o) / 1000).toFixed(1)}k tokens`}</td></tr>
             ))}</tbody></table>
           )}
           <p className="mt-3 text-[12px] text-muted">{stats.logged} comments logged from LinkedIn in 30 days. You pay the provider directly; the estimate uses list prices.{" "}
-            <a className="inline-flex items-center gap-1 text-accent hover:underline" href={prov?.console} target="_blank" rel="noreferrer">Open {prov?.name.split(" ")[0]} console <ExternalLink size={11} /></a></p>
+            <a className="inline-flex items-center gap-1 text-accent hover:underline" href={prov.console} target="_blank" rel="noreferrer">Open {prov.name.split(" ")[0]} console <ExternalLink size={11} /></a></p>
         </section>
       </div>
     </div>
-  );
-}
-
-/** Extra keys so AI citations can ask the same question on several engines. Kept in the extension only. */
-function SearchKeys({ status, send }: { status: ExtStatus | null; send: (type: string, data?: Record<string, unknown>) => Promise<ExtStatus> }) {
-  const toast = useToast();
-  const [keys, setKeys] = useState<Record<string, string>>({});
-  const rows = [["openai", "OpenAI (ChatGPT)"], ["gemini", "Gemini"], ["claude", "Claude"]] as const;
-  async function save(p: string) {
-    try { await send("settings", { searchKey: { provider: p, key: keys[p] } }); setKeys({ ...keys, [p]: "" }); haptic(); toast("Key saved in this browser"); } catch (e) { toast((e as Error).message); }
-  }
-  return (
-    <section id="search-keys" className="card p-5 md:col-span-2">
-      <h2 className="flex items-center gap-2 text-[14px] font-semibold"><KeyRound size={15} /> Keys for AI citations</h2>
-      <p className="mt-1 text-[12px] text-muted">AI citations asks each buyer question on every engine that has a key here, with web search on. The key above counts for its own provider. Keys stay in this browser and go only to the provider. Perplexity is not connected yet.</p>
-      <div className="mt-3 grid gap-2">
-        {rows.map(([p, name]) => {
-          const ready = !!status?.searchKeys?.[p], extra = !!status?.extraKeys?.includes(p);
-          return (
-            <div key={p} className="flex flex-wrap items-center gap-2 border-t border-line pt-2">
-              <span className="w-36 text-[13px] font-medium">{name}</span>
-              <span className={`text-[12px] ${ready ? "text-good" : "text-muted"}`}>{ready ? (extra ? "Search key saved" : "Uses the key above") : "No key"}</span>
-              <input type="password" autoComplete="off" aria-label={`${name} key`} className="field ml-auto h-8 w-full sm:w-64" placeholder={extra ? "Saved. Type to replace." : "Paste a key"} value={keys[p] ?? ""} onChange={(e) => setKeys({ ...keys, [p]: e.target.value })} disabled={!status?.installed} />
-              <button className="btn h-8" disabled={!keys[p]} onClick={() => save(p)}>Save</button>
-              {extra && <button className="btn btn-ghost h-8 hover:text-bad" onClick={() => send("settings", { clearSearchKey: p }).then(() => toast("Key removed from this browser"), (e: Error) => toast(e.message))}>Remove</button>}
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }
