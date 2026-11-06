@@ -648,3 +648,15 @@ Run `db/029_post_video.sql` (after 022) before deploying: saving a video writes 
 - Cost rules: free local Human score first, and paid checks only when the local score is close to or above the level; cache by text hash so unchanged text is never re-checked; for articles re-check only edited paragraphs; a monthly word cap per service entered by the user from their plan, warning at 80% and stopping paid checks at 100% ("Not verified, free score only"); Walter only after Pangram fails and both local rounds fail.
 - Keys for Pangram and Walter live in the extension like the AI keys; the badge states "per Pangram", never a guaranteed "100% human".
 - Migration number: 031.
+
+## Connections section, agreed 7 Nov 2026 (Q135 to Q141)
+
+- Q135/Q141: one "Connections" section (Set up group) replacing the Extension section (old link redirects; "Prax for Chrome" becomes a tab). A premium catalog of 20 to 25 real tools in sections: AI writing models, AI citations engines, Humanization and detection, Data and discovery, Images and video, Meetings, Prax MCP. Real logos and names (official assets, unaltered; name only when no legitimate mark).
+- Each tool opens a full page: description, use cases in Prax, connect by API key and/or MCP details with a docs link and a test-connection button, the jobs it can do with routing and fallback, usage this month broken down by section (% of calls, call count, cost, trend), monthly cap with an 80% warning, and Edit, Review, Delete (confirm, Undo), Replace key; Back and Next between tools; filters by section, status and job.
+- Q136: one key per tool; jobs are routed (tool plus fallback) in one routes table; an optional per-job separate key under Advanced.
+- Q137: every call is tagged with its job, so usage shows per tool, per job and per section.
+- Q138: key forms are removed from other sections; each shows "Using X · change", and Connect opens the same panel in place. AI citations keeps only its engine selection.
+- Honesty rule: every card says whether Prax uses it for a job today ("Connected · used by 2 jobs" or "Connected · not used by any job yet").
+- Data tools are for web, news and company data only, never LinkedIn scraping (no-automation rule).
+- Keys stay in the extension (chrome.storage); never sent to Prax.
+- Migration number: 032.
