@@ -7,12 +7,40 @@ import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { parseEngine, type Engine } from "@/lib/citations";
-import { type Finding, type PlannedSearch, searchPrompt, parseSearchItems, ruleScore, sourceTypeOf, opportunityOf, scorePrompt, parseScores, linkKey, PACK_LABEL } from "@/lib/discovery";
+import { type Finding, type PlannedSearch, type FoundItem, searchPrompt, parseSearchItems, ruleScore, sourceTypeOf, opportunityOf, scorePrompt, parseScores, linkKey, normalizeLink, isLinkedIn, hostOf, PACK_LABEL } from "@/lib/discovery";
 import type { Link, LogRow } from "./shared";
 
 // pillars, who ("Name, Role at Company"), geos and region come from the profile, see src/lib/persona.ts.
-type Ctx = { wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[]; pillars: string[]; who: string; geos: string[]; region: string; buyers?: string[] };
+// tools: the extension can run Connections jobs (0.9.7), so Discovery search and fetch can use Exa, Tavily or Firecrawl.
+type Ctx = { tools?: boolean; wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[]; pillars: string[]; who: string; geos: string[]; region: string; buyers?: string[] };
 const mentions = (text: string, names: string[]) => names.find((n) => n.length > 2 && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) ?? "";
+
+// "web" is Connections' Discovery search route (Exa, Tavily or Firecrawl, with its fallback), run from the extension.
+export const WEB = "web";
+type Page = { title?: string; publisher?: string; published?: string | null; confirmed?: boolean; excerpt?: string };
+const ymdOf = (s: string) => { const t = Date.parse(s || ""); return Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : ""; };
+/** Web search results as found items: only real links, never LinkedIn, dated when the tool gives a date. */
+export function webItems(items: { url: string; title: string; date: string; summary: string }[]): FoundItem[] {
+  const seen = new Set<string>(), out: FoundItem[] = [];
+  for (const x of items) {
+    const url = normalizeLink(String(x.url ?? ""));
+    if (!url || isLinkedIn(url) || seen.has(linkKey(url))) continue;
+    seen.add(linkKey(url));
+    out.push({ url, title: String(x.title ?? "").trim() || hostOf(url), publisher: hostOf(url), date: ymdOf(x.date), summary: String(x.summary ?? "").trim().slice(0, 600), orgs: [] });
+  }
+  return out;
+}
+/** Reads a found page to confirm its date: on the Discovery fetch route (Prax's own reader by default). */
+async function readPage(url: string, tools: boolean): Promise<Page> {
+  const server = () => fetch("/api/discovery/read", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) }).then((r) => r.json()).catch(() => ({}));
+  if (!tools) return server();
+  try {
+    const r = await askExtension<{ server?: boolean; title?: string; text?: string; published?: string }>("tool", { op: "fetch", url, section: "discovery" }, 45000);
+    if (r.server) return server();
+    const published = ymdOf(r.published ?? "");
+    return { title: r.title || "", publisher: hostOf(url), published: published || null, confirmed: !!published, excerpt: String(r.text ?? "").slice(0, 600) };
+  } catch { return server(); }
+}
 
 export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => void) {
   const ref = useRef(ctx); ref.current = ctx;
@@ -31,7 +59,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
     try {
       for (let i = 0; i < todo.length; i += 8) {
         const batch = todo.slice(i, i + 8);
-        const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You score news for a business leader's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), c.pillars, c.who, c.geos, c.buyers) }, 120000);
+        const out = await askExtension<string>("ai", { job: "analysis", section: "discovery", plain: true, kind: "studio", rules: "You score news for a business leader's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), c.pillars, c.who, c.geos, c.buyers) }, 120000);
         const got = parseScores(parseJSON(out), c.geos);
         for (const f of batch) {
           const s = got[f.id]; if (!s) continue;
@@ -45,7 +73,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
     return n;
   }, [toast]);
 
-  const runAi = useCallback(async (plan: PlannedSearch[], engines: Engine[], trigger = "manual") => {
+  const runAi = useCallback(async (plan: PlannedSearch[], engines: (Engine | typeof WEB)[], trigger = "manual") => {
     if (!plan.length || !engines.length) return;
     const c = ref.current;
     stopAi.current = false;
@@ -60,15 +88,21 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
       const { p, e } = queue[i];
       const row = log[i];
       try {
-        const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine: e, prompt: searchPrompt(p.query, c.windowDays, c.today, c.region), country: "" }, 240000);
-        const parsed = parseEngine(e, res.raws);
-        const { returned, items } = parseSearchItems(parsed.answer, parsed.sources);
+        let returned = 0, items: FoundItem[] = [];
+        if (e === WEB) {
+          const res = await askExtension<{ tool: string; items: { url: string; title: string; date: string; summary: string }[] }>("tool", { op: "search", query: p.query, n: 8, section: "discovery" }, 90000);
+          items = webItems(res.items ?? []); returned = (res.items ?? []).length; row.engine = res.tool || WEB;
+        } else {
+          const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine: e, prompt: searchPrompt(p.query, c.windowDays, c.today, c.region), country: "", job: "discovery_search", section: "discovery" }, 240000);
+          const parsed = parseEngine(e, res.raws);
+          ({ returned, items } = parseSearchItems(parsed.answer, parsed.sources));
+        }
         row.returned = returned; row.cited = items.length; row.confirmed = 0; row.urls = items.map((x) => x.url);
         for (const it of items.slice(0, 6)) {
-          const page = await fetch("/api/discovery/read", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: it.url }) }).then((r) => r.json()).catch(() => ({}));
+          const page: Page = await readPage(it.url, !!c.tools);
           if (page.confirmed) row.confirmed!++;
           const old = known.get(linkKey(it.url));
-          const found = { engine: e, pack: PACK_LABEL[p.pack], query: p.query };
+          const found = { engine: row.engine ?? e, pack: PACK_LABEL[p.pack], query: p.query };
           if (old) {
             if (!old.found_by.includes("ai")) { await supabase().from("discovery_findings").update({ found_by: [...old.found_by, "ai"], found: { ...old.found, ai: found } }).eq("id", old.id); old.found_by = [...old.found_by, "ai"]; }
             continue;

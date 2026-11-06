@@ -16,7 +16,7 @@ import { Section, KpiTiles, StartCards, type TourStep } from "@/components/shell
 import { useToast, haptic } from "@/components/toaster";
 import { decodeText } from "@/lib/text";
 import { askExtension, parseJSON } from "@/lib/bridge";
-import { DraftModelRow } from "@/components/provider-mark";
+import { UsingLine } from "@/components/connections/sheet";
 import {
   mergeStudio, humanScore, classifyInput, LENGTHS, DEFAULT_STYLES, DEFAULT_PLAYBOOKS, DEFAULT_TUNING, DEFAULT_SAFETY,
   type Studio, type Style, type Playbook, type Tuning, type Safety, type Fingerprint,
@@ -104,7 +104,7 @@ export default function StudioPage() {
                 ))}
               </section>
             </div>
-            <DraftModelRow href={`/w/${ws.slug}/extension`} />
+            <section className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-[18px] py-3.5"><UsingLine job="comment" label="Drafts are written by" className="text-body" /></section>
             <StartCards tour="start" items={[
               { title: fp?.summary ? "Refresh the voice" : "Build the voice", sub: `Add posts and comments ${firstNameOf(ws)} wrote; Prax learns how they sound.`, icon: AudioLines, onClick: () => openRule("Voice Lab") },
               { title: "Test a rewrite", sub: "Paste a draft and see it rewritten and scored.", icon: Star, onClick: () => openRule("Rewrite Lab") },
@@ -215,7 +215,7 @@ function VoiceLab({ studio, save }: { studio: Studio; save: Save }) {
   async function build() {
     setBusy("Building the voice fingerprint");
     try {
-      const out = await askExtension<string>("ai", { plain: true, kind: "voice", rules: "You study how one senior professional writes and describe it precisely, so another writer can match it. Report only what the text shows.", user: `TEXT WRITTEN BY THE PERSON:\n${text.slice(0, 30000)}\n\nDescribe how they write. Return only JSON: {"summary": "two sentences on the voice", "tone": ["3 to 5 words"], "sentences": "sentence length and rhythm in one line", "vocabulary": ["words and terms they favour, up to 12"], "phrases": ["short phrases they actually use, up to 8"], "avoid": ["things they never do, up to 6"], "sample": "a 50-word LinkedIn comment in this voice on a stablecoin settlement post"}` });
+      const out = await askExtension<string>("ai", { job: "analysis", section: "comment_studio", plain: true, kind: "voice", rules: "You study how one senior professional writes and describe it precisely, so another writer can match it. Report only what the text shows.", user: `TEXT WRITTEN BY THE PERSON:\n${text.slice(0, 30000)}\n\nDescribe how they write. Return only JSON: {"summary": "two sentences on the voice", "tone": ["3 to 5 words"], "sentences": "sentence length and rhythm in one line", "vocabulary": ["words and terms they favour, up to 12"], "phrases": ["short phrases they actually use, up to 8"], "avoid": ["things they never do, up to 6"], "sample": "a 50-word LinkedIn comment in this voice on a stablecoin settlement post"}` });
       const f = parseJSON<Fingerprint>(out);
       if (!f?.summary) throw new Error("The model did not return a fingerprint. Try again.");
       const { error } = await supabase().from("voice_versions").insert({ workspace_id: ws.id, source_name: names.join(", ") || "Pasted text", source_chars: text.length, fingerprint: f });
@@ -348,7 +348,7 @@ function Playbooks({ studio, save }: { studio: Studio; save: Save }) {
   async function classify() {
     setBusy(true); setRes(null);
     try {
-      const out = await askExtension<string>("ai", { kind: "studio", user: `POST:\n${input.text.slice(0, 6000)}\n\nClassify this LinkedIn post as exactly one of: ${list.map((b) => b.type).join(", ")}. Return only JSON: {"type": "...", "why": "one sentence", "angle": "the angle a comment should take, following that type's playbook, in one sentence"}` });
+      const out = await askExtension<string>("ai", { job: "analysis", section: "comment_studio", kind: "studio", user: `POST:\n${input.text.slice(0, 6000)}\n\nClassify this LinkedIn post as exactly one of: ${list.map((b) => b.type).join(", ")}. Return only JSON: {"type": "...", "why": "one sentence", "angle": "the angle a comment should take, following that type's playbook, in one sentence"}` });
       const j = parseJSON<{ type: string; why: string; angle: string }>(out);
       if (!j?.type) throw new Error("No answer from the model. Try again.");
       setRes(j);
@@ -469,7 +469,7 @@ function RewriteLab({ studio }: { studio: Studio }) {
       : `${ctx}DRAFT:\n${input}\n\nDo not rewrite it.`;
     const tail = post.trim() ? ` Also score impact (1 to 10: how likely the post's author is to reply to it) with one sentence why.` : "";
     try {
-      const raw = await askExtension<string>("ai", { kind: "studio", user: `${ask}${tail}\nReturn only JSON: {${kind === "score" ? "" : `"text": "...", `}"impact": 7, "why": "..."}` });
+      const raw = await askExtension<string>("ai", { job: "comment", section: "comment_studio", kind: "studio", user: `${ask}${tail}\nReturn only JSON: {${kind === "score" ? "" : `"text": "...", `}"impact": 7, "why": "..."}` });
       const j = parseJSON<{ text?: string; impact?: number; why?: string }>(raw);
       if (!j) throw new Error("No answer from the model. Try again.");
       if (kind !== "score") setOut(j.text || "");

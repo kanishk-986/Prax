@@ -72,7 +72,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     setBusy("propose");
     try {
       const o = objective(brief.objective);
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => segs[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\n${settings ? `${povText(settings.pov, first)}\n` : ""}Return only JSON: {"titles": ["...", "..."]}` }, 60000);
+      const out = await askExtension<string>("ai", { job: "post", section: "content_studio", kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => segs[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\n${settings ? `${povText(settings.pov, first)}\n` : ""}Return only JSON: {"titles": ["...", "..."]}` }, 60000);
       const j = parseJSON<{ titles: string[] }>(out);
       if (j?.titles?.length) setPlan(skeleton.map((s, i) => ({ ...s, title: j.titles[i] || s.title })));
     } catch { toast("Planned without AI: connect the extension and a key for sharper titles"); }
@@ -83,7 +83,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     setBusy("keys");
     let found: string[] = [];
     try {
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Suggest 6 short search keywords (2 to 4 words each) that buyers would use for a LinkedIn campaign named "${name}" on the topic "${brief.topic}".${regionText(ws) ? ` Buyers in ${regionText(ws)}.` : ""} Return only JSON: {"keywords": ["..."]}` }, 30000);
+      const out = await askExtension<string>("ai", { job: "post", section: "content_studio", kind: "studio", user: `Suggest 6 short search keywords (2 to 4 words each) that buyers would use for a LinkedIn campaign named "${name}" on the topic "${brief.topic}".${regionText(ws) ? ` Buyers in ${regionText(ws)}.` : ""} Return only JSON: {"keywords": ["..."]}` }, 30000);
       found = parseJSON<{ keywords: string[] }>(out)?.keywords ?? [];
     } catch {}
     if (!found.length) found = KEYS[brief.topic] ?? [];
@@ -596,7 +596,7 @@ function DmDraft({ c, tg, prospect, onClose }: { c: Campaign; tg: Target; prospe
   useEffect(() => {
     (async () => {
       try {
-        const out = await askExtension<string>("ai", { kind: "studio", user: `${connected ? "Write a short LinkedIn message (under 80 words)" : "Write a LinkedIn connection note, 300 characters maximum"} from this profile to ${tg.name}${tg.company ? ` at ${tg.company}` : ""}. Why now: ${tg.engaged_reason || "they engaged with a recent post"}. Campaign topic: ${c.brief.topic}. ${c.brief.resource?.name ? `Resource on offer: ${c.brief.resource.name}.` : ""} Reference the reason specifically, offer value first, no pitch, no flattery.\nReturn only JSON: {"text": "..."}` });
+        const out = await askExtension<string>("ai", { job: "comment", section: "content_studio", kind: "studio", user: `${connected ? "Write a short LinkedIn message (under 80 words)" : "Write a LinkedIn connection note, 300 characters maximum"} from this profile to ${tg.name}${tg.company ? ` at ${tg.company}` : ""}. Why now: ${tg.engaged_reason || "they engaged with a recent post"}. Campaign topic: ${c.brief.topic}. ${c.brief.resource?.name ? `Resource on offer: ${c.brief.resource.name}.` : ""} Reference the reason specifically, offer value first, no pitch, no flattery.\nReturn only JSON: {"text": "..."}` });
         const j = parseJSON<{ text: string }>(out);
         setText(j?.text ?? "");
       } catch { setText(`Thank you for engaging with my post on ${c.brief.topic.toLowerCase()}. I would value hearing how your team is approaching it.`); toast("No AI key: a plain draft is in the box"); }

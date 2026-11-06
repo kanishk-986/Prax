@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
+import { ConnectButton } from "@/components/connections/sheet";
+import { ToolInline } from "@/components/connections/ui";
 import { X } from "lucide-react";
 import { ESTIMATE, type Engine } from "@/lib/citations";
 import { type PlannedSearch, type Settings, type Finding, PACK_LABEL } from "@/lib/discovery";
@@ -16,7 +17,7 @@ export const PACKS: { id: keyof Settings["packs"]; label: string; sub: (n: numbe
 ];
 
 /** AI search: what is searched, on which AI tools, and a live log of what each search found. */
-export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, chosen, onRun, onStop, saveSettings, findingsFor }: {
+export function SearchTab({ d, plan, packCount, live, lastAi, running, chosen, onRun, onStop, saveSettings, findingsFor }: {
   d: Data; slug: string; plan: PlannedSearch[]; packCount: Record<string, number>; live: { log: LogRow[]; done: number; total: number; phase: string } | null; lastAi: Run | null;
   running: boolean; chosen: Engine[]; onRun: () => void; onStop: () => void; saveSettings: (s: Partial<Settings>, note: string) => void; findingsFor: (r: LogRow) => Finding[];
 }) {
@@ -24,7 +25,7 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
   const [open, setOpen] = useState<LogRow | null>(null);
   const s = d.settings;
   const calls = plan.length * Math.max(1, chosen.length);
-  const cost = plan.length * chosen.reduce((a, e) => a + ESTIMATE[e].usd, 0);
+  const cost = plan.length * chosen.reduce((a, e) => a + (ESTIMATE[e]?.usd ?? 0.008), 0);
   const log = live?.log.length ? live.log : lastAi?.log ?? [];
   const add = () => { const v = draft.trim(); if (!v) return; saveSettings({ queries: [...s.queries, v] }, "Search added"); setDraft(""); };
   const cols = "grid-cols-[minmax(0,2.6fr)_minmax(0,.9fr)_minmax(0,.8fr)_repeat(3,minmax(0,.6fr))]";
@@ -57,8 +58,8 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
           <h2 className="text-body font-semibold">AI tools</h2>
           {d.engines.map((e) => (
             <span key={e.id} className="group flex items-center justify-between gap-2.5 border-t border-line pt-2 text-body">
-              <span className="flex min-w-0 flex-col gap-1"><ProviderMark id={e.id} /><span className="flex flex-wrap items-center gap-x-2 pl-6 text-meta text-muted"><KeyState on={e.ready} />{e.ready && <ModelId model={e.model} className="text-meta text-muted" />}</span></span>
-              {!e.ready && <Link href={`/w/${slug}/extension#search-keys`} className="btn btn-quiet h-7 shrink-0 px-2.5 text-meta">Connect</Link>}
+              <span className="flex min-w-0 flex-col gap-1">{e.id === "web" ? <span className="flex items-center gap-1.5 font-semibold"><ToolInline id={e.model} /><span className="font-normal text-muted">web search</span></span> : <ProviderMark id={e.id} />}<span className="flex flex-wrap items-center gap-x-2 pl-6 text-meta text-muted"><KeyState on={e.ready} />{e.ready && e.id !== "web" && <ModelId model={e.model} className="text-meta text-muted" />}</span></span>
+              {!e.ready && (e.id === "web" ? <ConnectButton job="discovery_search" className="btn-quiet h-7 shrink-0 px-2.5 text-meta" /> : <ConnectButton tool={e.id} className="btn-quiet h-7 shrink-0 px-2.5 text-meta" />)}
             </span>
           ))}
           {cost > 0 && <span className="text-meta text-muted">About {calls} calls · about ${cost.toFixed(2)} on your keys (list prices, rough)</span>}
@@ -76,13 +77,13 @@ export function SearchTab({ d, slug, plan, packCount, live, lastAi, running, cho
               return (
                 <button key={r.id ?? i} type="button" onClick={() => setOpen(r)} className={`grid w-full ${cols} items-center gap-2.5 border-t border-[#ececec] px-[18px] py-2.5 text-left text-body hover:bg-[#fafafa]`}>
                   <span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.error ? "#d64545" : cur ? "#d64545" : done ? ((r.cited ?? 0) ? "#141414" : "#b5b5b5") : "#e3e3e3" }} /><span className="truncate">{r.q}</span></span>
-                  <span className="truncate text-muted">{PACK_LABEL[(r.pack ?? "custom") as keyof typeof PACK_LABEL]}</span><span className="min-w-0">{r.engine ? <ProviderMark id={r.engine} short bold={false} /> : ""}</span>
+                  <span className="truncate text-muted">{PACK_LABEL[(r.pack ?? "custom") as keyof typeof PACK_LABEL]}</span><span className="min-w-0">{r.engine ? <ToolInline id={r.engine} short /> : ""}</span>
                   <span className="num">{r.error ? "Failed" : done ? r.returned : cur ? "…" : "None"}</span><span className="num">{done && !r.error ? r.cited : "None"}</span><span className="num">{done && !r.error ? r.confirmed : "None"}</span>
                 </button>
               );
             })}
           </div></div>
-        ) : <p className="m-0 border-t border-[#ececec] px-[18px] py-5 text-body text-muted">No AI search has run yet. Connect a key on the Extension page, then press Run AI search. Each search shows here as it runs.</p>}
+        ) : <p className="m-0 border-t border-[#ececec] px-[18px] py-5 text-body text-muted">No AI search has run yet. Connect an AI tool here or in Connections, then press Run AI search. Each search shows here as it runs.</p>}
       </div>
       {open && (() => {
         const rows = findingsFor(open);

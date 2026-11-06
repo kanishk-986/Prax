@@ -34,9 +34,9 @@ async function ensureBar(tabId, rescan) {
 async function ensureAllTabs() {
   const tabs = await chrome.tabs.query({ url: "https://www.linkedin.com/*" }).catch(() => []);
   await Promise.all(tabs.map((t) => (t.discarded ? null : ensureBar(t.id).catch(() => {}))));
-  // The Prax site's bridge, so the Extension page answers without a reload after an update.
+  // The Prax site's bridge, so the Connections page answers without a reload after an update.
   const web = await chrome.tabs.query({ url: PRAX + "/*" }).catch(() => []);
-  await Promise.all(web.map((t) => chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["bridge.js"] }).catch(() => {})));
+  await Promise.all(web.map((t) => chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["tools.js", "bridge.js"] }).catch(() => {})));
 }
 
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
@@ -47,7 +47,7 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
 });
 
 chrome.runtime.onStartup.addListener(() => { ensureAllTabs(); });
-// First install opens the Extension page in Prax, where all setup happens.
+// First install opens Prax for Chrome in Connections, where all setup happens (the old /extension link redirects there).
 chrome.runtime.onInstalled.addListener((d) => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   ensureAllTabs();
@@ -60,14 +60,19 @@ let running = 0, keepAlive = 0;
 function hold() { if (running++ === 0) keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000); }
 function release() { if (--running <= 0) { running = 0; clearInterval(keepAlive); } }
 
-const DEFAULT_MODEL = { claude: "claude-opus-5-5", openai: "gpt-5", grok: "grok-4", gemini: "gemini-2.5-pro" };
+// Every tool call follows the routes set in Prax, Connections (db/032): a job (comment drafts, post drafts, scoring,
+// Discovery search and fetch, the humanization check, images) runs on its primary tool, or on the fallback when the
+// primary has no key here, is at its monthly cap, or fails. Requests and reply mapping for each tool live in tools.js.
+importScripts("tools.js");
+const T = PRAX_TOOLS;
+const DEFAULT_MODEL = T.DEFAULT_MODEL;
 let meCache = null;
 
 async function cfg() { return (await chrome.storage.local.get("cfg")).cfg || {}; }
 
 async function prax(action, body = {}) {
   const c = await cfg();
-  if (!c.praxUrl || !c.praxToken) throw new Error("Connect this browser in Prax: open Prax, Extension, Connect this browser.");
+  if (!c.praxUrl || !c.praxToken) throw new Error("Connect this browser in Prax: open Prax, Connections, Prax for Chrome, Connect this browser.");
   let r;
   try {
     r = await fetch(c.praxUrl.replace(/\/$/, "") + "/api/ext/" + action, {
@@ -84,41 +89,116 @@ async function me(fresh) {
   return meCache;
 }
 
-async function callModel(system, user) {
+// ---------- routes, caps and usage tags ----------
+// The saved routes and the tools at 100% of their monthly cap, from Prax, kept for a minute. Without Prax (not
+// connected yet, or before db/032) every job uses its default: writing jobs use the drafting model chosen here.
+let connCache = null, connAt = 0;
+async function connections() {
+  if (connCache && Date.now() - connAt < 60000) return connCache;
+  try { connCache = await prax("connections"); } catch { connCache = { routes: {}, blocked: [] }; }
+  connAt = Date.now();
+  return connCache;
+}
+// The defaults match JOBS in src/lib/connections.ts (scripts/test-connections.ts checks them).
+const WRITING_JOBS = ["comment", "post", "analysis"];
+const JOB_DEFAULT = { discovery_search: { primary: "exa", fallback: "" }, discovery_fetch: { primary: "prax_reader", fallback: "" }, humanize_check: { primary: "pangram", fallback: "" }, humanize_rewrite: { primary: "prax_rewrite", fallback: "walter" }, image: { primary: "openai_images", fallback: "gemini_images" } };
+async function routeOf(job) {
+  const c = await cfg(), s = await connections();
+  const saved = s.routes && s.routes[job];
+  if (saved && saved.primary) return { primary: saved.primary, fallback: saved.fallback || "" };
+  if (WRITING_JOBS.includes(job)) return { primary: c.provider || "claude", fallback: "" };
+  return JOB_DEFAULT[job] || { primary: "", fallback: "" };
+}
+const NAME = { claude: "Claude", openai: "OpenAI", gemini: "Gemini", perplexity: "Perplexity", mistral: "Mistral", deepseek: "DeepSeek", groq: "Groq", grok: "Grok", exa: "Exa", tavily: "Tavily", firecrawl: "Firecrawl", pangram: "Pangram", gptzero: "GPTZero", originality: "Originality.ai", serpapi: "SerpApi", openai_images: "OpenAI", gemini_images: "Google" };
+/** The tool for a job now and its key: the primary, else the fallback. Throws a plain message when neither can run. */
+async function pick(job) {
+  const c = await cfg(), s = await connections(), route = await routeOf(job);
+  const blocked = new Set(s.blocked || []);
+  const r = T.resolve(route, (t) => !!T.keyOf(c, t, job), (t) => blocked.has(t));
+  if (!r.tool) {
+    const name = NAME[route.primary] || route.primary || "an AI";
+    throw new Error(r.reason === "cap" ? `The monthly cap for ${name} is reached. Raise it in Prax, Connections.` : `No ${name} key in this browser. Connect it in Prax, Connections.`);
+  }
+  const other = r.usedFallback ? "" : r.order.find((t) => t !== r.tool && !blocked.has(t) && (t.startsWith("prax_") || !!T.keyOf(c, t, job))) || "";
+  return { tool: r.tool, key: T.keyOf(c, r.tool, job), fallback: other, route };
+}
+// One usage row per call, tagged with the job and the Prax section: counts, cost and time only, never the text.
+function logUse(row) { prax("usage", row).catch(() => {}); }
+
+async function send(req) {
+  let r;
+  try { r = await fetch(req.url, req.init); } catch { throw new Error(req.url.split("/")[2] + " could not be reached. Check the internet connection and try again."); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(T.errorOf("", r.status, j)); e.status = r.status; throw e; }
+  return j;
+}
+
+const modelFor = (c, tool) => (c.models && c.models[tool]) || ((c.provider || "claude") === tool && c.model) || DEFAULT_MODEL[tool];
+
+/** One chat call for a writing job on the routed tool, trying the fallback once when the primary fails. */
+async function callModel(system, user, job = "comment", section = "", kind = "draft", meta = {}, tagJob = job) {
   const c = await cfg();
-  const provider = c.provider || "claude";
-  const model = c.model || DEFAULT_MODEL[provider];
-  if (!c.apiKey) throw new Error("Add your AI key in Prax: open Prax, Extension, AI model.");
-  let r, j;
-  if (provider === "claude") {
-    r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      // Server-side fallback lets Anthropic retry on another model if this one declines.
-      headers: { "content-type": "application/json", "x-api-key": c.apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "anthropic-beta": "server-side-fallback-2026-07-01" },
-      body: JSON.stringify({ model, max_tokens: 4000, system, messages: [{ role: "user", content: user }], output_config: { effort: "medium" }, fallbacks: "default" }),
-    });
-    j = await r.json();
-    if (!r.ok) throw new Error(j.error?.message || "Claude error " + r.status);
-    if (j.stop_reason === "refusal") throw new Error("The model declined this one. Try another mode.");
-    return { text: (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join(""), provider, model, input_tokens: j.usage?.input_tokens, output_tokens: j.usage?.output_tokens };
+  const first = await pick(job);
+  const tryOn = async (tool, key) => {
+    const model = modelFor(c, tool), t0 = Date.now();
+    try {
+      const out = T.mapChat(tool, await send(T.chatRequest(tool, key, model, system, user)));
+      logUse({ kind, provider: tool, model, input_tokens: out.input_tokens, output_tokens: out.output_tokens, job: tagJob, section, cost: out.cost, ok: true, ms: Date.now() - t0, ...meta });
+      return { ...out, provider: tool, model };
+    } catch (e) {
+      logUse({ kind, provider: tool, model, input_tokens: 0, output_tokens: 0, job: tagJob, section, ok: false, ms: Date.now() - t0 });
+      throw e;
+    }
+  };
+  try { return await tryOn(first.tool, first.key); }
+  catch (e) {
+    if (!first.fallback || /declined/.test(e.message)) throw e;
+    return await tryOn(first.fallback, T.keyOf(c, first.fallback, job));
   }
-  if (provider === "gemini") {
-    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": c.apiKey },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: user }] }] }),
-    });
-    j = await r.json();
-    if (!r.ok) throw new Error(j.error?.message || "Gemini error " + r.status);
-    return { text: (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join(""), provider, model, input_tokens: j.usageMetadata?.promptTokenCount, output_tokens: j.usageMetadata?.candidatesTokenCount };
+}
+
+// ---------- Connections: Test connection, Discovery search and Discovery fetch ----------
+// test: the cheapest documented call for that tool, with the key saved here (or a key typed into the Connect panel,
+// which is used for this one call and not kept). search and fetch run on the route for Discovery search or fetch;
+// "prax_reader" means the page should use Prax's own server reader. Never for LinkedIn pages.
+async function toolJob(msg) {
+  const c = await cfg();
+  const section = String(msg.section || "");
+  if (msg.op === "test") {
+    const tool = String(msg.tool || "");
+    const key = String(msg.key || "").trim() || T.keyOf(c, tool, msg.job || "");
+    if (!key) throw new Error("No key to test. Paste one, or connect the tool first.");
+    const t0 = Date.now();
+    try {
+      const j = await send(T.testRequest(tool, key));
+      const line = T.mapTest(tool, j);
+      logUse({ kind: "test", provider: tool, model: "", input_tokens: 0, output_tokens: 0, job: "test", section: "connections", ok: true, ms: Date.now() - t0 });
+      return { ok: true, line, ms: Date.now() - t0 };
+    } catch (e) {
+      logUse({ kind: "test", provider: tool, model: "", input_tokens: 0, output_tokens: 0, job: "test", section: "connections", ok: false, ms: Date.now() - t0 });
+      throw new Error(`${NAME[tool] || tool}: ${e.message}`);
+    }
   }
-  const base = provider === "grok" ? "https://api.x.ai/v1" : "https://api.openai.com/v1";
-  r = await fetch(base + "/chat/completions", {
-    method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + c.apiKey },
-    body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
-  });
-  j = await r.json();
-  if (!r.ok) throw new Error(j.error?.message || "Model error " + r.status);
-  return { text: j.choices?.[0]?.message?.content || "", provider, model, input_tokens: j.usage?.prompt_tokens, output_tokens: j.usage?.completion_tokens };
+  if (msg.op === "search" || msg.op === "fetch") {
+    const job = msg.op === "search" ? "discovery_search" : "discovery_fetch";
+    const first = await pick(job);
+    const run = async (tool, key) => {
+      if (tool === "prax_reader") return { tool, server: true };
+      const t0 = Date.now();
+      try {
+        const out = msg.op === "search" ? T.mapSearch(tool, await send(T.searchRequest(tool, key, String(msg.query || ""), Math.min(10, Number(msg.n) || 8))))
+          : T.mapFetch(tool, await send(T.fetchRequest(tool, key, String(msg.url || ""))), String(msg.url || ""));
+        logUse({ kind: msg.op, provider: tool, model: "", input_tokens: 0, output_tokens: 0, units: out.units || 1, cost: out.cost, job, section: section || "discovery", ok: true, ms: Date.now() - t0 });
+        return { tool, ...out };
+      } catch (e) {
+        logUse({ kind: msg.op, provider: tool, model: "", input_tokens: 0, output_tokens: 0, job, section: section || "discovery", ok: false, ms: Date.now() - t0 });
+        throw e;
+      }
+    };
+    try { return await run(first.tool, first.key); }
+    catch (e) { if (!first.fallback) throw e; return await run(first.fallback, T.keyOf(c, first.fallback, job)); }
+  }
+  throw new Error("Unknown tool request.");
 }
 
 // Drafts for LinkedIn count against the daily limit set in Comment Studio, Safety (0 = no limit).
@@ -134,14 +214,18 @@ async function countUse(kind) {
 }
 
 // Draft with the profile's locked rules and voice, then the task-specific rules the caller sends.
-async function draft({ rules, user, kind, meta, plain }) {
+// The job picks the route (comment drafts, post drafts, or scoring and analysis); older callers send only a kind.
+const KIND_JOB = { comment: "comment", reply: "comment", note: "comment", repair: "comment", refine: "comment", pipeline: "comment", draft: "comment", voice: "analysis" };
+const JOBS_OK = ["comment", "post", "analysis"];
+async function draft({ rules, user, kind, meta, plain, job, section }) {
   const m = await me();
   await countUse(kind);
   // Plain requests (Voice Lab analysis) skip the voice and house rules, which would colour the result.
   const system = plain ? rules || "You analyse writing." : [m.voice || "Write thoughtful, specific LinkedIn comments.", m.rules?.voice, `Target topics for this profile: ${(m.topics || []).join(", ")}.`, m.rules?.locked, rules].filter(Boolean).join("\n\n");
-  const r = await callModel(system, user);
-  // Token counts, style, post type and scores go to Prax for the overview; the text does not.
-  prax("usage", { kind: kind || "draft", provider: r.provider, model: r.model, input_tokens: r.input_tokens || 0, output_tokens: r.output_tokens || 0, ...(meta || {}) }).catch(() => {});
+  // Prax's own humanization rewrite runs on the post drafts route and is tagged as the humanization rewrite job.
+  const j = JOBS_OK.includes(job) ? job : job === "humanize_rewrite" ? "post" : KIND_JOB[kind] || (plain ? "analysis" : "post");
+  // Token counts, style, post type and scores go to Prax for the overview, tagged with the job and section; the text does not.
+  const r = await callModel(system, user, j, section || "", kind || "draft", meta || {}, job === "humanize_rewrite" ? job : j);
   return r.text;
 }
 
@@ -171,11 +255,12 @@ async function post(url, headers, body) {
   return j;
 }
 
-async function search({ engine, prompt, country }) {
-  if (SERP_ENGINES[engine]) return serpSearch({ engine, prompt, country });
+async function search({ engine, prompt, country, job, section }) {
+  const tag = { job: job === "discovery_search" ? "discovery_search" : "citations", section: section === "discovery" ? "discovery" : "citations" };
+  if (SERP_ENGINES[engine]) return serpSearch({ engine, prompt, country, tag });
   const c = await cfg();
   const key = keyFor(c, engine);
-  if (!key) throw new Error(`No ${KEY_NAME[engine] || engine} key in this browser. Add one on the AI citations page or the Extension page.`);
+  if (!key) throw new Error(`No ${KEY_NAME[engine] || engine} key in this browser. Connect it in Prax, Connections.`);
   const model = (c.searchModels && c.searchModels[engine]) || SEARCH_MODEL[engine];
   const loc = country ? { user_location: { type: "approximate", country } } : {};
   const raws = [];
@@ -199,7 +284,7 @@ async function search({ engine, prompt, country }) {
     raws.push(await post("https://generativelanguage.googleapis.com/v1beta/interactions", { "x-goog-api-key": key, "Api-Revision": "2026-05-20" }, { model, input: prompt, tools: [{ type: "google_search" }] }));
   }
   const tok = (k) => raws.reduce((s, j) => s + (j.usage?.[k] ?? 0), 0);
-  prax("usage", { kind: "citation", provider: engine, model: raws[raws.length - 1]?.model || model, input_tokens: tok("input_tokens"), output_tokens: tok("output_tokens") }).catch(() => {});
+  logUse({ kind: "citation", provider: engine, model: raws[raws.length - 1]?.model || model, input_tokens: tok("input_tokens"), output_tokens: tok("output_tokens"), ...tag, ok: true });
   return { engine, model, raws };
 }
 
@@ -232,10 +317,10 @@ const serpSlim = (j) => ({
   ...(j.error ? { error: String(j.error).slice(0, 300) } : {}),
 });
 
-async function serpSearch({ engine, prompt, country }) {
+async function serpSearch({ engine, prompt, country, tag }) {
   const c = await cfg();
   const key = (c.keys && c.keys.serpapi) || "";
-  if (!key) throw new Error("No SerpApi key in this browser. Add one on the Prax Extension page, Keys for AI search.");
+  if (!key) throw new Error("No SerpApi key in this browser. Connect SerpApi in Prax, Connections.");
   const cc = String(country || "").toUpperCase();
   const raws = [];
   let searches = 0;
@@ -255,18 +340,19 @@ async function serpSearch({ engine, prompt, country }) {
     searches++;
   }
   // One usage row per SerpApi search, with no tokens: Prax shows a search count for these engines, never a cost.
-  for (let i = 0; i < searches; i++) prax("usage", { kind: "citation", provider: engine, model: SERP_ENGINES[engine], input_tokens: 0, output_tokens: 0 }).catch(() => {});
+  for (let i = 0; i < searches; i++) logUse({ kind: "citation", provider: engine, model: SERP_ENGINES[engine], input_tokens: 0, output_tokens: 0, units: 1, ...tag, ok: true });
   return { engine, model: SERP_ENGINES[engine], raws, searches };
 }
 
 // ---------- Content Studio images ----------
 // One image from a short brief, with the OpenAI or Google key saved in this browser. Returns a data URL; nothing is stored.
-const IMAGE_MODEL = { openai: "gpt-image-1", gemini: "gemini-2.5-flash-image" };
-async function image({ provider, prompt, size }) {
+// gpt-image-1 was shut down on 23 Oct 2026 (developers.openai.com/api/docs/models), so OpenAI uses gpt-image-2.5-flare.
+const IMAGE_MODEL = { openai: "gpt-image-2.5-flare", gemini: "gemini-2.5-flash-image" };
+async function image({ provider, prompt, size, section }) {
   const c = await cfg();
   const p = provider === "gemini" ? "gemini" : "openai";
   const key = keyFor(c, p);
-  if (!key) throw new Error(`No ${p === "openai" ? "OpenAI" : "Google"} key in this browser. Add one on the Prax Extension page.`);
+  if (!key) throw new Error(`No ${p === "openai" ? "OpenAI" : "Google"} key in this browser. Connect it in Prax, Connections.`);
   const model = (c.imageModels && c.imageModels[p]) || IMAGE_MODEL[p];
   let url = "";
   if (p === "openai") {
@@ -279,7 +365,7 @@ async function image({ provider, prompt, size }) {
     url = part ? `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}` : "";
   }
   if (!url) throw new Error("No image came back. Try a simpler description.");
-  prax("usage", { kind: "image", provider: p, model, input_tokens: 0, output_tokens: 0 }).catch(() => {});
+  logUse({ kind: "image", provider: p, model, input_tokens: 0, output_tokens: 0, units: 1, job: "image", section: section || "content_write", ok: true });
   return { provider: p, model, url };
 }
 
@@ -292,7 +378,7 @@ async function image({ provider, prompt, size }) {
 // GET /task/{task_id} until stage is STAGE_SUCCESS or STAGE_FAILED. Models from GET /models (docs .../models.md).
 importScripts("walter.js");
 const PANGRAM = "https://text.external-api.pangram.com";
-const PANGRAM_ERR = { 400: "Pangram could not read the request.", 401: "Pangram did not accept the key. Check it on the Prax Extension page.", 402: "The Pangram account has no credits left.", 403: "This Pangram key cannot use that model.", 404: "Pangram lost that check. Try again.", 413: "That text is too long for Pangram.", 422: "Pangram could not check that text.", 429: "Pangram is rate limiting this key. Wait a minute and try again.", 500: "Pangram had an error. Try again.", 503: "Pangram is busy. Try again shortly." };
+const PANGRAM_ERR = { 400: "Pangram could not read the request.", 401: "Pangram did not accept the key. Check it in Prax, Connections.", 402: "The Pangram account has no credits left.", 403: "This Pangram key cannot use that model.", 404: "Pangram lost that check. Try again.", 413: "That text is too long for Pangram.", 422: "Pangram could not check that text.", 429: "Pangram is rate limiting this key. Wait a minute and try again.", 500: "Pangram had an error. Try again.", 503: "Pangram is busy. Try again shortly." };
 let pangramModelCache = null;
 
 async function pangramFetch(path, key, init = {}) {
@@ -329,7 +415,9 @@ async function pangramDetect(key, text) {
 
 // Detectors Prax can ask, each one function: check(key, text) returns the raw reply, which Prax maps (src/lib/humanize.ts
 // DETECTORS). GPTZero or Originality.ai would add an entry here and one there; nothing else changes.
-const DETECTORS = { pangram: { check: pangramDetect } };
+// GPTZero and Originality.ai (Connections): request and reply slimming in tools.js; Prax maps the reply (src/lib/humanize.ts).
+async function otherDetect(tool, key, text) { return T.slimDetect(tool, await send(T.detectRequest(tool, key, text))); }
+const DETECTORS = { pangram: { check: pangramDetect }, gptzero: { check: (k, t) => otherDetect("gptzero", k, t) }, originality: { check: (k, t) => otherDetect("originality", k, t) } };
 // Every paid call is tagged for usage: the job (humanize_check, humanize_rewrite) is set by Prax from the service,
 // and the section is where the call came from (comment_studio, linkedin_bar, content_write, content_editor).
 const SECTIONS = ["comment_studio", "linkedin_bar", "content_write", "content_editor"];
@@ -350,25 +438,33 @@ async function humanize(msg) {
     }
     return { ...plan, texts: out };
   }
-  const plan = await prax("humanize", { op: "plan", service: "pangram", kind, texts, local: Number(msg.local) || 0, has_key: !!keys.pangram, confirm: !!msg.confirm });
+  // The detector comes from the humanization check route (Pangram unless Connections says otherwise); a detector at its
+  // Connections cap, or with no key here, gives way to the fallback, and with neither the plan says no key.
+  const conn = await connections();
+  const route = await routeOf("humanize_check");
+  const picked = T.resolve(route, (t) => !!T.keyOf(c, t, "humanize_check"), (t) => (conn.blocked || []).includes(t));
+  // A page can ask one detector by id (src/components/humanize/use-humanize.ts detector()); otherwise the route decides.
+  const service = DETECTORS[msg.detector] ? msg.detector : DETECTORS[picked.tool] ? picked.tool : "pangram";
+  const detKey = T.keyOf(c, service, "humanize_check");
+  const plan = await prax("humanize", { op: "plan", service, kind, texts, local: Number(msg.local) || 0, has_key: !!detKey, confirm: !!msg.confirm });
   const base = { ...plan, walter: { hasKey: !!keys.walter, ready: WALTER.confirmed } };
   if (msg.op !== "check" || plan.decision?.action !== "check") return base;
   const results = plan.results.slice();
   let used = plan.used?.pangram || 0;
   for (let i = 0; i < texts.length; i++) {
     if (results[i]) continue;
-    const raw = await DETECTORS.pangram.check(keys.pangram, texts[i]);
-    const rec = await prax("humanize", { op: "record", service: "pangram", job: "humanize_check", section, kind, text: texts[i], raw });
+    const raw = await DETECTORS[service].check(detKey, texts[i]);
+    const rec = await prax("humanize", { op: "record", service, job: "humanize_check", section, kind, text: texts[i], raw });
     results[i] = rec.result; used = rec.used ?? used;
   }
-  return { ...base, decision: { ...plan.decision, action: "checked" }, results, used: { ...plan.used, pangram: used } };
+  return { ...base, detector: service, decision: { ...plan.decision, action: "checked" }, results, used: { ...plan.used, pangram: used } };
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const jobs = {
     me: () => me(msg.fresh),
     prax: () => prax(msg.action, msg.body),
-    draft: () => draft(msg),
+    draft: () => draft({ ...msg, section: msg.section || (sender.tab && LINKEDIN.test(sender.tab.url || "") ? "linkedin_bar" : sender.tab ? "" : "side_panel") }),
     scored: () => scored(msg.meta),
     remember: () => remember(msg.items || []),
     history: async () => (await chrome.storage.local.get("history")).history || [],
@@ -376,6 +472,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     search: () => search(msg),
     image: () => image(msg),
     humanize: () => humanize(msg),
+    tool: () => toolJob(msg),
     // The side panel's Prax bar status and Fix bars: checks (and if needed adds) the bar in that tab.
     barStatus: () => ensureBar(msg.tabId, !!msg.rescan),
   };
@@ -386,4 +483,4 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true;
 });
 
-chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) meCache = null; });
+chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) { meCache = null; connCache = null; } });

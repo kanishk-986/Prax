@@ -43,7 +43,7 @@ export function GetStarted({ name, steps }: { name: string; steps: SetupStep[] }
 export function setupSteps(o: { base: string; first: string; hasStrategy: boolean; extConnected: boolean; people: number; prospects: number }): SetupStep[] {
   return [
     { key: "settings", title: "Fill in the profile", line: `Role, company, pillars, focus regions and the comment voice, so every draft sounds like ${o.first}.`, href: `${o.base}/settings`, done: o.hasStrategy },
-    { key: "extension", title: "Connect the Chrome extension", line: "It drafts comments on LinkedIn and logs what is posted. The AI key stays in this browser.", href: `${o.base}/extension`, done: o.extConnected },
+    { key: "extension", title: "Connect the Chrome extension", line: "It drafts comments on LinkedIn and logs what is posted. The AI key stays in this browser.", href: `${o.base}/connections?tab=chrome`, done: o.extConnected },
     { key: "network", title: "Import the LinkedIn export", line: "The connections zip from LinkedIn. Warm paths and segments come from it; message text is never saved.", href: `${o.base}/network`, done: o.people > 0 },
     { key: "pipeline", title: "Add the first people to Pipeline", line: "From the Network import, a CSV or one by one. Today then plans comments and follow-ups for them.", href: `${o.base}/pipeline`, done: o.prospects > 0 },
   ];

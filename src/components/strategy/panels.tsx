@@ -18,7 +18,7 @@ const STAGES_ALL = ["Target", "Warming", "Requested", "Connected", "In conversat
 const WHERE: Record<string, string> = {
   "Dashboard targets": "", Dashboard: "", "Today quota": "/today", Today: "/today", "Today order": "/today", "Pipeline segments": "/pipeline", "Pipeline next step": "/pipeline", "Pipeline touch plan": "/pipeline",
   "Discovery buyer fit": "/discovery", "Discovery priority": "/discovery", "Discovery geography": "/discovery", Discovery: "/discovery", "Content Studio": "/studio-content", "Content Studio angles": "/studio-content",
-  "Content Studio angle": "/studio-content", "Content Studio plan": "/studio-content?tab=plan", Campaigns: "/studio-content?tab=campaigns", "AI citations": "/citations", "Comment Studio": "/studio", "Extension voice": "/extension",
+  "Content Studio angle": "/studio-content", "Content Studio plan": "/studio-content?tab=plan", Campaigns: "/studio-content?tab=campaigns", "AI citations": "/citations", "Comment Studio": "/studio", "Extension voice": "/connections?tab=chrome",
 };
 
 function Panel({ title, kicker, type, onClose, children, footer }: { title: string; kicker: string; type: NodeType; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode }) {

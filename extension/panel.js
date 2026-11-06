@@ -101,8 +101,8 @@ function findReplies(name) {
 const ago = (t) => { if (!t) return "not yet"; const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `${s} s ago` : `${Math.round(s / 60)} min ago`; };
 async function refreshStatus(rescan) {
   const rows = [["Extension", "v" + chrome.runtime.getManifest().version]];
-  rows.push(["Prax", !cfg.praxToken ? ["Not connected. Open Prax, Extension, Connect this browser.", "bad"] : me ? [`Connected to ${me.workspace}`, "good"] : meErr ? [meErr, "bad"] : ["Checking…"]]);
-  rows.push(["AI key", cfg.apiKey ? ["Saved in this browser", "good"] : ["Missing. Add it on the Prax Extension page.", "bad"]]);
+  rows.push(["Prax", !cfg.praxToken ? ["Not connected. Open Prax, Connections, Prax for Chrome, Connect this browser.", "bad"] : me ? [`Connected to ${me.workspace}`, "good"] : meErr ? [meErr, "bad"] : ["Checking…"]]);
+  rows.push(["AI key", cfg.apiKey || Object.values(cfg.keys || {}).some(Boolean) ? ["Saved in this browser", "good"] : ["Missing. Connect an AI tool in Prax, Connections.", "bad"]]);
   const tab = await activeTab().catch(() => null);
   if (!tab || !D.isLinkedIn(tab.url)) rows.push(["This tab", "Not a LinkedIn page"]);
   else {
@@ -309,11 +309,11 @@ function renderAI() {
   const state = (on) => `<span class="ks${on ? " on" : ""}"><i></i>${on ? "Connected in this browser" : "No key in this browser"}</span>`;
   const row = (id, on, model, note) => `<div class="pr"><div class="pr-top">${praxMark(id)}${note ? `<span class="pr-note">${note}</span>` : ""}</div>
     <div class="pr-facts">${state(on)}${on ? `<code>${esc(model)}</code>` : ""}</div></div>`;
-  $("ai-rows").innerHTML = row(main, !!cfg.apiKey, cfg.model || (PRAX_PROVIDERS[main] || {}).model || "", main in SEARCH_MODELS ? "Drafts and AI search" : "Drafts")
+  $("ai-rows").innerHTML = row(main, has(main), cfg.model || (PRAX_PROVIDERS[main] || {}).model || "", main in SEARCH_MODELS ? "Drafts and AI search" : "Drafts")
     + Object.keys(SEARCH_MODELS).filter((p) => p !== main).map((p) => row(p, has(p), (cfg.searchModels && cfg.searchModels[p]) || SEARCH_MODELS[p], "AI search")).join("");
 }
 chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) { cfg = ch.cfg.newValue || {}; renderAI(); } });
-$("openkeys").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension#search-keys" }));
+$("openkeys").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension?to=tools" }));
 
 $("openprax").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));
 $("who").addEventListener("click", () => chrome.tabs.create({ url: "https://prax-gamma.vercel.app/extension" }));

@@ -358,7 +358,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
     const prompt = promptFor(q, engine), country = engine === "gemini" ? "" : COUNTRY[q.region] ?? "";
     const base = withProfile({ workspace_id: ws.id, question_id: q.id, engine, web_search: true, question_text: prompt, region: q.region, language: q.language, repeat_index: rep }, scope);
     try {
-      const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country }, 240000);
+      const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country, job: "citations", section: "citations" }, 240000);
       const p = parseEngine(engine, res.raws);
       const st = statusOf(p);
       const { data, error } = await supabase().from("citation_runs").insert({ ...base, model: p.model || res.model, status: st, answer: p.answer, input_tokens: p.input_tokens, output_tokens: p.output_tokens, error: p.refused ? "The model declined to answer" : st === "no_answer" ? (p.note ?? "No AI answer for this search") : "" }).select("id").single();
@@ -402,7 +402,7 @@ function RunPanel({ qs, self, facts, onKeys, onClose, onDone }: { qs: Question[]
       foot={running
         ? <button className={s.btn} onClick={() => { stop.current = true; setProg({ ...prog!, stopped: true }); }}>Stop after the current ones</button>
         : <button className={cx(s.btn, s.red)} disabled={!total} onClick={start}>{prog ? "Run again" : `Start ${total} runs`}</button>}>
-      {status && !status.installed && <p className="mb-3 text-[13px] text-[#9e1c1c]">Install the Prax extension from the Extension page first.</p>}
+      {status && !status.installed && <p className="mb-3 text-[13px] text-[#9e1c1c]">Install Prax for Chrome first: Connections, Prax for Chrome.</p>}
       <Card title="AI tools" meta={`${chosen.length} selected`} action={missing ? <button className={s.link} onClick={onKeys}>Connect AI keys</button> : undefined}>
         <div className={cx(s.rows, s.rowsTop)}>{LIVE.map((e) => (
           <label key={e.id} className={cx(s.row, "cursor-pointer py-3", !ready(e.id) && "cursor-default")}>

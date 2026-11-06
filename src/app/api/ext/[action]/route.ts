@@ -4,7 +4,8 @@ import { parseProfile, auditProfile } from "@/lib/profile";
 import { mergeStudio, tuningRules, voiceText, LOCKED_RULES, LENGTHS } from "@/lib/studio";
 import { parseCount } from "@/lib/content";
 import { normUrl } from "@/lib/network";
-import { KINDS, DETECTORS, detection, sectionOf, decide, levelFor, mergeSettings, textHash, wordCount, costOf, walterAllowed, type Kind } from "@/lib/humanize";
+import { KINDS, DETECTORS, detection, sectionOf, decide, levelFor, mergeSettings, textHash, wordCount, costOf, walterAllowed, type Kind, type DetectorId } from "@/lib/humanize";
+import { blockedTools, eventsOf, mergeConnSettings } from "@/lib/connections";
 
 // The Chrome extension's only door into Prax. Every call carries the user's extension token,
 // which the database checks before it reads or writes anything.
@@ -17,7 +18,9 @@ type Rpc = (fn: string, args: Record<string, unknown>) => Promise<any>;
  *  record: one paid call; a Pangram reply is mapped here (src/lib/humanize.ts) and cached by its text hash. */
 async function humanizeOp(body: Record<string, unknown>, rpc: Rpc) {
   const kind: Kind = KINDS.includes(body.kind as Kind) ? (body.kind as Kind) : "post";
-  const service = body.service === "walter" ? "walter" : "pangram";
+  // Pangram, or another registered detector routed in Connections (GPTZero, Originality.ai; db/032 accepts them), or Walter.
+  const detector: DetectorId = typeof body.service === "string" && body.service in DETECTORS ? (body.service as DetectorId) : "pangram";
+  const service = body.service === "walter" ? "walter" : detector;
   const section = sectionOf(body.section);
   if (body.op === "record") {
     const text = String(body.text ?? "").slice(0, 60000);
@@ -107,6 +110,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       // Humanization (db/031). The extension's background calls "plan" before any paid check and "record" after one;
       // the Pangram and Walter keys never come here. Text is hashed here for the cache and is not stored.
       case "humanize": return json(await humanizeOp(body, rpc));
+      // Connections (db/032): the saved routes and the tools at 100% of their monthly cap, so the extension can route
+      // each job and stop paid calls at the cap. Keys never come here. Before 032 runs this answers with no routes.
+      case "connections": {
+        const st = await rpc("ext_connection_state", {}).catch(() => null);
+        if (!st) return json({ routes: {}, blocked: [] });
+        const s = mergeConnSettings(st.settings);
+        const month = new Date().toISOString().slice(0, 7);
+        return json({ routes: s.routes, blocked: blockedTools(s.caps, eventsOf(st.usage ?? [], st.humanize ?? []), month) });
+      }
       case "snapshot":return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
       case "capture": {
         const me = await rpc("ext_me", {});

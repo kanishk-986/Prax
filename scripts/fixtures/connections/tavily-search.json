@@ -1,0 +1,25 @@
+{
+  "source": "https://docs.tavily.com/documentation/api-reference/endpoint/search",
+  "note": "The OpenAPI spec gives no whole-response example, only per-field `example:` values. This object is assembled from those per-field values only (nothing added); long text trimmed. `usage` appears only when include_usage:true; `answer` only when include_answer is set.",
+  "response": {
+    "query": "Who is Leo Messi?",
+    "answer": "Lionel Messi, born in 1987, is an Argentine footballer widely regarded as one of the greatest players of his generation. ...[trimmed]",
+    "images": [],
+    "results": [
+      {
+        "title": "Lionel Messi Facts | Britannica",
+        "url": "https://www.britannica.com/facts/Lionel-Messi",
+        "content": "Lionel Messi, an Argentine footballer, is widely regarded as one of the greatest football players of his generation. ...[trimmed]",
+        "score": 0.81025416,
+        "raw_content": null,
+        "published_date": "Tue, 11 Mar 2025 17:00:00 GMT",
+        "favicon": "https://britannica.com/favicon.png",
+        "id": "a3f9c2-04"
+      }
+    ],
+    "auto_parameters": { "topic": "general", "search_depth": "basic" },
+    "response_time": "1.67",
+    "usage": { "credits": 1 },
+    "request_id": "123e4567-e89b-12d3-a456-426614174111"
+  }
+}

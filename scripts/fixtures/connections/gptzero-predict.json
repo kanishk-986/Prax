@@ -1,0 +1,184 @@
+{
+  "source": "https://docs.gptzero.me/api-reference/#POST/v2/predict/text (openapi/public.yaml)",
+  "response": {
+    "version": "2026-10-07-base",
+    "neatVersion": "4.1o",
+    "scanId": "cc817f5a-5fc9-443b-a4f6-8636625bbe6d",
+    "documents": [
+      {
+        "paragraphs": [
+          {
+            "start_sentence_index": 0,
+            "num_sentences": 1,
+            "completely_generated_prob": 0
+          },
+          {
+            "start_sentence_index": 1,
+            "num_sentences": 2,
+            "completely_generated_prob": 0.8254776901813464
+          },
+          {
+            "start_sentence_index": 3,
+            "num_sentences": 1,
+            "completely_generated_prob": 0
+          }
+        ],
+        "completely_generated_prob": 1,
+        "average_generated_prob": 1,
+        "predicted_class": "ai",
+        "confidence_score": 1,
+        "confidence_category": "high",
+        "overall_burstiness": 0,
+        "writing_stats": {},
+        "excluded_spans": [
+          {
+            "start": 0,
+            "end": 56,
+            "text": "The Natural Splendor of Uganda: A Symphony of Landscapes",
+            "reason": "header"
+          },
+          {
+            "start": 385,
+            "end": 404,
+            "text": "The Mountain Realms",
+            "reason": "header"
+          },
+          {
+            "start": 1089,
+            "end": 1105,
+            "text": "The Great Waters",
+            "reason": "header"
+          }
+        ],
+        "confidence_thresholds_raw": {
+          "identity": {
+            "ai": {
+              "reject": 0.33,
+              "low": 0.6,
+              "medium": 0.8
+            },
+            "human": {
+              "reject": 0.33,
+              "low": 0.6,
+              "medium": 0.8
+            },
+            "mixed": {
+              "reject": 0.33,
+              "low": 0.6,
+              "medium": 0.8
+            }
+          }
+        },
+        "sentences": [
+          {
+            "generated_prob": 0,
+            "sentence": "The Natural Splendor of Uganda: A Symphony of Landscapes",
+            "perplexity": 0,
+            "should_mask": true,
+            "masking_reason": "header",
+            "class_probabilities": {
+              "human": 1,
+              "ai": 0,
+              "paraphrased": 0
+            },
+            "interpretability_value": null,
+            "interpretability_normalized_value": null,
+            "interpretability_designation": null,
+            "interpretability_alpha": null,
+            "highlight_sentence_for_ai": false,
+            "special_highlight_type": null
+          },
+          {
+            "generated_prob": 0.9999980210411515,
+            "sentence": "Uganda stands as a testament to nature's extraordinary diversity, where every vista tells a story of ecological richness and pristine beauty.",
+            "perplexity": 0,
+            "should_mask": false,
+            "masking_reason": null,
+            "class_probabilities": {
+              "human": 1.978958848370778e-06,
+              "ai": 0.9998728061027473,
+              "paraphrased": 0.00012521493840426658
+            },
+            "interpretability_value": null,
+            "interpretability_normalized_value": null,
+            "interpretability_designation": null,
+            "interpretability_alpha": null,
+            "highlight_sentence_for_ai": true,
+            "special_highlight_type": null
+          },
+          {
+            "generated_prob": 0.9999983073568068,
+            "sentence": "From its mist-shrouded mountains to its sprawling savannas, the country presents an unparalleled tapestry of natural wonders that has rightfully earned it the title \"Pearl of Africa.\"",
+            "perplexity": 0,
+            "should_mask": false,
+            "masking_reason": null,
+            "class_probabilities": {
+              "human": 1.692643193177586e-06,
+              "ai": 0.9998432384812528,
+              "paraphrased": 0.00015506887555403017
+            },
+            "interpretability_value": null,
+            "interpretability_normalized_value": null,
+            "interpretability_designation": null,
+            "interpretability_alpha": null,
+            "highlight_sentence_for_ai": true,
+            "special_highlight_type": null
+          }
+        ],
+        "class_probabilities": {
+          "human": 0,
+          "ai": 1,
+          "mixed": 0
+        },
+        "confidence_scores_raw": {
+          "identity": {
+            "ai": 1,
+            "mixed": 0,
+            "human": 0
+          }
+        },
+        "subclass": {
+          "ai": {
+            "predicted_class": "pure_ai",
+            "result_message": "",
+            "confidence_score": 1,
+            "confidence_category": "high",
+            "class_probabilities": {
+              "pure_ai": 1,
+              "ai_paraphrased": 0
+            },
+            "confidence_scores_raw": {
+              "identity": {
+                "pure_ai": 1,
+                "ai_paraphrased": 0
+              }
+            },
+            "confidence_thresholds_raw": {
+              "identity": {
+                "ai_paraphrased": {
+                  "reject": 0.33,
+                  "low": 0.6,
+                  "medium": 0.8
+                },
+                "pure_ai": {
+                  "reject": 0.33,
+                  "low": 0.6,
+                  "medium": 0.8
+                }
+              }
+            }
+          }
+        },
+        "pageNumber": 0,
+        "neatVersion": "4.1o",
+        "version": "2026-10-07-base",
+        "language": "en",
+        "result_message": "Our detector is highly confident that the text is written by AI.",
+        "result_sub_message": null,
+        "document_classification": "AI_ONLY",
+        "inputText": "The Natural Splendor of Uganda: A Symphony of Landscapes\n\nUganda stands as a testament to nature's extraordinary diversity, where every vista tells a story of ecological richness and pristine beauty. From its mist-shrouded mountains to its sprawling savannas, the country presents an unparalleled tap ...[trimmed]",
+        "document_id": "677a87ae-deb1-41b4-8dab-31a8586c600f"
+      }
+    ]
+  }
+}

@@ -122,7 +122,7 @@ export function useHumanize(kind: Kind, text: string, setText: (t: string) => vo
         if (!r.texts) throw new Error({ "no-cap": "Enter Walter's monthly words in Settings, Humanization, first.", "cap-reached": "This month's Walter words are used up.", "not-ready": "Walter (beta) is waiting for its API to be confirmed.", "no-key": "Add a Walter key in Settings, Humanization." }[r.walter?.why ?? ""] ?? "Walter is not available.");
         changes = parseChanges({ changes: sents.map((b, k) => ({ before: b, after: r.texts![k] })) }, t);
       } else {
-        const raw = await askExtension<string>("ai", { kind: "repair", user: rewriteAsk(t, sents, rounds + 1) }, 120000);
+        const raw = await askExtension<string>("ai", { job: "humanize_rewrite", section: opts.section, kind: "repair", user: rewriteAsk(t, sents, rounds + 1) }, 120000);
         changes = parseChanges(parseJSON(raw), t);
       }
       if (!changes.length) throw new Error("No usable rewrite came back. Try again, or edit the flagged passages yourself.");

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Star, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, BookOpen, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, Inbox, type LucideIcon } from "lucide-react";
+import { Plug, UserRound, Radar, LayoutDashboard, CheckSquare, Kanban, FileText, MessageSquare, LayoutTemplate, Sparkles, BookOpen, Settings, Network, PenLine, ChevronsUpDown, Menu, X, Search, Inbox, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace";
 import { Logo } from "./logo";
@@ -32,7 +32,7 @@ export const NAV: NavItem[] = [
   { href: "/network", label: "Network", icon: Network, group: "grow" },
   { href: "/comments", label: "Engagement", icon: MessageSquare, group: "grow" },
   { href: "/templates", label: "Templates", icon: LayoutTemplate, group: "setup" },
-  { href: "/extension", label: "Extension", icon: Star, group: "setup" },
+  { href: "/connections", label: "Connections", icon: Plug, group: "setup", words: "extension keys api tools chrome routes usage" },
   { href: "/playbook", label: "Playbook", icon: BookOpen, group: "setup", words: "strategy notes plan canvas" },
   { href: "/settings", label: "Settings", icon: Settings, group: "setup" },
 ];

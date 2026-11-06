@@ -185,7 +185,7 @@ export function usePipeline(): { data: PipelineData; api: PipelineApi } {
       const { error } = await supabase().from("threads").insert({ workspace_id: ws.id, ref_table: "prospects", ref_id: l.id, body, author_email: email });
       return error ? fail(error.message) : ok(null);
     },
-    draft: (prompt) => askExtension<string>("ai", { plain: true, kind: "pipeline", rules: DM_RULES, user: prompt }),
+    draft: (prompt) => askExtension<string>("ai", { job: "comment", section: "pipeline", plain: true, kind: "pipeline", rules: DM_RULES, user: prompt }),
   }), [rows, ready, ws.id, ws.slug, email, reasons.length, patchRow, setRows]);
 
   return { data, api };

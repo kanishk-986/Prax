@@ -1,0 +1,12 @@
+{
+  "source": "https://docs.gptzero.me/api-reference/#GET/v3/usage-stats (openapi/public.yaml components.schemas.UsageStats.x-examples['Professional Plan'])",
+  "response": {
+    "data": {
+      "words_left": 429569,
+      "words_used": 70431,
+      "cycle_start": 1739985107,
+      "cycle_end": 1742342400,
+      "plan": "Professional"
+    }
+  }
+}

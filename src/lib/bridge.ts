@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 
 // Talks to the Prax extension through its bridge script on this page. Settings sent here go
 // straight into the extension's storage in this browser; the AI key never reaches the server.
-export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[]; checkerKeys?: { pangram?: boolean; walter?: boolean } };
-export const LATEST_EXT = "0.9.6";
+export type ExtStatus = { installed: boolean; version?: string; connected?: boolean; provider?: string; model?: string; hasKey?: boolean; quiet?: boolean; searchKeys?: Record<string, boolean>; extraKeys?: string[]; checkerKeys?: { pangram?: boolean; walter?: boolean };
+  /** 0.9.7: whether each Connections tool has a key here, the tool each per-job key is for, and the model set per tool. */
+  tools?: Record<string, boolean>; jobKeys?: Record<string, string>; models?: Record<string, string> };
+export const LATEST_EXT = "0.9.7";
 
 export function useExtension() {
   const [status, setStatus] = useState<ExtStatus | null>(null);
@@ -31,7 +33,7 @@ export function useExtension() {
   return { status, send };
 }
 
-export const NO_EXTENSION = `Prax for Chrome is not answering in this browser. Install ${LATEST_EXT}, connect it on the Extension page, then reload this page.`;
+export const NO_EXTENSION = `Prax for Chrome is not answering in this browser. Install ${LATEST_EXT}, connect it in Connections, Prax for Chrome, then reload this page.`;
 
 // Once the bridge has answered on this page it stays; until then each ask checks first, so a missing extension
 // is said within a second or two instead of after the full AI wait (up to two minutes of "Reading").
@@ -48,7 +50,7 @@ function bridgeAnswers(ms = 1500): Promise<boolean> {
 }
 
 /** AI work and local draft history from the extension. The AI key stays in the extension. */
-export async function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image" | "humanize", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
+export async function askExtension<T = unknown>(type: "ai" | "history" | "clearHistory" | "search" | "image" | "humanize" | "tool", data: Record<string, unknown> = {}, ms = 120000): Promise<T> {
   if (!(await bridgeAnswers())) throw new Error(NO_EXTENSION);
   return new Promise((resolve, reject) => {
     const id = Math.random().toString(36).slice(2);
@@ -57,7 +59,7 @@ export async function askExtension<T = unknown>(type: "ai" | "history" | "clearH
       window.removeEventListener("message", on); clearTimeout(t);
       if (e.data.ok) resolve(e.data.data as T); else reject(new Error(e.data.error || "The extension could not do that."));
     };
-    const t = setTimeout(() => { window.removeEventListener("message", on); reject(new Error(`The extension did not answer. Install Prax for Chrome ${LATEST_EXT} and connect it on the Extension page.`)); }, ms);
+    const t = setTimeout(() => { window.removeEventListener("message", on); reject(new Error(`The extension did not answer. Install Prax for Chrome ${LATEST_EXT} and connect it in Connections, Prax for Chrome.`)); }, ms);
     window.addEventListener("message", on);
     window.postMessage({ praxWeb: true, id, type, data }, location.origin);
   });

@@ -183,7 +183,7 @@ function Insights() {
   if (!s.month) return (
     <NotStarted tour="kpis" title="Not started"
       body={<>{s.week ? `${s.week} ${s.week === 1 ? "comment" : "comments"} ticked on Today this week, none logged yet. ` : ""}Engagement fills itself when comments are posted with the Prax extension: who you commented on, which modes earn replies, and who is still waiting for one. A comment posted without it can be added in the Log.</>}
-      action={<Link href={`/w/${ws.slug}/extension`} className="btn btn-primary h-10 px-4">Set up the extension</Link>} />
+      action={<Link href={`/w/${ws.slug}/connections?tab=chrome`} className="btn btn-primary h-10 px-4">Set up the extension</Link>} />
   );
   const kpi: [string, string, string][] = [
     ["This week", s.quota ? `${s.week} of ${s.quota}` : String(s.week), "comments against the weekly target"],

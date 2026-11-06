@@ -1,0 +1,17 @@
+{
+  "source": "https://docs.mistral.ai/api/endpoint/chat",
+  "note": "Example exactly as shown on the docs page; it is a placeholder (index '<to fill>', usage {}). Real shape per https://docs.mistral.ai/openapi.yaml ChatCompletionResponse/UsageInfo: choices[].message.content, usage.prompt_tokens/completion_tokens/total_tokens.",
+  "response": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": "<to fill>"
+      }
+    ],
+    "created": "1702256327",
+    "id": "cmpl-e5cc70bb28c444948073e77776eb30ef",
+    "model": "mistral-small-latest",
+    "object": "chat.completion",
+    "usage": {}
+  }
+}

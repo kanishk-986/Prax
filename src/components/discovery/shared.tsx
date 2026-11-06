@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import { type Finding, type Band, type Settings, type Topic, hostOf } from "@/lib/discovery";
-import { providerName } from "@/lib/providers";
+import { providerName, providerOf } from "@/lib/providers";
+import { toolName } from "@/lib/connections";
 
 export type Run = { id: string; kind: "ai" | "crawl"; trigger: string; status: string; window_days: number; stats: Record<string, number>; log: LogRow[]; started_at: string; finished_at: string | null };
 export type LogRow = { id?: string; q?: string; pack?: string; engine?: string; returned?: number; cited?: number; confirmed?: number; urls?: string[]; error?: string; link?: string; name?: string; status?: string; articles?: number };
@@ -46,7 +47,8 @@ export function foundBy(f: Finding): string {
 }
 export const foundKinds = (f: Finding) => [f.found_by.includes("ai") && "AI search", f.found_by.includes("crawl") && "Crawl", f.found_by.includes("linkedin") && "LinkedIn"].filter(Boolean) as string[];
 /** Short provider name ("Claude", "ChatGPT"), from the shared provider list. */
-export const engineName = (e: string) => providerName(e, true);
+// AI engines by their provider name; the web search tools (Exa, Tavily, Firecrawl) by their Connections name.
+export const engineName = (e: string) => (providerOf(e) ? providerName(e, true) : toolName(e, true));
 export const warmLine = (n: number) => `Warm: you know ${n} ${n === 1 ? "person" : "people"} here, from Network. Comment first.`;
 export const ago = (iso: string | null) => {
   if (!iso) return "never";

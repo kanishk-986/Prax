@@ -1,0 +1,26 @@
+{
+  "source": "https://docs.mistral.ai/openapi.yaml (paths./v1/models.get.responses.200.examples.userExample)",
+  "note": "Converted verbatim from the YAML example. The example is a bare array, but the declared schema ModelList is an object with a data array.",
+  "response": [
+    {
+      "id": "<model_id>",
+      "capabilities": {
+        "completion_chat": true,
+        "completion_fim": false,
+        "function_calling": false,
+        "fine_tuning": false,
+        "vision": false,
+        "classification": false
+      },
+      "job": "<job_id>",
+      "root": "open-mistral-7b",
+      "object": "model",
+      "created": 1756746619,
+      "owned_by": "<owner_id>",
+      "max_context_length": 32768,
+      "aliases": [],
+      "TYPE": "fine-tuned",
+      "archived": false
+    }
+  ]
+}

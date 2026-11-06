@@ -121,7 +121,43 @@ export type Detection = { detector: DetectorId; score: number; verdict: "human" 
 export type Detector = { id: DetectorId; name: string; map: (raw: unknown) => Result };
 export const DETECTORS: Partial<Record<DetectorId, Detector>> = {
   pangram: { id: "pangram", name: "Pangram", map: mapPangram },
+  gptzero: { id: "gptzero", name: "GPTZero", map: mapGptzero },
+  originality: { id: "originality", name: "Originality.ai", map: mapOriginality },
 };
+
+// GPTZero and Originality.ai (registered by Connections, db/032). The extension sends only the fields below
+// (slimDetect in extension/tools.js); fixtures from each vendor's docs are in scripts/fixtures/connections.
+type GzRaw = { predicted_class?: string; class_probabilities?: { human?: number; ai?: number; mixed?: number }; result_message?: string; version?: string; sentences?: { sentence?: string; generated_prob?: number }[] };
+/**
+ * GPTZero POST /v2/predict/text (docs.gptzero.me/openapi/public.yaml), documents[0]:
+ * - score: round(class_probabilities.human x 100), the document's probability of being human written.
+ * - flagged: sentences whose generated_prob is 0.5 or more. prediction: predicted_class (human, ai or mixed).
+ */
+export function mapGptzero(raw: unknown): Result {
+  const r = (raw ?? {}) as GzRaw;
+  const h = r.class_probabilities?.human;
+  if (typeof h !== "number") throw new Error("GPTZero's reply had no score.");
+  const sents = Array.isArray(r.sentences) ? r.sentences : [];
+  const flagged = sents.filter((s) => Number(s.generated_prob) >= 0.5 && String(s.sentence ?? "").trim())
+    .map((s) => ({ text: String(s.sentence).trim(), label: "AI-Generated", ai: Number(s.generated_prob), confidence: "", start: -1, end: -1 }));
+  const words = sents.reduce((n, s) => n + wordCount(String(s.sentence ?? "")), 0);
+  return { score: Math.max(0, Math.min(100, Math.round(h * 100))), words, flagged, prediction: String(r.predicted_class ?? ""), headline: String(r.result_message ?? ""), version: String(r.version ?? "") };
+}
+type OaRaw = { prediction_label?: string; ai_assisted_percent?: number; model?: string; credits?: number; sentences?: { text?: string; ai_score?: number; start_index?: number; end_index?: number }[] };
+/**
+ * Originality.ai POST /api/v3/scan with check_ai only (docs.originality.ai/scan), results.ai:
+ * - score: 100 minus ai_assisted_percent. flagged: sentences whose ai_score (0 to 1) is 0.5 or more.
+ * - prediction: prediction_label ("human" or "ai"). words: credits used x 100 when given (1 credit = 100 words).
+ */
+export function mapOriginality(raw: unknown): Result {
+  const r = (raw ?? {}) as OaRaw;
+  if (typeof r.ai_assisted_percent !== "number") throw new Error("Originality.ai's reply had no score.");
+  const sents = Array.isArray(r.sentences) ? r.sentences : [];
+  const flagged = sents.filter((s) => Number(s.ai_score) >= 0.5 && String(s.text ?? "").trim())
+    .map((s) => ({ text: String(s.text).trim(), label: "AI-Generated", ai: Number(s.ai_score), confidence: "", start: Number(s.start_index ?? -1), end: Number(s.end_index ?? -1) }));
+  const words = sents.reduce((n, s) => n + wordCount(String(s.text ?? "")), 0);
+  return { score: Math.max(0, Math.min(100, 100 - Math.round(r.ai_assisted_percent))), words, flagged, prediction: String(r.prediction_label ?? ""), headline: "", version: String(r.model ?? "") };
+}
 /** The verdict word: Pangram's own short prediction when it gives one ("Human", "Mixed", "AI"), else from the score. */
 export function detection(id: DetectorId, r: Result): Detection {
   const p = r.prediction.toLowerCase();

@@ -12,11 +12,12 @@ import { useToast, haptic } from "@/components/toaster";
 import { useExtension } from "@/lib/bridge";
 import { useCitationScope } from "@/lib/citation-profile";
 import { KpiTiles } from "@/components/shell";
-import { ProviderMark, ProviderLogo, KeyRow, useProviderUsage } from "@/components/provider-mark";
-import { providerName, providerOf, MARKS } from "@/lib/providers";
+import { ProviderMark, ProviderLogo, useProviderUsage } from "@/components/provider-mark";
+import { ToolSheet } from "@/components/connections/sheet";
+import { providerName, providerOf, MARKS, usageLine } from "@/lib/providers";
 import { buildPdf, downloadFile, type PdfDoc, type PdfMark, type PdfSection } from "@/lib/pdf";
 import {
-  ENGINES, isSerp, keySlot, scored, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
+  ENGINES, keySlot, scored, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
   subjectShare, detectPerson, weeklyTrend, sameDirection, promptGaps, gapTopic, keywordStats, runWeeks, runsInWeek, shiftWeek, audienceOf, AUDIENCE_LABEL, postProfile,
   type Engine, type Entity, type Run, type Question, type Facts, type PromptGap,
 } from "@/lib/citations";
@@ -26,42 +27,40 @@ import s from "./citations.module.css";
 const shortDate = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const when = (t: string) => new Date(t).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const engineLabel = (e: string) => providerName(e, true);
-const keyName = (e: string) => (isSerp(e) ? "SerpApi" : providerName(e));
 export type Ctx = { runs: Run[]; qs: Question[]; person?: Entity; company?: Entity; selfAll: Entity; rivals: Entity[]; experts: Entity[]; firms: Entity[]; ctx: string[] };
 const names = (c: Pick<Ctx, "person" | "company">) => who(c.person, c.company);
 
-// ---------------- keys ----------------
+// ---------------- engines ----------------
+// Q138: no key form here. The AI tools AI citations can ask, each with its key state and usage; Connect or Manage
+// opens the Connections panel for that tool in place (SerpApi serves Google AI answers and Copilot).
 export function KeysModal({ onClose }: { onClose: () => void }) {
-  const { status, send } = useExtension();
-  const toast = useToast();
+  const { status } = useExtension();
   const usage = useProviderUsage();
-  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
-  async function save(e: Engine, key: string) {
-    try { await send("settings", { searchKey: { provider: keySlot(e), key } }); haptic(); toast(`${keyName(e)} key saved in this browser`); } catch (err) { toast((err as Error).message); throw err; }
-  }
-  async function remove(e: Engine) {
-    try { await send("settings", { clearSearchKey: keySlot(e) }); haptic(); toast(`${keyName(e)} key removed from this browser`); } catch (err) { toast((err as Error).message); throw err; }
-  }
+  const [sheet, setSheet] = useState<string | null>(null);
+  useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && !sheet && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose, sheet]);
   return (
     <div className={s.center} onMouseDown={onClose}>
-      <div className={cx(s.dialog, "max-h-[calc(100dvh-32px)] max-w-[640px] overflow-y-auto p-0")} role="dialog" aria-modal="true" aria-label="AI keys" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={cx(s.dialog, "max-h-[calc(100dvh-32px)] max-w-[600px] overflow-y-auto p-0")} role="dialog" aria-modal="true" aria-label="AI tools for AI citations" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-6 pb-4 pt-5">
-          <div><h2 className="text-[17px] font-semibold">AI keys</h2><p className={cx(s.small, "mt-0.5")}>Saved only in this browser. Sent only to that provider, or to SerpApi for Google AI answers and Copilot.</p></div>
+          <div><h2 className="text-[17px] font-semibold">AI tools</h2><p className={cx(s.small, "mt-0.5")}>The engines AI citations can ask. Keys are connected in Connections and stay in this browser.</p></div>
           <button className={cx(s.btn, s.ghost, s.sm, "w-7 px-0")} onClick={onClose} aria-label="Close"><X size={15} /></button>
         </div>
-        {status && !status.installed ? <p className="border-t border-[#ececec] px-6 py-4 text-[13.5px] text-[#9e1c1c]">Install the Prax extension from the Extension page first.</p> : (
-          <div className="@container border-t border-[#ececec]">{ENGINES.map((e) => {
-            const u = usage.of(e.id), extra = !!status?.extraKeys?.includes(keySlot(e.id));
-            return <KeyRow key={e.id} id={e.id} connected={!!status?.searchKeys?.[e.id]} model={u.lastModel || e.model} usage={u} disabled={!status?.installed}
-              note={e.via ? "Through SerpApi" : status?.searchKeys?.[e.id] && !extra ? "Uses your drafting key" : undefined} removable={extra} onSave={(k) => save(e.id, k)} onRemove={() => remove(e.id)} />;
-          })}</div>
-        )}
+        <div className="border-t border-[#ececec]">{ENGINES.map((e) => {
+          const on = !!status?.searchKeys?.[e.id], u = usage.of(e.id), tool = keySlot(e.id);
+          return (
+            <div key={e.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-[#ececec] px-6 py-3 last:border-b-0">
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5"><ProviderMark id={e.id} /><span className={cx(s.small, "pl-6")}>{e.via ? "Through SerpApi · " : ""}{on ? `Connected in this browser · ${usageLine(u, !!e.via)} this month` : "No key in this browser"}</span></span>
+              <button className={cx(s.btn, s.sm)} disabled={!!status && !status.installed} onClick={() => setSheet(tool)}>{on ? "Manage" : "Connect"}</button>
+            </div>
+          );
+        })}</div>
+        {status && !status.installed && <p className="border-t border-[#ececec] px-6 py-4 text-[13.5px] text-[#9e1c1c]">Install Prax for Chrome first: Connections, Prax for Chrome.</p>}
         <div className="flex justify-end gap-2 border-t border-[#ececec] px-6 py-4"><button className={s.btn} onClick={onClose}>Done</button></div>
       </div>
+      {sheet && <span onMouseDown={(e) => e.stopPropagation()}><ToolSheet tool={sheet} onClose={() => setSheet(null)} /></span>}
     </div>
   );
 }
-
 // ---------------- chart ----------------
 type Series = { key: string; label: string; color: string; dash?: boolean; values: (number | null)[]; unit?: string };
 /** How many weeks have a value on any series. A line needs two. */

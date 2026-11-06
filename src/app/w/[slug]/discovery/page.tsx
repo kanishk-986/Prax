@@ -7,6 +7,11 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, today as todayYmd, addDays, weekStart } from "@/lib/workspace";
 import { pillarsOf, regionsOf, regionText, whoLine, PROFILE_CHANNEL } from "@/lib/persona";
 import { useExtension } from "@/lib/bridge";
+import { useConnections } from "@/components/connections/use-connections";
+import { oldExtension } from "@/components/connections/keys";
+import { toolName } from "@/lib/connections";
+import { WEB } from "@/components/discovery/runner";
+import { ToolInline } from "@/components/connections/ui";
 import { ProviderMark, KeyState } from "@/components/provider-mark";
 import { ENGINES, ESTIMATE, type Engine } from "@/lib/citations";
 import { Section, type TourStep, type TabDef } from "@/components/shell";
@@ -118,7 +123,13 @@ export default function DiscoveryStudio() {
   const raise = useCallback((orgs: string[]) => { for (const o of orgs) { const r = raisedMap.get(o.toLowerCase().replace(/\s+/g, " ").trim()); if (r) return { rule: r, points: RAISE_POINTS }; } return null; }, [raisedMap]);
   const band = useCallback((f: Finding) => bandOf(f, settings.weights, settings.bands), [settings]);
   const total = useCallback((f: Finding) => totalScore(f.scores, settings.weights), [settings]);
-  const engines = LIVE_ENGINES.map((e) => ({ id: e.id, name: e.name, model: e.model, ready: !!ext?.searchKeys?.[e.id] }));
+  // Connections: Discovery search can also run on a web search tool (Exa, Tavily or Firecrawl), from the extension.
+  const conn = useConnections({ usage: false });
+  const webRoute = conn.route("discovery_search");
+  const toolsOk = !!ext?.installed && !oldExtension(ext);
+  const webReady = toolsOk && [webRoute.primary, webRoute.fallback].some((t) => !!t && conn.connected(t));
+  const engines = [...LIVE_ENGINES.map((e) => ({ id: e.id as string, name: e.name, model: e.model, ready: !!ext?.searchKeys?.[e.id] })),
+    { id: WEB, name: `Web search, ${toolName(webRoute.primary)}`, model: webRoute.primary, ready: webReady }];
 
   // The Digest for the chosen week, with the merge decisions made on it.
   const digest = useMemo(() => {
@@ -146,9 +157,10 @@ export default function DiscoveryStudio() {
   const plan = useMemo(() => searchPlan({ packs: settings.packs, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: settings.queries, pillars, region }), [settings, entities, today, gaps, pillars, region]);
   const packCount = Object.fromEntries(PACKS.map((p) => [p.id, searchPlan({ packs: { pillar: false, entity: false, event: false, gap: false, [p.id]: true }, entities: entities.map((e) => e.name), batch: settings.batch, todayYmd: today, gaps, queries: [], pillars, region }).length]));
   const [pickEngines, setPickEngines] = useState<Engine[] | null>(null);
+  // A web search tool is a search source like the AI engines, picked the same way.
   const chosen = (pickEngines ?? engines.filter((e) => e.ready).map((e) => e.id as Engine)).filter((e) => engines.find((x) => x.id === e)?.ready);
 
-  const runner = useRunner({ wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips], pillars, who: whoLine(ws), geos: settings.geo, region, buyers: buyersOf(ws.segments, ws.segment_weights) }, toast);
+  const runner = useRunner({ tools: toolsOk, wsId: ws.id, today, windowDays: settings.window_days, findings, competitors, targets: [...targets, ...vips], pillars, who: whoLine(ws), geos: settings.geo, region, buyers: buyersOf(ws.segments, ws.segment_weights) }, toast);
 
   async function saveSettings(patch: Partial<Settings>, note: string) {
     const prev = raw ?? {}, next = { ...settings, ...patch };
@@ -332,7 +344,7 @@ function RunPanel({ d, plan, links, chosen, setChosen, runner, saveWindow, onClo
   const [doCrawl, setDoCrawl] = useState(true), [doAi, setDoAi] = useState(true);
   const busy = runner.ai.running || runner.crawl.running || runner.scoring;
   const calls = doAi ? plan.length * chosen.length : 0;
-  const cost = doAi ? plan.length * chosen.reduce((a, e) => a + ESTIMATE[e].usd, 0) : 0;
+  const cost = doAi ? plan.length * chosen.reduce((a, e) => a + (ESTIMATE[e]?.usd ?? 0.008), 0) : 0;
   const passes: [string, string][] = [
     ...(["pillar", "entity", "event", "gap", "custom"] as const).map((p, i) => {
       const rows = runner.ai.log.filter((r) => r.pack === p), done = rows.filter((r) => r.returned != null || r.error).length;
@@ -356,7 +368,7 @@ function RunPanel({ d, plan, links, chosen, setChosen, runner, saveWindow, onClo
       {d.engines.map((e) => (
         <span key={e.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-body">
           <Box on={chosen.includes(e.id as Engine)} onClick={() => e.ready && setChosen(chosen.includes(e.id as Engine) ? chosen.filter((x) => x !== e.id) : [...chosen, e.id as Engine])} label={e.name} />
-          <ProviderMark id={e.id} bold={false} className={e.ready ? "" : "opacity-70"} />
+          {e.id === WEB ? <span className={e.ready ? "" : "opacity-70"}><ToolInline id={e.model} /> <span className="text-muted">web search</span></span> : <ProviderMark id={e.id} bold={false} className={e.ready ? "" : "opacity-70"} />}
           <KeyState on={e.ready} className="ml-auto text-meta" />
         </span>
       ))}

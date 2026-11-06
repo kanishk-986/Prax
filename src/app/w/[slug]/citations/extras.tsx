@@ -10,6 +10,7 @@ import { useWorkspace, useWho, today } from "@/lib/workspace";
 import { cap, possessive, pillarsOf, regionText, whoLine } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
+import { ConnectButton } from "@/components/connections/sheet";
 import { ProviderMark } from "@/components/provider-mark";
 import { upsertToday } from "@/components/content/shared";
 import { useCitationScope } from "@/lib/citation-profile";
@@ -39,7 +40,7 @@ const isRow = (r: Rec | RecRow): r is RecRow => "id" in r;
 export async function judgeRun(run: { id: string; answer: string }, facts: Partial<Facts>, self: Entity) {
   let sentiment = "", issues = factIssues(run.answer, facts, self.aliases);
   try {
-    const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You check AI answers about a company for tone and factual errors. Be literal and strict. Never invent issues.", user: judgePrompt(run.answer, facts, self.name) });
+    const out = await askExtension<string>("ai", { job: "analysis", section: "citations", plain: true, kind: "studio", rules: "You check AI answers about a company for tone and factual errors. Be literal and strict. Never invent issues.", user: judgePrompt(run.answer, facts, self.name) });
     const j = parseJudge(out);
     if (j) { sentiment = j.sentiment; const seen = new Set(issues.map((i) => i.said)); issues = [...issues, ...j.issues.filter((i) => !seen.has(i.said))]; }
   } catch { /* no key or no extension: keep the check Prax can do alone */ }
@@ -105,7 +106,7 @@ export function ProfileCard({ facts, onFacts }: { facts: Partial<Facts>; onFacts
 // ---------------- questions: quick setup, suggestions, sets ----------------
 /** region: the profile's focus regions as text (regionText in src/lib/persona.ts), empty for a mix. */
 async function draftQuestions(n: number, existing: string[], topics: string[], headline: string, region: string) {
-  const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You write the questions a senior buyer types into an AI assistant when looking for a partner, a vendor or an expert. Never mention any company by name.", user: `Profile: ${headline}\nTopics: ${topics.join(", ")}\nAlready tracked:\n${existing.slice(0, 60).join("\n") || "(none)"}\n\nWrite ${n} new questions a buyer would ask, spread across these topics, ${region ? `mostly about ${region}, a few global` : "across regions, some global"}. Plain words, no brand names. Return only JSON: {"questions": [{"question": "...", "topic": "one of the topics", "region": "UAE"}]}` });
+  const out = await askExtension<string>("ai", { job: "analysis", section: "citations", plain: true, kind: "studio", rules: "You write the questions a senior buyer types into an AI assistant when looking for a partner, a vendor or an expert. Never mention any company by name.", user: `Profile: ${headline}\nTopics: ${topics.join(", ")}\nAlready tracked:\n${existing.slice(0, 60).join("\n") || "(none)"}\n\nWrite ${n} new questions a buyer would ask, spread across these topics, ${region ? `mostly about ${region}, a few global` : "across regions, some global"}. Plain words, no brand names. Return only JSON: {"questions": [{"question": "...", "topic": "one of the topics", "region": "UAE"}]}` });
   const j = parseJSON<{ questions: { question: string; topic: string; region?: string }[] }>(out);
   return (j?.questions ?? []).filter((q) => q.question && !existing.some((e) => e.toLowerCase() === q.question.toLowerCase())).slice(0, n);
 }
@@ -229,7 +230,7 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
     setBusy(true);
     try {
       const ctx = askContext(runs, qs, self, rivals);
-      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: `You advise ${whoLine(ws)} on getting named by AI assistants. Recommend concrete actions only: things to publish on their LinkedIn, and places to be mentioned elsewhere. Never suggest spam, paid placements disguised as editorial, or anything against a regulator.`, user: `DATA:\n${ctx}\n\nGive up to 5 new recommendations. Return only JSON: {"recs": [{"kind": "profile", "title": "short action", "detail": "one or two sentences why"}]}` });
+      const out = await askExtension<string>("ai", { job: "analysis", section: "citations", plain: true, kind: "studio", rules: `You advise ${whoLine(ws)} on getting named by AI assistants. Recommend concrete actions only: things to publish on their LinkedIn, and places to be mentioned elsewhere. Never suggest spam, paid placements disguised as editorial, or anything against a regulator.`, user: `DATA:\n${ctx}\n\nGive up to 5 new recommendations. Return only JSON: {"recs": [{"kind": "profile", "title": "short action", "detail": "one or two sentences why"}]}` });
       const j = parseJSON<{ recs: { kind: string; title: string; detail: string }[] }>(out);
       const rows = (j?.recs ?? []).filter((x) => x.title && (x.kind === "profile" || x.kind === "elsewhere"));
       if (!rows.length) throw new Error("No recommendations came back. Try again.");
@@ -276,7 +277,6 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
 
 // ---------------- draft test ----------------
 export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self: Entity; initial?: string; onClose: () => void }) {
-  const { ws } = useWorkspace();
   const who = useWho();
   const { status } = useExtension();
   const toast = useToast();
@@ -304,14 +304,14 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
       const q = active.find((x) => x.id === qid)!;
       const prompt = `${q.question}\n\nAmong the sources you may use, consider this new piece by ${who.name}${who.company ? ` of ${who.company}` : ""}:\n"""\n${draft.slice(0, 6000)}\n"""`;
       try {
-        const r = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country: "" }, 240000);
+        const r = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine, prompt, country: "", job: "citations", section: "citations" }, 240000);
         const p = parseEngine(engine, r.raws);
         out.push({ q: q.question, engine, named: detect({ answer: p.answer, sources: p.sources, status: p.sources.length ? "ok" : "no_sources" }, self).named, answer: p.answer });
       } catch (e) { out.push({ q: q.question, engine, named: false, answer: `Failed: ${(e as Error).message}` }); }
       setRes([...out]);
     }
     try {
-      setAdvice(await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You judge whether a LinkedIn piece is likely to be cited by AI assistants for given buyer questions. Be specific and brief. No dashes.", user: `QUESTIONS:\n${pickQ.map((id) => active.find((q) => q.id === id)?.question).join("\n")}\n\nDRAFT:\n${draft.slice(0, 6000)}\n\nScore its citability from 1 to 10, then give three concrete changes: definitions, a named framework, specific facts, clear entity names. Plain text, five lines at most.` }));
+      setAdvice(await askExtension<string>("ai", { job: "analysis", section: "citations", plain: true, kind: "studio", rules: "You judge whether a LinkedIn piece is likely to be cited by AI assistants for given buyer questions. Be specific and brief. No dashes.", user: `QUESTIONS:\n${pickQ.map((id) => active.find((q) => q.id === id)?.question).join("\n")}\n\nDRAFT:\n${draft.slice(0, 6000)}\n\nScore its citability from 1 to 10, then give three concrete changes: definitions, a named framework, specific facts, clear entity names. Plain text, five lines at most.` }));
     } catch { /* the engine results stand on their own */ }
     setBusy(false); haptic();
     if (!out.length) toast("Pick at least one question and one engine");
@@ -328,7 +328,7 @@ export function DraftTest({ qs, self, initial, onClose }: { qs: Question[]; self
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3"><span className={s.label}>AI tools</span>{DRAFT_LIVE.map((e) => (
         <label key={e.id} className={cx("flex items-center gap-1.5 text-[13px]", !ready.includes(e.id) && "opacity-50")}><input type="checkbox" disabled={!ready.includes(e.id)} checked={engines.includes(e.id)} onChange={(ev) => setPickE(ev.target.checked ? [...engines, e.id] : engines.filter((x) => x !== e.id))} /><ProviderMark id={e.id} bold={false} /></label>
-      ))}{!ready.length && <Link href={`/w/${ws.slug}/extension#search-keys`} className={cx(s.btn, s.sm)}>Add a key</Link>}</div>
+      ))}{!ready.length && <ConnectButton job="citations" label="Connect an AI tool" />}</div>
       {res && res.length > 0 && (
         <div className={cx(s.box, "mt-4 overflow-x-auto")}>
           <table className={s.table}><thead><tr><th>Prompt</th><th>AI tool</th><th>Result</th></tr></thead>
@@ -355,7 +355,7 @@ export function AskPanel({ runs, qs, self, rivals, onClose }: { runs: Run[]; qs:
     const history = [...msgs, { who: "you" as const, text }];
     setMsgs(history); setQ(""); setBusy(true);
     try {
-      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: `You answer questions about AI citation results for ${self.name}. Use only the DATA given. Be short, specific and plain. If the data does not answer the question, say so. No dashes.`, user: `DATA:\n${ctx}\n\nCONVERSATION:\n${history.slice(-6).map((m) => `${m.who === "you" ? "User" : "Prax"}: ${m.text}`).join("\n")}\n\nAnswer the last question.` });
+      const out = await askExtension<string>("ai", { job: "analysis", section: "citations", plain: true, kind: "studio", rules: `You answer questions about AI citation results for ${self.name}. Use only the DATA given. Be short, specific and plain. If the data does not answer the question, say so. No dashes.`, user: `DATA:\n${ctx}\n\nCONVERSATION:\n${history.slice(-6).map((m) => `${m.who === "you" ? "User" : "Prax"}: ${m.text}`).join("\n")}\n\nAnswer the last question.` });
       setMsgs([...history, { who: "prax", text: out.trim() }]);
     } catch (e) { setMsgs([...history, { who: "prax", text: (e as Error).message }]); }
     setBusy(false);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prax for LinkedIn",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Draft comments, replies and connection notes in your profile's voice right on LinkedIn, and log what you post to Prax. Acts only when you click.",
   "permissions": [
     "sidePanel",
@@ -18,7 +18,19 @@
     "https://generativelanguage.googleapis.com/*",
     "https://api.perplexity.ai/*",
     "https://serpapi.com/*",
-    "https://text.external-api.pangram.com/*"
+    "https://text.external-api.pangram.com/*",
+    "https://api.mistral.ai/*",
+    "https://api.deepseek.com/*",
+    "https://api.groq.com/*",
+    "https://api.exa.ai/*",
+    "https://api.tavily.com/*",
+    "https://api.firecrawl.dev/*",
+    "https://api.gptzero.me/*",
+    "https://api.originality.ai/*",
+    "https://newsapi.org/*",
+    "https://api.apify.com/*",
+    "https://api.crunchbase.com/*",
+    "https://api.calendly.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -54,6 +66,7 @@
         "https://prax-gamma.vercel.app/*"
       ],
       "js": [
+        "tools.js",
         "bridge.js"
       ],
       "run_at": "document_start"

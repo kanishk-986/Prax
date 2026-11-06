@@ -1,0 +1,248 @@
+{
+  "source": "https://docs.originality.ai/scan",
+  "note": "Rebuilt from the field tree (name/value/complexItems) that the docs page renders as its response example; strings over 300 chars and arrays over 3 items trimmed.",
+  "response": {
+    "results": {
+      "properties": {
+        "privateID": 13495,
+        "id": "oc8f4xd0uryg79mk",
+        "title": "API V3 Scan",
+        "excludedUrls": [
+          "https://example.com"
+        ],
+        "publicLink": "https://app.originality.ai/share/oc8f4xd0uryg79mk",
+        "content": "I didn’t realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year. On my way to the office, I used my cellphone to work on the train. But shortly after I exited the train station, like ma ...[trimmed]",
+        "formattedContent": "I didn’t realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year. On my way to the office, I used my cellphone to work on the train. But shortly after I exited the train station, like ma ...[trimmed]"
+      },
+      "credits": {
+        "used": 7
+      },
+      "ai": {
+        "model": "model-5.0",
+        "prediction_label": "human",
+        "ai_assisted_percent": 4,
+        "sentences": [
+          {
+            "start_index": 0,
+            "end_index": 180,
+            "text": "I didn’t realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year. ",
+            "ai_score": 0
+          },
+          {
+            "start_index": 180,
+            "end_index": 247,
+            "text": "On my way to the office, I used my cellphone to work on the train. ",
+            "ai_score": 0
+          },
+          {
+            "start_index": 247,
+            "end_index": 409,
+            "text": "But shortly after I exited the train station, like many other AT&T users who experienced a sudden network outage, I had no service or access to 5G internet data. ",
+            "ai_score": 0.2874894862622023
+          }
+        ]
+      },
+      "plagiarism": {
+        "score": 60,
+        "results": [
+          {
+            "phrase": "I didn't realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year.",
+            "results": [
+              {
+                "link": "https://muckrack.com/trisha-jandoc/articles",
+                "title": "Articles by Trisha Jandoc's Profile | CNET, Ziff Davis Journalist",
+                "scores": [
+                  {
+                    "score": 0.8439331098575829,
+                    "sentence": "... I didn't realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a."
+                  },
+                  {
+                    "score": 0.76125,
+                    "sentence": "... without service in New York City on a random Thursday last year."
+                  }
+                ],
+                "cite_info": {
+                  "authors": [],
+                  "publisher": null,
+                  "identifiers": {
+                    "doi": null,
+                    "isbn": null
+                  }
+                },
+                "timestamps": {
+                  "date_modified": null,
+                  "date_published": null
+                },
+                "source_category": "web",
+                "submission_meta": null
+              }
+            ]
+          },
+          {
+            "phrase": "On my way to the office, I used my cellphone to work on the train.",
+            "results": [
+              {
+                "link": "https://muckrack.com/trisha-jandoc/articles",
+                "title": "Articles by Trisha Jandoc's Profile | CNET, Ziff Davis Journalist",
+                "scores": [
+                  {
+                    "score": 1,
+                    "sentence": "On my way to the office, I used my cellphone to work on the train."
+                  },
+                  {
+                    "score": 0.7351946847488597,
+                    "sentence": "But shortly after I. ... On my way to the office, I used my cellphone to work on the train."
+                  }
+                ],
+                "cite_info": {
+                  "authors": [],
+                  "publisher": null,
+                  "identifiers": {
+                    "doi": null,
+                    "isbn": null
+                  }
+                },
+                "timestamps": {
+                  "date_modified": null,
+                  "date_published": null
+                },
+                "source_category": "web",
+                "submission_meta": null
+              }
+            ]
+          },
+          {
+            "phrase": "But shortly after I exited the train station, like many other AT&T users who experienced a sudden network outage, I had no service or access to 5G internet data.",
+            "results": [
+              {
+                "link": "https://muckrack.com/trisha-jandoc/articles",
+                "title": "Articles by Trisha Jandoc's Profile | CNET, Ziff Davis Journalist",
+                "scores": [
+                  {
+                    "score": 0.9725836498005856,
+                    "sentence": "... But shortly after I exited the train station, like many other AT&T users who experienced a sudden network outage, I had no service or access to 5G internet data."
+                  },
+                  {
+                    "score": 0.84,
+                    "sentence": "But shortly after I exited the train station, like many other AT&T users who experienced."
+                  }
+                ],
+                "cite_info": {
+                  "authors": [],
+                  "publisher": null,
+                  "identifiers": {
+                    "doi": null,
+                    "isbn": null
+                  }
+                },
+                "timestamps": {
+                  "date_modified": null,
+                  "date_published": null
+                },
+                "source_category": "web",
+                "submission_meta": null
+              }
+            ]
+          }
+        ]
+      },
+      "facts": {
+        "0": {
+          "claim": "But shortly after I exited the train station, like many other AT&T users who experienced a sudden network outage, I had no service or access to 5G internet data.",
+          "classification": "True",
+          "confidence": 0.72,
+          "explanation": "AT&T experienced widespread outages in which customers lost wireless service, including voice and 5G data access, although the personal timing and location described cannot be independently verified.",
+          "sources": [
+            {
+              "title": "AT&T customers report a massive outage, disrupting phone ...",
+              "url": "https://www.krgv.com/news/atandt-customers-report-a-massive-outage-disrupting-phone-service-across-america/",
+              "date": "2026-10-28"
+            },
+            {
+              "title": "Failure to follow procedures caused US-wide AT&T outage",
+              "url": "https://www.theregister.com/on-prem/2024/07/23/failure-to-follow-procedures-caused-us-wide-att-outage/475203",
+              "date": "2024-07-23"
+            }
+          ],
+          "rewrite": null
+        }
+      },
+      "readability": {
+        "text_stats": {
+          "letterCount": 570,
+          "sentenceCount": 5,
+          "uniqueWordCount": 100,
+          "syllableCount": 196,
+          "totalSyllables": 204,
+          "averageSyllablesPerWord": 1.44,
+          "wordsWithThreeSyllables": 11,
+          "percentWordsWithThreeSyllables": 7.75,
+          "longestSentence": "after finally finding a place that allowed me to use their public Wi Fi I texted my family and let them know that they wouldn't be able to contact me until I reached the office which was still a ways away. ",
+          "paragraphCount": 1,
+          "averageSpeakingTime": 1.1,
+          "averageReadingTime": 0.5,
+          "averageWritingTime": 3.5
+        },
+        "readability": {
+          "fleschReadingEase": 56.2,
+          "fleschGradeLevel": 12,
+          "gunningFoxIndex": 14.5,
+          "smogIndex": 11.7,
+          "powersSumnerKearl": 7,
+          "forcastGradeLevel": 10.9,
+          "colemanLiauIndex": 7.8,
+          "automatedReadabilityIndex": 11.7,
+          "daleChallReadabilityGrade": 4.7,
+          "spacheReadabilityGrade": 5,
+          "linsearWriteGrade": 11.6
+        },
+        "sentences": [
+          {
+            "phrase": "I didn’t realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year.",
+            "cleanPhrase": "I didn’t realize how convenient it is to stay connected by using my phone as a mobile hotspot until I found myself without service in New York City on a random Thursday last year ",
+            "isVeryHard": true,
+            "isHard": false,
+            "wordsOver13Chars": [],
+            "wordsOver4Syllables": [],
+            "adverbs": []
+          },
+          {
+            "phrase": "On my way to the office, I used my cellphone to work on the train.",
+            "cleanPhrase": "On my way to the office  I used my cellphone to work on the train ",
+            "isVeryHard": false,
+            "isHard": true,
+            "wordsOver13Chars": [],
+            "wordsOver4Syllables": [],
+            "adverbs": []
+          },
+          {
+            "phrase": "But shortly after I exited the train station, like many other AT&T users who experienced a sudden network outage, I had no service or access to 5G internet data.",
+            "cleanPhrase": "But shortly after I exited the train station  like many other AT&amp T users who experienced a sudden network outage  I had no service or access to 5G internet data ",
+            "isVeryHard": true,
+            "isHard": false,
+            "wordsOver13Chars": [],
+            "wordsOver4Syllables": [],
+            "adverbs": []
+          }
+        ]
+      },
+      "grammarSpelling": {
+        "matches": [],
+        "warnings": {
+          "incompleteResults": false
+        },
+        "score": 0,
+        "grade": "A+"
+      },
+      "contentOptimizer": {
+        "error": "not selected"
+      },
+      "contentQuality": {
+        "info": "content quality score type not selected"
+      },
+      "aiAllowance": {
+        "error": "not selected"
+      }
+    }
+  }
+}

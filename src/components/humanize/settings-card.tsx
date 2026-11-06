@@ -3,12 +3,11 @@
 // 0 never calls Pangram), the monthly word caps from the user's plans, the cost per 100 words, and this month's meters
 // (a warning at 80%, paid checks stop at 100%). The owner changes them; everyone else reads them.
 import { useEffect, useState } from "react";
+import { UsingLine } from "@/components/connections/sheet";
 import { supabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
-import { CheckerLogo, CheckerName, KeyState } from "@/components/provider-mark";
-import { useExtension } from "@/lib/bridge";
-import { CHECKERS, SAVED_KEY, checkerConnected, saveCheckerKey, removeCheckerKey, type CheckerId } from "@/lib/providers";
+import { CheckerLogo, CheckerName } from "@/components/provider-mark";
 import { PRESETS, meter, money, clampLevel, type Settings, type Kind } from "@/lib/humanize";
 import { useHumanizeSettings } from "./use-humanize";
 
@@ -97,53 +96,12 @@ export function HumanizeSettings() {
         </div>
         {owner && !missing && <div className="mt-4 flex items-center gap-3"><button className="btn btn-dark" disabled={!dirty || busy} onClick={save}>{busy ? "Saving" : "Save humanization"}</button>{!dirty && <span className="text-meta text-muted">Saved</span>}</div>}
         {!owner && <p className="mt-3 text-meta text-muted">The profile owner sets these.</p>}
-        <CheckerKeys />
+        <div id="checker-keys" className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+          <UsingLine job="humanize_check" label="Checks use" />
+          <UsingLine job="humanize_rewrite" tool="walter" label="Second fixer" />
+        </div>
       </>}
     </section>
   );
 }
 
-/** The Pangram and Walter keys in this browser: a minimal form until the Connections section owns it. The key goes into
- *  the extension (chrome.storage) through the bridge and is never sent to Prax or shown again. */
-function CheckerKeys() {
-  const toast = useToast();
-  const { status, send } = useExtension();
-  const [open, setOpen] = useState<CheckerId | null>(null);
-  const [key, setKey] = useState("");
-  const installed = !!status?.installed;
-  async function save(id: CheckerId) {
-    try { await send("settings", saveCheckerKey(id, key)); setKey(""); setOpen(null); haptic(); toast(`${CHECKERS[id].name} key saved in this browser`); }
-    catch (e) { toast((e as Error).message); }
-  }
-  async function remove(id: CheckerId) {
-    try { await send("settings", removeCheckerKey(id)); setOpen(null); haptic(); toast(`${CHECKERS[id].name} key removed from this browser`); }
-    catch (e) { toast((e as Error).message); }
-  }
-  return (
-    <div id="checker-keys" className="mt-4 flex flex-col border-t border-line pt-4">
-      <span className="label">Keys in this browser</span>
-      {status && !installed && <p className="mt-1 text-meta text-muted">Install Prax for Chrome to add a key. Keys stay in the extension.</p>}
-      {(["pangram", "walter"] as const).map((id) => {
-        const on = checkerConnected(status, id);
-        return (
-          <div key={id} className="border-b border-line py-2.5 last:border-b-0">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              <CheckerName id={id} className="text-body" />
-              <KeyState on={on} className="text-meta" />
-              <button type="button" className="btn ml-auto h-8 w-[112px]" disabled={!installed} aria-expanded={open === id} onClick={() => { setOpen(open === id ? null : id); setKey(""); }}>{open === id ? "Cancel" : on ? "Replace key" : "Connect"}</button>
-            </div>
-            {open === id && (
-              <form className="anim-rise mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (key.trim()) save(id); }}>
-                <label htmlFor={`ck-${id}`} className="sr-only">{CHECKERS[id].name} key</label>
-                <input id={`ck-${id}`} autoFocus type="password" autoComplete="off" spellCheck={false} className="field h-9 min-w-0 flex-[1_1_220px] font-mono text-meta" placeholder={on ? `${SAVED_KEY}  Paste a new key` : `Paste your ${CHECKERS[id].name} key`} value={key} onChange={(e) => setKey(e.target.value)} />
-                <button type="submit" className="btn btn-dark h-9" disabled={!key.trim()}>Save to this browser</button>
-                {on && <button type="button" className="btn btn-ghost h-9 hover:text-bad" onClick={() => remove(id)}>Remove key</button>}
-                <span className="basis-full text-meta text-muted">Saved only inside the Prax extension in this browser and sent only to {CHECKERS[id].name}.{id === "walter" ? " Walter is in early access: Prax calls it only once its API is confirmed." : ""} <a className="underline underline-offset-2 hover:text-ink" href={CHECKERS[id].console} target="_blank" rel="noreferrer">Get a key</a></span>
-              </form>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}

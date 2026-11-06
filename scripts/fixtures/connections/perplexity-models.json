@@ -1,0 +1,12 @@
+{
+  "source": "https://docs.perplexity.ai/api-reference/models-get",
+  "note": "Converted from the YAML example in the OpenAPI block; data array trimmed to 3 of ~21 entries. Spec declares security: [] for this endpoint (no auth), so it does not validate a key. No example response is shown for POST /v1/agent, so no perplexity-agent fixture was written.",
+  "response": {
+    "object": "list",
+    "data": [
+      { "id": "anthropic/claude-opus-5", "object": "model", "created": 0, "owned_by": "anthropic" },
+      { "id": "openai/gpt-6-astra", "object": "model", "created": 0, "owned_by": "openai" },
+      { "id": "perplexity/kimi-k3", "object": "model", "created": 0, "owned_by": "moonshotai" }
+    ]
+  }
+}

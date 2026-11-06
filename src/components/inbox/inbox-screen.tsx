@@ -190,7 +190,7 @@ function DraftBox({ draft, base, person, onChange, onAgain, onClose }: { draft: 
       </div>
       {draft.state === "busy" ? <div className="flex flex-col gap-2 py-1" aria-busy="true"><span className="h-3 w-11/12 animate-pulse rounded bg-track" /><span className="h-3 w-3/4 animate-pulse rounded bg-track" /></div>
         : <textarea aria-label={`Reply to ${person}`} className="field min-h-[124px] bg-surface md:min-h-[96px]" value={draft.text} onChange={(e) => onChange(e.target.value)} />}
-      {draft.state === "error" && <p className="text-meta text-muted">{draft.error} <Link className="font-medium text-ink underline decoration-line-strong underline-offset-[3px]" href={`${base}/extension`}>Set up the extension</Link></p>}
+      {draft.state === "error" && <p className="text-meta text-muted">{draft.error} <Link className="font-medium text-ink underline decoration-line-strong underline-offset-[3px]" href={`${base}/connections?tab=chrome`}>Set up the extension</Link></p>}
       {draft.state !== "busy" && (
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="btn btn-dark h-8" onClick={async () => { try { await navigator.clipboard.writeText(draft.text); toast("Reply copied"); } catch { toast("Copy did not work. Select the text and copy it.", undefined, { info: true }); } }}><Copy size={14} /> Copy</button>

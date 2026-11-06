@@ -1,0 +1,8 @@
+{
+  "source": "https://docs.originality.ai/credit-balance-copy-1",
+  "note": "Rebuilt from the field tree (name/value/complexItems) that the docs page renders as its response example; strings over 300 chars and arrays over 3 items trimmed.",
+  "response": {
+    "credits": 8646,
+    "subscriptionCredits": 1745
+  }
+}

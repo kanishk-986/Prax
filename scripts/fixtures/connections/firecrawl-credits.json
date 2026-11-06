@@ -1,0 +1,13 @@
+{
+  "source": "https://docs.firecrawl.dev/api-reference/endpoint/credit-usage",
+  "note": "The OpenAPI block gives no whole-response example, only per-field `example:` values. This object is assembled from those per-field values only (nothing added).",
+  "response": {
+    "success": true,
+    "data": {
+      "remainingCredits": 1000,
+      "planCredits": 500000,
+      "billingPeriodStart": "2025-01-01T00:00:00Z",
+      "billingPeriodEnd": "2025-01-31T23:59:59Z"
+    }
+  }
+}

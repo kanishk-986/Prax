@@ -8,6 +8,7 @@ import { useLive } from "@/lib/live";
 import { useWorkspace, useSegments, fmtDay, today, ymd, SEGMENTS } from "@/lib/workspace";
 import { firstNameOf, pillarsOf, possessive, whoLine } from "@/lib/persona";
 import { askExtension, parseJSON } from "@/lib/bridge";
+import { ConnectButton } from "@/components/connections/sheet";
 import { SidePanel } from "@/components/discovery/shared";
 import { Section, KpiTiles, type TourStep } from "@/components/shell";
 import { useToast, haptic } from "@/components/toaster";
@@ -683,7 +684,7 @@ function ExplainPanel({ topic, posts, people, onClose }: { topic: TopicRule; pos
   const run = useCallback(async () => {
     setBusy(true); setErr("");
     try {
-      const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You advise a senior business leader on LinkedIn. Be specific and plain. Never invent people or facts.", user: topicExplainPrompt({ topic: topic.name, words: topic.words, who: whoLine(ws), pillars: pillarsOf(ws), posts, people: fit }) }, 120000);
+      const out = await askExtension<string>("ai", { job: "analysis", section: "network", plain: true, kind: "studio", rules: "You advise a senior business leader on LinkedIn. Be specific and plain. Never invent people or facts.", user: topicExplainPrompt({ topic: topic.name, words: topic.words, who: whoLine(ws), pillars: pillarsOf(ws), posts, people: fit }) }, 120000);
       const r = parseTopicExplain(parseJSON(out), fit);
       if (!r) throw new Error("The AI did not return an explanation. Try again.");
       setRes(r);
@@ -700,7 +701,7 @@ function ExplainPanel({ topic, posts, people, onClose }: { topic: TopicRule; pos
         : err ? (
           <div className="flex flex-col items-start gap-3 rounded-xl border border-line p-4">
             <p className="text-body text-dark-red">{err}</p>
-            <span className="flex flex-wrap gap-2"><button type="button" className="btn h-8" onClick={run}>Try again</button><Link href={`/w/${ws.slug}/extension`} className="btn btn-quiet h-8">Extension and AI key</Link></span>
+            <span className="flex flex-wrap gap-2"><button type="button" className="btn h-8" onClick={run}>Try again</button><ConnectButton job="analysis" label="Connect an AI tool" className="btn-quiet" /></span>
           </div>
         ) : res && (
           <>

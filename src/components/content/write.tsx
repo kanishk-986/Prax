@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useWorkspace, today, fmtDay, addDays } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
+import { UsingLine } from "@/components/connections/sheet";
 import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import { humanScore } from "@/lib/studio";
 import { useHumanize } from "@/components/humanize/use-humanize";
@@ -204,7 +205,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   const ctx = () => `${material()}\n\nFORMAT: ${type}.\n${povText(settings.pov, first)}\n${pillars.length ? `Content pillars: ${pillars.join("; ")}.` : ""}${channel === "company" ? `\nThis is for the ${company} company page, written as the company, not as ${first}.` : ""}`;
   const ai = async <T,>(label: string, user: string): Promise<T | null> => {
     setBusy(label); setErr("");
-    try { const out = await askExtension<string>("ai", { kind: "studio", user }, 90000); const j = parseJSON<T>(out); if (!j) throw new Error("The AI reply could not be read. Try again."); return j; }
+    try { const out = await askExtension<string>("ai", { job: "post", section: "content_write", kind: "studio", user }, 90000); const j = parseJSON<T>(out); if (!j) throw new Error("The AI reply could not be read. Try again."); return j; }
     catch (e) { setErr(`${(e as Error).message} You can also write this step yourself.`); return null; }
     finally { setBusy(""); }
   };
@@ -268,11 +269,11 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   async function genImage() {
     const keys = ext?.searchKeys ?? {};
     const provider = keys.openai ? "openai" : keys.gemini ? "gemini" : "";
-    if (!provider) { setErr("No OpenAI or Google Gemini key in this browser. Connect one on the Extension page first."); return; }
+    if (!provider) { setErr("No OpenAI or Google Gemini key in this browser. Connect OpenAI Images or Gemini Images first."); return; }
     setBusy("image"); setErr("");
     const brief = layout === "statement" ? `A clean statement card: the line "${hook}" set large in dark type on white, a thin red rule, generous margins.` : layout === "diagram" ? `A simple diagram of three to five outlined boxes joined by thin red arrows, explaining: ${idea?.title}. Dark lines on white.` : `An editorial photograph for a LinkedIn post about: ${idea?.title}. Calm, professional, no text.`;
     try {
-      const r = await askExtension<{ url: string }>("image", { provider, prompt: `${brief} ${imgPrompt} Style: mature B2B, only dark, red and white, no gradients, no logos.` }, 120000);
+      const r = await askExtension<{ url: string }>("image", { provider, section: "content_write", prompt: `${brief} ${imgPrompt} Style: mature B2B, only dark, red and white, no gradients, no logos.` }, 120000);
       setImage(r.url); haptic();
       // Keep it with the post: save the post first if it is new, then upload the image to Storage.
       if (!editable) { toast("Image made with your key"); return; }
@@ -642,7 +643,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
               {ext?.searchKeys?.openai || ext?.searchKeys?.gemini ? (
                 <div className="flex flex-wrap items-center gap-2"><span className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pb-1 text-meta text-muted">Made with <ProviderMark id={ext.searchKeys.openai ? "openai" : "gemini"} bold={false} className="text-ink" /><ModelId model={ext.searchKeys.openai ? "gpt-image-1" : "gemini-2.5-flash-image"} /><KeyState on className="text-meta" /></span><button className="btn btn-primary" disabled={busy === "image"} onClick={genImage}>{busy === "image" ? "Making the image" : shownImg || imgPath ? "Make another" : "Make the image"}</button>{(image || imgPath) && <button className="btn" onClick={downloadImage}><Download size={14} /> Download</button>}{(image || imgPath) && <button className="btn btn-ghost" onClick={dropImage}>Remove</button>}{imgPath && <span className="basis-full text-meta text-muted">Saved with the post. It stays here after a reload.</span>}</div>
               ) : (
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><KeyState on={false} className="text-meta" /><span className="text-meta text-muted">Images use the OpenAI or Google Gemini (Nano Banana) key. It stays in this browser.</span></span><Link className="btn btn-primary" href={`/w/${ws.slug}/extension#search-keys`}>Connect</Link></div>
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5"><span className="flex min-w-[220px] flex-1 flex-col gap-1.5"><span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body"><ProviderMark id="openai" /><span className="text-muted">or</span><ProviderMark id="gemini" /></span><span className="text-meta text-muted">Images use the OpenAI or Google Gemini key, kept in this browser.</span></span><UsingLine job="image" label="Images use" /></div>
               )}
             </>}
           </div>}

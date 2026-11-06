@@ -41,7 +41,7 @@ eq("article: human share weighted by words, flags kept", [art.score, art.words, 
 eq("combine of nothing", combine([]), null);
 
 // ---------- the detector interface ----------
-eq("Pangram is a detector; GPTZero and Originality.ai plug in later", Object.keys(DETECTORS), ["pangram"]);
+eq("Pangram is a detector; GPTZero and Originality.ai are registered beside it (Connections, db/032)", Object.keys(DETECTORS), ["pangram", "gptzero", "originality"]);
 eq("check gives a score and a verdict", (({ detector, score, verdict }) => [detector, score, verdict])(detection("pangram", DETECTORS.pangram!.map(fx("task-mixed.json")))), ["pangram", 40, "mixed"]);
 eq("verdict from the score when there is no prediction", [detection("pangram", { ...human, prediction: "" }).verdict, detection("pangram", { ...human, score: 10, prediction: "" }).verdict], ["human", "ai"]);
 eq("usage sections", [sectionOf("comment_studio"), sectionOf("linkedin_bar"), sectionOf("content_write"), sectionOf("content_editor"), sectionOf("x")], ["comment_studio", "linkedin_bar", "content_write", "content_editor", ""]);
@@ -179,7 +179,7 @@ eq("031 levels 0 to 100", /level_comment between 0 and 100/.test(sql), true);
 eq("031 ext functions check the token", (sql.match(/select \* into a from ext_auth\(tok\)/g) ?? []).length, 3);
 const bg = read("extension/background.js"), bridge = read("extension/bridge.js"), route = read("src/app/api/ext/[action]/route.ts");
 const manifest = JSON.parse(read("extension/manifest.json"));
-eq("extension 0.9.6 in manifest and LATEST_EXT", [manifest.version, /LATEST_EXT = "0\.9\.6"/.test(read("src/lib/bridge.ts"))], ["0.9.6", true]);
+eq("extension 0.9.7 (Connections) in manifest and LATEST_EXT", [manifest.version, /LATEST_EXT = "0\.9\.7"/.test(read("src/lib/bridge.ts"))], ["0.9.7", true]);
 eq("manifest allows the documented Pangram host only", [manifest.host_permissions.includes("https://text.external-api.pangram.com/*"), manifest.optional_host_permissions], [true, ["https://api.walterwrites.ai/*"]]);
 eq("background uses the documented x-api-key, /task and /models", [/"x-api-key": key/.test(bg), /pangramFetch\("\/task"/.test(bg), /"\/task\/" \+ encodeURIComponent/.test(bg), /pangramFetch\("\/models"/.test(bg)], [true, true, true, true]);
 const toPrax = bg.slice(bg.indexOf("async function humanize"), bg.indexOf("chrome.runtime.onMessage"));

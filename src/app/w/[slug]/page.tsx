@@ -258,7 +258,7 @@ export default function Dashboard() {
             <Panel tour="reach" title="LinkedIn reach" meta={REACH.some((r) => reach[r.key]?.now) ? "captured with the extension" : undefined}>
               {/* One row per captured metric. Nothing captured yet: one honest line and where to start, no rows of "None". */}
               {!REACH.some((r) => reach[r.key]?.now) ? (
-                <p className="border-t border-line px-[18px] py-4 text-body text-muted">Not started. Reach appears after the extension reads {possessive(first)} LinkedIn analytics page once. <Link href={`${base}/extension`} className="font-medium text-ink underline decoration-line-strong underline-offset-[3px] hover:decoration-ink">How to capture it</Link></p>
+                <p className="border-t border-line px-[18px] py-4 text-body text-muted">Not started. Reach appears after the extension reads {possessive(first)} LinkedIn analytics page once. <Link href={`${base}/connections?tab=chrome`} className="font-medium text-ink underline decoration-line-strong underline-offset-[3px] hover:decoration-ink">How to capture it</Link></p>
               ) : REACH.filter((r) => reach[r.key]?.now).map((r) => { const e = reach[r.key]; const d = e?.now && e?.prev ? deltaOf(Number(e.now.value), Number(e.prev.value)) : null; return (
                 <div key={r.key} className="flex items-center gap-3 border-t border-line px-[18px] py-2.5">
                   <span className="flex min-w-0 flex-1 flex-col"><span className="text-body font-semibold">{r.label}</span>

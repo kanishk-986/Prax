@@ -73,7 +73,7 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
     setBusy(true); setErr(""); setRes(null);
     const n = panelDrafts(studio.tuning);
     try {
-      const raw = await askExtension<string>("ai", { kind: "comment", user: commentAsk({ post: text, author, style, studio }) });
+      const raw = await askExtension<string>("ai", { job: "comment", section: "comment_studio", kind: "comment", user: commentAsk({ post: text, author, style, studio }) });
       const out = readDrafts(parseJSON(raw), n);
       if (!out) throw new Error("The model did not return drafts. Try again.");
       // Guardrail repair, as on LinkedIn: one extra call fixes drafts that break a house rule or score under the minimum.
@@ -82,7 +82,7 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
         .filter(({ h }) => (t.repair && h.flags.some((f) => !/words/.test(f))) || (t.humanize && h.score < t.minHuman));
       if (bad.length) {
         try {
-          const fix = parseJSON<{ drafts?: { i: number; text: string }[] }>(await askExtension<string>("ai", { kind: "repair", user: `Rules: ${LOCKED_RULES} ${tuningRules(t)}\n\nFix these drafts. Keep each one's point and angle; change only what breaks the rules or reads as machine-written.\n${bad.map(({ i, h }) => `${i}. Problems: ${h.flags.join(", ") || "reads as AI"}\n${out.drafts[i].text}`).join("\n\n")}\n\nReturn only JSON: {"drafts": [{"i": 0, "text": "..."}]}` }));
+          const fix = parseJSON<{ drafts?: { i: number; text: string }[] }>(await askExtension<string>("ai", { job: "comment", section: "comment_studio", kind: "repair", user: `Rules: ${LOCKED_RULES} ${tuningRules(t)}\n\nFix these drafts. Keep each one's point and angle; change only what breaks the rules or reads as machine-written.\n${bad.map(({ i, h }) => `${i}. Problems: ${h.flags.join(", ") || "reads as AI"}\n${out.drafts[i].text}`).join("\n\n")}\n\nReturn only JSON: {"drafts": [{"i": 0, "text": "..."}]}` }));
           (fix?.drafts ?? []).forEach((d) => { if (out.drafts[d.i] && d.text?.trim()) out.drafts[d.i] = { ...out.drafts[d.i], text: d.text.trim() }; });
         } catch { /* the unrepaired drafts are still shown, with their flags */ }
       }
@@ -195,7 +195,7 @@ export function DraftPanel({ ctx, onClose }: { ctx: DraftContext; onClose: () =>
           {err ? (
             <div className="panel flex flex-col gap-2 p-4">
               <p className="text-body text-ink-2">{err}</p>
-              {extErr && <Link href={`/w/${ws.slug}/extension`} onClick={onClose} className="btn h-9 w-fit px-3">Open Extension</Link>}
+              {extErr && <Link href={`/w/${ws.slug}/connections?tab=chrome`} onClick={onClose} className="btn h-9 w-fit px-3">Open Prax for Chrome</Link>}
             </div>
           ) : busy ? (
             [0, 1, 2].slice(0, studio ? panelDrafts(studio.tuning) : 3).map((k) => <div key={k} className="h-[132px] animate-pulse rounded-xl bg-[#ececec]" />)

@@ -45,7 +45,7 @@ export default function InboxPage() {
     },
     draft: (it) => {
       const lead = it.prospectId ? leads.rows.find((l) => l.id === it.prospectId) : undefined;
-      return askExtension<string>("ai", { plain: true, kind: "pipeline", rules: DM_RULES, user: replyPrompt(it, whoLine(ws), lead?.next_action ? `Planned next step: ${lead.next_action}` : "") });
+      return askExtension<string>("ai", { job: "comment", section: "inbox", plain: true, kind: "pipeline", rules: DM_RULES, user: replyPrompt(it, whoLine(ws), lead?.next_action ? `Planned next step: ${lead.next_action}` : "") });
     },
     fallback: (it) => `Hi ${it.person.split(/\s+/)[0]}, thank you for your message. `,
   }), [ws, leads.rows, states, dms]);
