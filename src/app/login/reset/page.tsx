@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { MIN_PASSWORD, newPasswordErrors, readHash, updatePasswordMessage } from "@/lib/auth";
+import { MIN_PASSWORD, newPasswordErrors, readHash, hashTokensAllowed, updatePasswordMessage } from "@/lib/auth";
 import { AuthShell, Field, SubmitButton, Notice, authLink } from "@/components/auth-card";
 
 // Set a new password. Two ways in, both leave a session before this page saves anything:
@@ -23,10 +23,13 @@ export default function Reset() {
     setInvite(new URLSearchParams(window.location.search).get("mode") === "invite");
     (async () => {
       const sb = supabase();
-      const h = readHash(window.location.hash);
-      if (h.access_token || h.error) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      const { hash, search } = window.location;
+      const h = readHash(hash);
+      if (h.access_token || h.refresh_token || h.error) window.history.replaceState(null, "", window.location.pathname + search);
       if (h.error) { setState("expired"); return; }
-      if (h.access_token && h.refresh_token) {
+      if (h.access_token || h.refresh_token) {
+        if (!hashTokensAllowed(search, hash)) { setState("expired"); return; }
+        if (!h.access_token || !h.refresh_token) { setState("expired"); return; }
         const { error } = await sb.auth.setSession({ access_token: h.access_token, refresh_token: h.refresh_token });
         if (error) { setState("expired"); return; }
       }

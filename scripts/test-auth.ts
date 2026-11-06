@@ -1,5 +1,5 @@
 // Checks the sign-in helpers: email and required checks, new password rules, error copy, safe redirects, invite hash. Run: node scripts/test-auth.ts
-import { emailError, requiredError, newPasswordErrors, signInMessage, updatePasswordMessage, safeNext, readHash } from "../src/lib/auth.ts";
+import { emailError, requiredError, newPasswordErrors, signInMessage, updatePasswordMessage, safeNext, readHash, hashTokensAllowed } from "../src/lib/auth.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -40,10 +40,22 @@ eq("protocol relative refused", safeNext("//evil.com"), "/");
 eq("backslash trick refused", safeNext("/\\evil.com"), "/");
 eq("absolute url refused", safeNext("https://evil.com"), "/");
 eq("missing falls back", safeNext(null), "/");
+eq("tab trick refused", safeNext("/\t/evil.com"), "/");
+eq("newline trick refused", safeNext("/\n/evil.com"), "/");
+eq("carriage return trick refused", safeNext("/\r/evil.com"), "/");
+eq("encoded tab stays a same-site path", safeNext("/%09/evil.com"), "/%09/evil.com");
+eq("decoded tab refused", safeNext(decodeURIComponent("/%09/evil.com")), "/");
+eq("hash kept", safeNext("/w/x?a=1#top"), "/w/x?a=1#top");
 
 eq("invite hash read", readHash("#access_token=a&expires_in=3600&refresh_token=r&type=invite"), { access_token: "a", refresh_token: "r" });
 eq("expired link hash read", readHash("#error=access_denied&error_code=otp_expired&error_description=x"), { error: "otp_expired" });
 eq("empty hash", readHash(""), {});
+eq("invite link tokens taken", hashTokensAllowed("?mode=invite", "#access_token=a&refresh_token=r&type=invite"), true);
+eq("recovery tokens taken on an invite link", hashTokensAllowed("?mode=invite", "#access_token=a&refresh_token=r&type=recovery"), true);
+eq("tokens without mode refused", hashTokensAllowed("", "#access_token=a&refresh_token=r&type=invite"), false);
+eq("tokens with no type refused", hashTokensAllowed("?mode=invite", "#access_token=a&refresh_token=r"), false);
+eq("magic link type refused", hashTokensAllowed("?mode=invite", "#access_token=a&refresh_token=r&type=magiclink"), false);
+eq("other mode refused", hashTokensAllowed("?mode=other", "#access_token=a&refresh_token=r&type=invite"), false);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

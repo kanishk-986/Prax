@@ -1,5 +1,16 @@
 # Prax handoff, 5 November 2026
 
+## Security review fixes (6 Nov 2026, branch `security-fixes`, not deployed)
+
+- **Run `db/020_security.sql` after `db/019_demo_profile.sql`**, in the Supabase SQL editor, before deploying this branch (the invite route needs `invite_log`). Re-runnable. It revokes the 017 helpers `citation_default_profile(uuid)` and `citation_profile_name(uuid)` from public, anon and authenticated; refires the 017 `citation_profile_fill` trigger on `update of profile_id, workspace_id`; forces `notes.created_by := auth.uid()` on insert when signed in; sets `search_path = public, pg_catalog` on the five 018 `prax_*` functions and revokes `prax_mojibake_columns()` from public and anon; adds `invite_log` (RLS: own rows, select and insert only).
+- `safeNext` (`src/lib/auth.ts`) refuses control characters and backslashes and keeps only same-origin paths (`/\t/evil.com` was an open redirect).
+- `isPrivateIp` (`src/lib/content.ts`) parses IPv6 properly: IPv4-mapped in hex (`::ffff:7f00:1`, what the URL parser turns `[::ffff:127.0.0.1]` into), `::/96`, `64:ff9b::/96`, `2002::/16`, link-local, ULA, multicast. The IP checked is not pinned for the actual fetch (DNS rebinding is still possible in theory): that needs an undici `Agent` with `connect.lookup`, and `undici` is not a dependency.
+- `/api/invite`: always `{ sent: true }` (no account-exists hint), generic errors with detail in the server log, at most 20 invites an hour per person, and the email link built from `SITE_URL` (fallback `https://prax-gamma.vercel.app`), never the request origin. Set `SITE_URL` in Vercel if the domain changes.
+- Reset page: hash tokens are taken only on `?mode=invite` with `type=invite` or `type=recovery`.
+- Cron: the secret is compared with `crypto.timingSafeEqual`.
+- `next.config.ts`: `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `nosniff` on every route. No script CSP. `/share/[token]` still renders.
+- Extension **0.9.2**: the production manifest no longer matches `http://localhost:3000/*`. For local work, add `"http://localhost:3000/*"` back to the `bridge.js` content script `matches` in `extension/manifest.json` on your machine, load it unpacked, and do not commit or zip that change. Reinstall 0.9.2 after the deploy.
+
 ## AI providers and keys (6 Nov 2026, branch `provider-branding`, not deployed)
 
 - One source: `src/lib/providers.ts` (names, logos, default models, usage maths, display rules in its header comment). `src/components/provider-mark.tsx` has `ProviderLogo`, `ProviderMark`, `KeyDot`, `KeyState`, `ModelId`, `KeyRow` (the key ledger row), `DraftModelRow` and `useProviderUsage`. `src/components/provider-keys.tsx` holds the Extension page's AI model and AI search key cards. `extension/marks.js` is the plain JS copy for the side panel; `node scripts/test-providers.ts` checks both copies match.

@@ -42,7 +42,8 @@ export default function Settings() {
     // The server route checks the caller is an owner and sends the Supabase invite email (set your password).
     const res = await fetch("/api/invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace_id: ws.id, email: inv.email, role: inv.role }) });
     const out = await res.json().catch(() => ({ error: "The invite could not be sent." }));
-    done(out.error ? { message: out.error } : null, out.existing ? `${inv.email.trim()} already has an account and gets access at next sign in` : `Invite sent to ${inv.email.trim()}`);
+    // The route answers the same for new and existing accounts; someone who already has one gets access at next sign in.
+    done(out.error ? { message: out.error } : null, `Invite sent to ${inv.email.trim()}`);
     setInv({ email: "", role: "editor" }); invites.reload();
   }
 

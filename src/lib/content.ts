@@ -235,19 +235,54 @@ export function urlProblem(raw: string): string | null {
   if (isPrivateIp(h)) return "Private network addresses cannot be read.";
   return null;
 }
-/** True for loopback, private, link-local, carrier-grade NAT, multicast and unspecified addresses (IPv4 and IPv6). */
-export function isPrivateIp(ip: string): boolean {
-  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+const DOTTED = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+/** Four dotted-decimal octets, or null. */
+function parseV4(s: string): number[] | null {
+  const m = s.match(DOTTED);
+  if (!m) return null;
+  const o = m.slice(1).map(Number);
+  return o.every((n) => n <= 255) ? o : null;
+}
+/** An IPv6 address as eight 16-bit groups, or null. Handles "::", a dotted IPv4 tail and a "%zone" suffix. */
+export function parseV6(s: string): number[] | null {
+  let a = s.toLowerCase().replace(/%.*$/, "");
+  if (!a.includes(":") || /[^0-9a-f:.]/.test(a)) return null;
+  const last = a.lastIndexOf(":");
+  if (a.includes(".")) {
+    // A dotted IPv4 tail (::ffff:1.2.3.4) becomes two hex groups (::ffff:102:304).
+    const v4 = parseV4(a.slice(last + 1));
+    if (!v4) return null;
+    a = a.slice(0, last + 1) + ((v4[0] << 8) | v4[1]).toString(16) + ":" + ((v4[2] << 8) | v4[3]).toString(16);
   }
-  const l = ip.toLowerCase();
-  if (!l.includes(":")) return false;
-  if (l === "::" || l === "::1") return true;
-  const mapped = l.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIp(mapped[1]);
-  return /^(fc|fd)/.test(l) || /^fe[89ab]/.test(l) || l.startsWith("ff");
+  const halves = a.split("::");
+  if (halves.length > 2) return null;
+  const groups = (h: string) => (h === "" ? [] : h.split(":"));
+  const head = groups(halves[0]);
+  const tail = halves.length === 2 ? groups(halves[1]) : [];
+  if ([...head, ...tail].some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
+  return [...head, ...Array<string>(halves.length === 2 ? fill : 0).fill("0"), ...tail].map((g) => parseInt(g, 16));
+}
+function privateV4([a, b]: number[]): boolean {
+  return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+}
+/**
+ * True for loopback, private, link-local, carrier-grade NAT, multicast and unspecified addresses (IPv4 and IPv6).
+ * IPv6 also refuses ::/96 (IPv4-compatible, which covers :: and ::1), 64:ff9b::/96 (NAT64), 2002::/16 (6to4),
+ * fe80::/10, fc00::/7 and ff00::/8, and judges IPv4-mapped ::ffff:0:0/96 by the IPv4 address inside, written
+ * dotted (::ffff:127.0.0.1) or in hex (::ffff:7f00:1). A string that does not parse as an address is not an IP.
+ */
+export function isPrivateIp(ip: string): boolean {
+  if (DOTTED.test(ip)) { const v4 = parseV4(ip); return v4 ? privateV4(v4) : true; } // bad octets: refuse
+  const h = parseV6(ip);
+  if (!h) return false;
+  const zero = (from: number, to: number) => h.slice(from, to).every((g) => g === 0);
+  if (zero(0, 5) && h[5] === 0xffff) return privateV4([h[6] >> 8, h[6] & 255, h[7] >> 8, h[7] & 255]);
+  if (zero(0, 6)) return true;
+  if (h[0] === 0x64 && h[1] === 0xff9b && zero(2, 6)) return true;
+  if (h[0] === 0x2002) return true;
+  return (h[0] & 0xffc0) === 0xfe80 || (h[0] & 0xfe00) === 0xfc00 || (h[0] & 0xff00) === 0xff00;
 }
 /** Readable text from HTML: scripts, styles and tags removed, entities decoded, whitespace collapsed. */
 export function readable(html: string) {

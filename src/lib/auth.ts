@@ -41,9 +41,12 @@ export function updatePasswordMessage(err: { status?: number; code?: string; mes
   return "We could not save your password. Request a new link and try again.";
 }
 
-// Only same-site paths: "/w/x" is fine, "//evil.com" and "https://evil.com" fall back to "/".
+// Only same-site paths: "/w/x" is fine, "//evil.com", "https://evil.com", backslashes and control characters
+// (a tab or newline the URL parser would strip, turning "/\t/evil.com" into "//evil.com") fall back to "/".
 export function safeNext(next: string | null | undefined): string {
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+  if (!next || !next.startsWith("/") || /[\x00-\x1f\\]/.test(next)) return "/";
+  try { const u = new URL(next, "https://x.invalid"); return u.origin === "https://x.invalid" ? u.pathname + u.search + u.hash : "/"; }
+  catch { return "/"; }
 }
 
 // Tokens Supabase puts after "#" when it redirects from an invite email: access_token, refresh_token, or an error.
@@ -54,4 +57,11 @@ export function readHash(hash: string): { access_token?: string; refresh_token?:
     refresh_token: p.get("refresh_token") ?? undefined,
     error: p.get("error_code") ?? p.get("error") ?? undefined,
   };
+}
+
+// Tokens after "#" are taken only on an invite link (?mode=invite) whose hash says type=invite or type=recovery.
+// Anything else (no mode, another type, a hand-made link) is refused, so a planted session cannot be set.
+export function hashTokensAllowed(search: string, hash: string): boolean {
+  const type = new URLSearchParams(hash.replace(/^#/, "")).get("type");
+  return new URLSearchParams(search).get("mode") === "invite" && (type === "invite" || type === "recovery");
 }

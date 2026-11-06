@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { crawlLink, saveCrawl } from "@/lib/crawl";
@@ -7,12 +8,18 @@ export const maxDuration = 300;
 
 type Link = { id: string; workspace_id: string; url: string; name: string; list_id: string };
 
+// Constant-time comparison; timingSafeEqual needs equal lengths, so a length mismatch is refused first.
+function sameSecret(got: string, want: string) {
+  const a = Buffer.from(got), b = Buffer.from(want);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // The Monday crawl (vercel.json). Vercel sends Authorization: Bearer <CRON_SECRET>; anything else is refused.
 // It reads every link in every workspace's lists on the server and records one crawl run per workspace.
 // AI search is not run here: the AI keys live only in the user's browser.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  if (!secret || !sameSecret(req.headers.get("authorization") ?? "", `Bearer ${secret}`)) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set" }, { status: 500 });
   const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key, { auth: { persistSession: false } });

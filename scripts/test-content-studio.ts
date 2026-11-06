@@ -71,6 +71,13 @@ eq("not a URL refused", urlProblem("not a link") !== null, true);
 for (const ip of ["10.0.0.1", "127.0.0.1", "172.16.5.4", "172.31.255.255", "192.168.0.1", "169.254.1.1", "0.0.0.0", "100.64.0.1", "::1", "fc00::1", "fe80::1", "::ffff:10.0.0.1"])
   eq(`${ip} is private`, isPrivateIp(ip), true);
 for (const ip of ["8.8.8.8", "172.32.0.1", "1.1.1.1", "2606:4700::1111"]) eq(`${ip} is public`, isPrivateIp(ip), false);
+// Bracketed IPv6 literals that reach private space. The URL parser rewrites ::ffff:127.0.0.1 as ::ffff:7f00:1.
+for (const h of ["[::ffff:127.0.0.1]", "[::ffff:7f00:1]", "[::ffff:169.254.169.254]", "[::ffff:a9fe:a9fe]", "[64:ff9b::7f00:1]", "[::1]", "[::]", "[::7f00:1]", "[fd00::1]", "[fe80::1]", "[ff02::1]", "[2002:7f00:1::]"])
+  eq(`http://${h}/ refused`, urlProblem(`http://${h}/`) !== null, true);
+for (const h of ["8.8.8.8", "[2606:4700::1111]", "[2001:4860:4860::8888]", "[::ffff:8.8.8.8]"]) eq(`http://${h}/ allowed`, urlProblem(`http://${h}/`), null);
+for (const ip of ["::ffff:7f00:1", "::FFFF:127.0.0.1", "0:0:0:0:0:ffff:7f00:1", "64:ff9b::a00:1", "2002::1", "fe80::1%en0", "febf::1", "fc00::", "ff00::", "0:0:0:0:0:0:0:1", "999.1.1.1"])
+  eq(`${ip} is private`, isPrivateIp(ip), true);
+for (const ip of ["2001:db8::1", "2a00:1450::200e", "::ffff:1.1.1.1", "64:ff9b:1::1", "example.com", "1::2::3"]) eq(`${ip} is not private`, isPrivateIp(ip), false);
 eq("readable strips scripts and keeps the title", (() => { const r = readable("<html><head><title>Rates &amp; rails</title><script>evil()</script></head><body><p>Settlement moved.</p><style>p{}</style></body></html>"); return [r.title, r.text.includes("evil"), r.text.includes("Settlement moved.")]; })(), ["Rates & rails", false, true]);
 
 // Parsing AI replies.
