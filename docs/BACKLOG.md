@@ -122,7 +122,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CS3 | Angle step after the idea (4 suggested angles plus your own), saved on the post and shown in approval | Q92; 5 Nov 20:59 "confirm me whether the angle thing is in the content studio" | Live |
 | CS4 | "Copy and open LinkedIn" hand-off; Prax never posts | Q33 | Live |
 | CS5 | Image generation with an OpenAI or Google (Nano Banana, `gemini-2.5-flash-image`) key; "Connect image key" goes to the Extension page | Q34 "only we will add open or google nano bann api"; 5 Nov 18:45 | Live (never tried with a real key) |
-| CS6 | Save generated images with the post | Handoff "Generated images stay in the browser to download; only the brief is stored" | Partly done: download only; the image is lost once the page is left |
+| CS6 | Save generated images with the post | Handoff "Generated images stay in the browser to download; only the brief is stored" | Built not live (images saved to storage; needs db/022) |
 | CS7 | Carousels from templates, downloaded as a PDF | Q34 | Live |
 | CS8 | Video as a content type: 3-second hook, beats (say and show), cover, captions | 5 Nov 18:25 "what about videos ??" | Live (script only; see I6) |
 | CS9 | LinkedIn formatter: bold, italic, bold italic, underline, strikethrough, serif, monospace, script, outline, bullets, numbers, arrows, checks, blank line keeper, divider, case, undo, clear, Markdown, shortcuts, 3,000 counter, mobile and desktop preview | Q33 "i want a linkedin formatter"; 5 Nov 18:16 "formatter looks incomplete" | Live |
@@ -144,13 +144,13 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CS25 | Point-of-view bank: approved stances, cleared proof points, stories, allowed numbers | Q61 | Live |
 | CS26 | Regulated-claims check before approval, with a tick to go on | Q64 | Live |
 | CS27 | LinkedIn newsletter track with its own cadence in Plan | Q66 | Live |
-| CS28 | What works: which types, pillars, days, times and hooks land, nudging plans; "not enough results yet" until there is data | Q67 | Partly done: the logic and panel exist, but nothing can feed it real results (see CS29), so it will say "not enough results" forever outside the demo |
-| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Not started: nothing writes `posts.impressions`, `reactions` or `comments`; the side panel's Read analytics only saves profile-level reach snapshots, and the post editor has no results fields |
-| CS30 | Repurpose: turn one article or long post into several pieces (posts, carousel, comments), each landing as an Idea | Q42; Handoff "Repurpose (one piece into several)" | Not started |
-| CS31 | First comment and reply prep, only on posts that need them | Q44 "not all but relevant ones" | Not started |
+| CS28 | What works: which types, pillars, days, times and hooks land, nudging plans; "not enough results yet" until there is data | Q67 | Built not live (fed by per-post results) |
+| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Built not live (results per post, manual entry; extension capture in progress) |
+| CS30 | Repurpose: turn one article or long post into several pieces (posts, carousel, comments), each landing as an Idea | Q42; Handoff "Repurpose (one piece into several)" | Built not live (Repurpose) |
+| CS31 | First comment and reply prep, only on posts that need them | Q44 "not all but relevant ones" | Built not live (first comment and reply prep) |
 | CS32 | Company channel: company-gap content flagged "Company content, not for the profile" | Q71 | Live |
 | CS33 | "Is this citable?" draft test from the post editor | Q60 item 8 | Live |
-| CS34 | Write a post's grid of icon cards replaced (audit: template look) | Polish pass "Left for later" | Not started |
+| CS34 | Write a post's grid of icon cards replaced (audit: template look) | Polish pass "Left for later" | Built not live (compact source list) |
 | CS35 | Quote cards | Q46 | Declined by user |
 | CS36 | Mobile one-tap approval, tag check | Q63, Q65 | Declined by user |
 | CS37 | One merged Studio for posts and comments | Q35 | Declined by user (kept separate) |

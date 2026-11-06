@@ -5,7 +5,7 @@ import { useWorkspace, today, addDays, weekStart, fmtDay } from "@/lib/workspace
 
 import { firstNameOf } from "@/lib/persona";
 import { StartCards } from "@/components/shell";
-import { whatWorks, nextIssue } from "@/lib/content";
+import { whatWorks, nextIssue, needsResults } from "@/lib/content";
 import { inProfile } from "@/lib/citations";
 import { useCitationProfile } from "@/lib/citation-profile";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf } from "./shared";
@@ -42,10 +42,13 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
       else if (st === "Idea" && (p.topic === "AI citations" || p.source_kind === "gap") && inProfile(p, citScope)) out.push({ id: p.id + "g", label: p.title, sub: "New topic from AI citations", post: p, act: "write" });
       else if (st === "Idea" && p.publish_date && p.publish_date <= addDays(t, 7)) out.push({ id: p.id + "i", label: p.title, sub: `Not written yet · planned ${fmtDay(p.publish_date, { day: "numeric", month: "short" })}`, post: p, act: "write" });
     }
+    // Posted pieces whose numbers have settled but were never added (CS29): the last three, after everything above.
+    if (can("editor")) for (const p of posts.filter((x) => needsResults({ ...x, status: statusOf(x.status) }, t) && x.publish_date && x.publish_date >= addDays(t, -30)).sort((a, b) => (b.publish_date ?? "").localeCompare(a.publish_date ?? "")).slice(0, 3))
+      out.push({ id: p.id + "m", label: p.title, sub: `Posted ${fmtDay(p.publish_date!, { day: "numeric", month: "short" })} · add its results`, post: p, act: "open" });
     return out.slice(0, 8);
   }, [posts, t, tomorrow, can, first, citScope]);
 
-  const ww = useMemo(() => whatWorks(posts.map((p) => ({ format: p.format, pillar: p.pillar, publish_date: p.publish_date, planned_time: p.planned_time, draft: p.draft, status: p.status, impressions: p.impressions, reactions: p.reactions, comments: p.comments }))), [posts]);
+  const ww = useMemo(() => whatWorks(posts.map((p) => ({ format: p.format, pillar: p.pillar, publish_date: p.publish_date, planned_time: p.planned_time, draft: p.draft, status: p.status, impressions: p.impressions, reactions: p.reactions, comments: p.comments, reposts: p.reposts ?? null }))), [posts]);
   const starts: [string, string, React.ElementType, () => void][] = [
     ["Write a post", "From an idea, a link, a PDF or a comment.", PenLine, () => go("write")],
     ["Plan a campaign", "A run of posts around one goal.", Target, planCampaign],
@@ -81,12 +84,12 @@ export function HomeTab({ posts, campaigns, settings, go, openPost, writeFrom, p
           <div className="panel" data-tour="works">
             <div className="panel-head">What works</div>
             <div className="border-t border-line p-4">
-            {!ww.enough ? <p className="m-0 text-body text-muted">Not enough results yet. Add the reactions and comments of {ww.need - ww.have} more posted {ww.need - ww.have === 1 ? "piece" : "pieces"} and Prax shows which formats, pillars, days and openings work best.</p>
+            {!ww.enough ? <p className="m-0 text-body text-muted">Not enough results yet. Add the numbers of {ww.need - ww.have} more posted {ww.need - ww.have === 1 ? "piece" : "pieces"} in each post view, and Prax shows which formats, pillars, days and openings work best.</p>
               : <div className="flex flex-col gap-2.5 text-body">
                 {([["Format", ww.byFormat], ["Pillar", ww.byPillar], ["Day", ww.byDay], ["Time", ww.bySlot], ["Opening", ww.byHook]] as const).map(([k, g]) => g[0] && (
-                  <div key={k} className="flex items-baseline gap-3"><span className="w-[64px] shrink-0 text-meta text-muted">{k}</span><span className="min-w-0 flex-1 font-semibold">{g[0].k}</span><span className="num text-meta text-muted">{g[0].avg} avg · {g[0].n} posts</span></div>
+                  <div key={k} className="flex items-baseline gap-3"><span className="w-[64px] shrink-0 text-meta text-muted">{k}</span><span className="min-w-0 flex-1 font-semibold">{g[0].k}</span><span className="num text-meta text-muted">{g[0].avg} avg · {g[0].n} {g[0].n === 1 ? "post" : "posts"}</span></div>
                 ))}
-                <p className="m-0 text-meta text-faint">Based on {ww.have} posted pieces. Reactions plus twice the comments.</p>
+                <p className="m-0 text-meta text-faint">Based on {ww.have} posted pieces with results. Reactions, plus comments counted twice and reposts three times.</p>
               </div>}
             </div>
           </div>

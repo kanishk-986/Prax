@@ -1,41 +1,52 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { X, Copy, Sparkles } from "lucide-react";
+import { X, Copy, Sparkles, Repeat2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useWorkspace, fmtDay } from "@/lib/workspace";
+import { useWorkspace, fmtDay, today } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { Threads } from "@/components/threads";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { FORMATS, reshareFallback } from "@/lib/campaigns";
 import { cap, fullNameOf, firstNameOf, companyOf, roleOf, pillarsOf, possessive, initialsOf, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
-import { claimsCheck, povText } from "@/lib/content";
+import { claimsCheck, povText, parseCount, hasResults, engagementRate, linksOut, firstLink, parsePrep, repurposeLabel, type Prep } from "@/lib/content";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf, logActivity, syncApprovalSession, Modal } from "./shared";
+import { usePostImage } from "./media";
 import type { ContentSettings } from "./settings";
 
 const when = (p: Post) => (p.publish_date ? `${fmtDay(p.publish_date, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}${p.planned_time ? `, ${p.planned_time}` : ""}` : "Not planned");
 const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 
 /** Read-only view of a post, opened from Library, Plan and campaign rows. */
-export function PostView({ post, campaigns, members, onClose, onEdit }: { post: Post; campaigns: Campaign[]; members: Record<string, string>; onClose: () => void; onEdit: () => void }) {
+export function PostView({ post, campaigns, members, posts = [], onClose, onEdit, onRepurpose }: { post: Post; campaigns: Campaign[]; members: Record<string, string>; posts?: Post[]; onClose: () => void; onEdit: () => void; onRepurpose?: (p: Post) => void }) {
   const { ws, can } = useWorkspace();
   const first = firstNameOf(ws), name = fullNameOf(ws), company = companyOf(ws);
   const camp = campaigns.find((c) => c.id === post.campaign_id);
+  const st = statusOf(post.status);
+  const img = usePostImage(post.image_path);
+  const from = post.repurposed_from ? posts.find((p) => p.id === post.repurposed_from) : null;
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-body last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
-    <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
+    <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && st === "Posted" && onRepurpose && <button className="btn" onClick={() => onRepurpose(post)}><Repeat2 size={14} /> Repurpose</button>}{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
       {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body font-semibold text-ink">Company content, not for {possessive(first)} profile</p>}
       <div className="grid gap-5 md:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="label mb-2">Draft, as it reads on LinkedIn</div>
-          <div className="rounded-xl border border-line bg-white p-4 shadow-[var(--shadow)]">
-            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-body font-semibold text-white">{initialsOf(post.channel === "company" ? companyOf(ws, "") : fullNameOf(ws, ""))}</span><span className="flex flex-col"><span className="text-body font-semibold">{post.channel === "company" ? cap(company) : cap(name)}</span><span className="text-meta text-muted">{post.channel === "company" ? "Company page" : ws.headline || "LinkedIn profile"}</span></span></div>
-            <p className="m-0 whitespace-pre-wrap text-body leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
+          <div className="overflow-hidden rounded-xl border border-line bg-white shadow-[var(--shadow)]">
+            <div className="p-4">
+              <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-body font-semibold text-white">{initialsOf(post.channel === "company" ? companyOf(ws, "") : fullNameOf(ws, ""))}</span><span className="flex flex-col"><span className="text-body font-semibold">{post.channel === "company" ? cap(company) : cap(name)}</span><span className="text-meta text-muted">{post.channel === "company" ? "Company page" : ws.headline || "LinkedIn profile"}</span></span></div>
+              <p className="m-0 whitespace-pre-wrap text-body leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- a signed Storage link, not a static asset */}
+            {post.image_path && (img ? <img src={img} alt="Post visual" className="block w-full border-t border-line" /> : <div className="aspect-[4/3] w-full animate-pulse border-t border-line bg-surface-2" aria-label="Loading the image" />)}
           </div>
+          {(st === "Ready" || st === "Posted") && <PrepBlock post={post} />}
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
         </div>
         <aside>
           {post.angle && <p className="m-0 mb-3 rounded-xl bg-surface-2 px-3.5 py-2.5 text-body leading-snug text-ink"><b className="font-semibold">Angle</b> {post.angle}</p>}
+          {st === "Posted" && <ResultsBlock post={post} />}
           {post.source_kind === "discovery" && <Row k="From" v={`Discovery Studio${post.discovery?.rank ? ` · #${post.discovery.rank}` : ""}${post.discovery?.score != null ? ` · ${post.discovery.score}` : ""}`} />}
+          {post.source_kind === "repurpose" && <Row k="From" v={`${repurposeLabel(post.source_ref ?? "")} of ${from ? `"${from.title}"` : "a posted piece"}`} />}
           <Row k="Campaign" v={camp ? <span className="text-[#d64545]">{camp.name}</span> : "Independent"} />
           <Row k="Type" v={post.format || "Text post"} />
           <Row k="Where" v={post.channel === "company" ? <ChannelFlag p={post} /> : `${possessive(cap(first))} profile`} />
@@ -213,5 +224,113 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
         </div>
       </aside>
     </div>
+  );
+}
+
+const n0 = (v: number | null | undefined) => (v == null ? "" : String(v));
+const FIELDS = [["impressions", "Impressions"], ["reactions", "Reactions"], ["comments", "Comments"], ["reposts", "Reposts"]] as const;
+type Field = (typeof FIELDS)[number][0];
+
+/** Results of a posted piece (CS29): typed in here from LinkedIn's analytics, or read by the extension (db/022). */
+function ResultsBlock({ post }: { post: Post }) {
+  const { can } = useWorkspace();
+  const toast = useToast();
+  const editable = can("editor");
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState<Record<Field, string>>({ impressions: "", reactions: "", comments: "", reposts: "" });
+  const [day, setDay] = useState(today());
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const has = hasResults(post);
+  const rate = engagementRate(post);
+  const bad = FIELDS.filter(([k]) => v[k].trim() && parseCount(v[k]) == null).map(([k]) => k as Field);
+  const start = () => { setV({ impressions: n0(post.impressions), reactions: n0(post.reactions), comments: n0(post.comments), reposts: n0(post.reposts) }); setDay(post.results_at || today()); setLink(post.url || ""); setOpen(true); };
+  async function save() {
+    if (bad.length) return;
+    const next = { impressions: parseCount(v.impressions), reactions: parseCount(v.reactions), comments: parseCount(v.comments), reposts: parseCount(v.reposts) };
+    const body = { ...next, results_at: Object.values(next).some((x) => x != null) ? day || today() : null, results_source: "manual", url: link.trim() };
+    const prev = { impressions: post.impressions, reactions: post.reactions, comments: post.comments, reposts: post.reposts ?? null, results_at: post.results_at ?? null, results_source: post.results_source ?? "", url: post.url };
+    setBusy(true);
+    const { error } = await supabase().from("posts").update(body).eq("id", post.id);
+    setBusy(false);
+    if (error) { toast(error.message); return; }
+    haptic(); setOpen(false);
+    toast("Results saved. What works and the campaign report use them.", async () => { await supabase().from("posts").update(prev).eq("id", post.id); });
+  }
+  return (
+    <section className="mb-4 rounded-xl border border-line bg-white p-3.5" aria-label="Results">
+      <div className="mb-2 flex items-center justify-between gap-2"><span className="text-body font-semibold">Results</span>{editable && !open && <button className="btn btn-quiet h-7 text-meta" onClick={start}>{has ? "Edit" : "Add results"}</button>}</div>
+      {open ? (
+        <form className="flex flex-col gap-2.5" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <div className="grid grid-cols-2 gap-2">
+            {FIELDS.map(([k, l], i) => (
+              <label key={k} className="flex min-w-0 flex-col gap-1"><span className="text-meta text-muted">{l}</span>
+                <input className="field num h-9" inputMode="decimal" autoFocus={i === 0} value={v[k]} placeholder="0" aria-invalid={bad.includes(k)} onChange={(e) => setV({ ...v, [k]: e.target.value })} style={bad.includes(k) ? { borderColor: "#d64545" } : undefined} />
+              </label>
+            ))}
+          </div>
+          {!!bad.length && <p className="m-0 text-meta text-[#9e1c1c]">Use whole numbers, or the short form LinkedIn shows, such as 2.1K.</p>}
+          <label className="flex flex-col gap-1"><span className="text-meta text-muted">Measured on</span><input type="date" className="field h-9" value={day} max={today()} onChange={(e) => setDay(e.target.value)} /></label>
+          <label className="flex flex-col gap-1"><span className="text-meta text-muted">Post link on LinkedIn</span><input type="url" className="field h-9" value={link} placeholder="https://www.linkedin.com/feed/update/..." onChange={(e) => setLink(e.target.value)} /></label>
+          <p className="m-0 text-meta leading-snug text-muted">With the link saved, the extension can fill these in when the analytics page of the post is open.</p>
+          <div className="flex gap-2"><button type="submit" className="btn btn-dark h-8" disabled={busy || !!bad.length}>{busy ? "Saving" : "Save results"}</button><button type="button" className="btn btn-ghost h-8" onClick={() => setOpen(false)}>Cancel</button></div>
+        </form>
+      ) : has ? (
+        <>
+          <dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-2">
+            {FIELDS.map(([k, l]) => <div key={k} className="flex flex-col"><dt className="text-meta text-muted">{l}</dt><dd className="num m-0 text-title font-semibold">{post[k] == null ? <span className="text-body font-normal text-muted">Not added</span> : (post[k] as number).toLocaleString("en-GB")}</dd></div>)}
+          </dl>
+          <p className="m-0 mt-2.5 text-meta leading-snug text-muted">{rate != null ? `${rate} interactions per 100 impressions. ` : ""}{post.results_at ? `Measured ${fmtDay(post.results_at, { day: "numeric", month: "short" })}` : "Measured"}{post.results_source === "extension" ? ", read by the extension." : ", added by hand."}</p>
+        </>
+      ) : <p className="m-0 text-meta leading-snug text-muted">No numbers yet. Add them from the analytics of the post on LinkedIn, two days or more after posting, when they have settled.</p>}
+    </section>
+  );
+}
+
+/** First comment (only when the post links out) and three likely replies with answers (CS31). Copy only; Prax never posts. */
+function PrepBlock({ post }: { post: Post }) {
+  const { ws, can } = useWorkspace();
+  const toast = useToast();
+  const first = firstNameOf(ws);
+  const [busy, setBusy] = useState(false);
+  const prep: Prep | null = post.prep && (post.prep.first || post.prep.replies?.length) ? { first: post.prep.first ?? "", replies: post.prep.replies ?? [], at: post.prep.at } : null;
+  const link = linksOut(post.draft) ? firstLink(post.draft) : "";
+  async function make() {
+    if (!post.draft.trim()) { toast("Write the draft first"); return; }
+    setBusy(true);
+    try {
+      const out = await askExtension<string>("ai", { kind: "studio", user: `${fullNameOf(ws)} is posting this on LinkedIn:\n${post.draft}\n\n${link ? `The post links to ${link}. Write the first comment ${first} adds right after posting: one or two sentences on why the link is worth opening, then the link.\n` : "The post does not link out, so no first comment is needed: leave \"first\" empty.\n"}Then write the 3 replies most likely from senior readers (a question, a push back, a request for detail) and ${possessive(first)} answer to each, 30 to 60 words, "I think" or "In my view" where it fits. Use only facts in the post. No dashes, no contractions, no hashtags.\nReturn only JSON: {"first": "...", "replies": [{"q": "...", "a": "..."}]}` }, 90000);
+      const p = parsePrep(parseJSON(out), link);
+      if (!p.replies.length && !p.first) throw new Error("Nothing usable came back. Try again.");
+      const { error } = await supabase().from("posts").update({ prep: { ...p, at: new Date().toISOString() } }).eq("id", post.id);
+      if (error) throw new Error(error.message);
+      haptic(); toast(link ? "First comment and replies ready to copy" : "Replies ready to copy");
+    } catch (e) { toast((e as Error).message); }
+    setBusy(false);
+  }
+  const copy = async (t: string, label: string) => { try { await navigator.clipboard.writeText(t); } catch {} haptic(); toast(`${label} copied`); };
+  return (
+    <section className="mt-4 rounded-xl border border-line bg-white p-4" aria-label="First comment and replies">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-body font-semibold">{link ? "First comment and replies" : "Replies to prepare"}</span>
+        {can("editor") && <button className="btn h-8 text-meta" disabled={busy} onClick={make}><Sparkles size={13} /> {busy ? "Writing" : prep ? "Prepare again" : "Prepare"}</button>}
+      </div>
+      {!prep ? <p className="m-0 mt-1.5 text-meta leading-snug text-muted">{link ? `The post links out, so the link reads better in a first comment. Prax drafts it, plus the three replies ${first} is most likely to get and an answer for each.` : `The three replies ${first} is most likely to get, each with an answer ready. No first comment is needed: the post does not link out.`} Copy them by hand; nothing is posted.</p> : (
+        <div className="mt-3 flex flex-col gap-3">
+          {prep.first && <div className="rounded-lg bg-surface-2 p-3"><div className="mb-1 flex items-center justify-between gap-2"><span className="text-meta font-semibold">First comment</span><button className="btn btn-quiet h-7 text-meta" onClick={() => copy(prep.first, "First comment")}><Copy size={12} /> Copy</button></div><p className="m-0 break-words text-body leading-relaxed">{prep.first}</p></div>}
+          <ol className="m-0 flex list-none flex-col p-0">
+            {prep.replies.map((r, i) => (
+              <li key={i} className={`flex flex-col gap-1 py-2.5 ${i ? "border-t border-line" : ""}`}>
+                <span className="text-meta text-muted">If someone says</span>
+                <span className="text-body leading-snug">&ldquo;{r.q}&rdquo;</span>
+                <span className="mt-1 flex items-center justify-between gap-2"><span className="text-meta text-muted">{cap(first)} can answer</span><button className="btn btn-quiet h-7 text-meta" onClick={() => copy(r.a, "Answer")}><Copy size={12} /> Copy</button></span>
+                <span className="text-body leading-relaxed">{r.a}</span>
+              </li>
+            ))}
+          </ol>
+          {prep.at && <p className="m-0 text-meta text-muted">Prepared {stamp(prep.at)}</p>}
+        </div>
+      )}
+    </section>
   );
 }
