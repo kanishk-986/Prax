@@ -289,13 +289,13 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 
 | ID | Item, in plain English | Source | Status |
 |---|---|---|---|
-| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | Not started (not agreed) |
-| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | Not started (not agreed; see D10) |
+| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | In progress (agreed 7 Nov) |
+| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | In progress (agreed 7 Nov) |
 | I3 | Team roles and approvals, including the owner's approval queue on a phone (mobile approval was declined as Q63) | Same list | Not started (not agreed) |
 | I4 | Results by pillar and format feeding Strategy (overlaps CS28 and S2) | Same list | Not started (not agreed) |
-| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | Not started (not agreed) |
-| I6 | Record or upload video inside Prax (today Prax writes the script, cover and captions; the person records outside Prax) | 5 Nov 18:26 Claude's reply to "what about videos" | Not started (not agreed) |
-| I7 | xAI Grok logo (no CC0 or official asset) | Handoff providers | Not started (not agreed) |
+| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | In progress (agreed 7 Nov) |
+| I6 | Record or upload video inside Prax (today Prax writes the script, cover and captions; the person records outside Prax) | 5 Nov 18:26 Claude's reply to "what about videos" | In progress (agreed 7 Nov) |
+| I7 | xAI Grok logo (no CC0 or official asset) | Handoff providers | In progress (agreed 7 Nov) |
 
 ---
 
