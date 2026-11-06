@@ -17,14 +17,14 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | D1 | Command-centre Dashboard: greeting with the member's name, one sentence on the week, Needs you now ranked by urgency, recent activity, LinkedIn reach | 5 Nov 21:10 "do the 4 pointers"; Handoff "Dashboard and Today redesign" | Live |
 | D2 | Five headline tiles, including "named in X% of AI answers" with the week-on-week change | Q98 | Live |
 | D3 | Discovery Studio in "This week at a glance" and new Discovery topics in Needs you now | Q97 | Live |
-| D4 | "This week at a glance" without the repeated numbers (audit: it repeats the tiles) | Polish pass "Left for later"; 6 Nov 03:44 reply | Built not live (glance lines say what is next) |
-| D5 | Activity rows written as sentences ("Alok commented on X's post"), not "Comment done" labels | Polish pass "Left for later" | Built not live (activity as sentences, wins highlighted) |
-| D6 | Hide the empty KPI row under the "Set up <name>'s profile" card on a new profile | Polish pass "Left for later" | Built not live |
-| D7 | Bug: on the demo profile the Network glance line says "No LinkedIn export uploaded yet" although the demo has network data (`page.tsx` line 204 reads the import count, the seed writes people) | 6 Nov 04:24 live check, "I'll fix it in the next pass" | Built not live (count used a missing id column; fixed) |
+| D4 | "This week at a glance" without the repeated numbers (audit: it repeats the tiles) | Polish pass "Left for later"; 6 Nov 03:44 reply | Live (deployed 7 Nov) (glance lines say what is next) |
+| D5 | Activity rows written as sentences ("Alok commented on X's post"), not "Comment done" labels | Polish pass "Left for later" | Live (deployed 7 Nov) (activity as sentences, wins highlighted) |
+| D6 | Hide the empty KPI row under the "Set up <name>'s profile" card on a new profile | Polish pass "Left for later" | Live (deployed 7 Nov) |
+| D7 | Bug: on the demo profile the Network glance line says "No LinkedIn export uploaded yet" although the demo has network data (`page.tsx` line 204 reads the import count, the seed writes people) | 6 Nov 04:24 live check, "I'll fix it in the next pass" | Live (deployed 7 Nov) (count used a missing id column; fixed) |
 | D8 | LinkedIn MCP button: first removed (Q118), then put back at the user's request as "LinkedIn MCP" with the LinkedIn mark, no "Coming soon"; a click explains it is on the way | Q118; 6 Nov 03:37 "can we put only LinkedIn MCP button" | Live |
 | D9 | LinkedIn MCP that actually connects (read LinkedIn data through an MCP) | 6 Nov 01:12 Q121 "i want to make cis mcp etc in the future" | Not started |
-| D10 | Weekly report: one page covering posts, replies, stage moves, AI citations movement and next week's plan (step 4 "weekly report"; Claude's "Weekly review" suggestion) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Built not live (weekly report, on screen and PDF) |
-| D11 | Multi-profile overview: one screen comparing all profiles (step 4) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Built not live (profiles overview) |
+| D10 | Weekly report: one page covering posts, replies, stage moves, AI citations movement and next week's plan (step 4 "weekly report"; Claude's "Weekly review" suggestion) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Live (deployed 7 Nov) (weekly report, on screen and PDF) |
+| D11 | Multi-profile overview: one screen comparing all profiles (step 4) | 5 Nov 15:48 step 4 list; Handoff "Next" item 3 | Live (deployed 7 Nov) (profiles overview) |
 | D12 | One comment count shared by Dashboard and Engagement (`commentDays`) | Audit item 1 (Q117) | Live |
 
 ## Today
@@ -36,8 +36,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | T3 | A skip counts as cleared on Today but not as done on the Dashboard | Q96 | Live |
 | T4 | Rows filled with real people and posts (Pipeline Do next, Discovery LinkedIn findings, own posts) instead of "Comment 1: who or what" | Audit item 6 (Q117) | Live |
 | T5 | Campaign tasks on Today: comment tasks on target accounts' posts, weekly approval session, fast-response and event tasks, message tasks only after someone engages | Q51 to Q54 | Live |
-| T6 | Reminder on Today at a post's planned time | Q33 "plus a reminder on Today at the planned time" | Built not live (Dubai-time reminder on Today) |
-| T7 | Today ignores closed stages of custom pipelines (Signed, Committed, Delivered, Done, Passed, Declined); today it only excludes Won and Parked by name, so due check-ins on closed leads still show | 5 Nov 22:52 "small fix for later"; Handoff Pipeline section | Built not live (all closed stages excluded) |
+| T6 | Reminder on Today at a post's planned time | Q33 "plus a reminder on Today at the planned time" | Live (deployed 7 Nov) (Dubai-time reminder on Today) |
+| T7 | Today ignores closed stages of custom pipelines (Signed, Committed, Delivered, Done, Passed, Declined); today it only excludes Won and Parked by name, so due check-ins on closed leads still show | 5 Nov 22:52 "small fix for later"; Handoff Pipeline section | Live (deployed 7 Nov) (all closed stages excluded) |
 | T8 | Weekly AI citations run reminder (once a week) | Q60 item 16 | Live |
 | T9 | First-hour block after posting (60 minutes, replies ready) | Q62 | Declined by user |
 
@@ -47,7 +47,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 |---|---|---|---|
 | P1 | No drag and drop; one screen with Do next (5 most urgent) and everyone grouped by stage | 5 Nov 17:55 "I do not want drag and drop"; Q36, Q101 | Live |
 | P2 | Lead panel: next action first with Done and Move to the next stage, then stage bar with days in stage, then timeline, warm path, touch plan, notes | Q36, Q105 | Live |
-| P3 | Full lead page opened from the panel | Q36 "the full lead page opens from it" | Built not live (full lead page) |
+| P3 | Full lead page opened from the panel | Q36 "the full lead page opens from it" | Live (deployed 7 Nov) (full lead page) |
 | P4 | Several pipelines per profile with templates (Outreach, Bank partners, Investors, Events and speakers, Blank); stage editor | Q37 | Live |
 | P5 | Activity timeline per lead, logged automatically | Q38.1 | Live |
 | P6 | Lead heat (hot, warm, cold dot; breakdown only in the panel) | Q38.2, Q103 | Live |
@@ -62,8 +62,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | P15 | Import from CSV or from Network | Q38.10 | Live |
 | P16 | Read-only Board view | Q104 | Declined by user (removed) |
 | P17 | Keyboard shortcuts to move stages, not shown on screen | Q36, Q106 | Live |
-| P18 | Remove Pipeline's repeated next-step sentence | Polish pass "Left for later" | Built not live |
-| P19 | Account map as its own view (step 4); Claude said it would be built once inside Pipeline | Step 4 list; Q38 note | Built not live (account map) |
+| P18 | Remove Pipeline's repeated next-step sentence | Polish pass "Left for later" | Live (deployed 7 Nov) |
+| P19 | Account map as its own view (step 4); Claude said it would be built once inside Pipeline | Step 4 list; Q38 note | Live (deployed 7 Nov) (account map) |
 
 ## Network
 
@@ -78,9 +78,9 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | N7 | Owner-only "Remove network data" | Q15 | Live |
 | N8 | Warm path line in the lead panel | Q9 | Live |
 | N9 | Keep Network as its own section (not folded into other pages) and make its use obvious | Q78 (first one); 5 Nov 20:30 "no take it like there only" | Live (fold-in declined by user) |
-| N10 | "Explain with AI" on topics | Q7 recommendation "can come with Content Studio in step 4" | Built not live (Explain with AI on topics) |
-| N11 | Mutual connections read by the extension from a profile the user opens (true 2nd-degree paths) | Q4 "waits for its own small release"; Handoff Network | Built not live (mutuals read on click; needs db/024) |
-| N12 | Location read from profile pages the user opens, for regional segments | Q11 "left for later" | Built not live (location read on click) |
+| N10 | "Explain with AI" on topics | Q7 recommendation "can come with Content Studio in step 4" | Live (deployed 7 Nov) (Explain with AI on topics) |
+| N11 | Mutual connections read by the extension from a profile the user opens (true 2nd-degree paths) | Q4 "waits for its own small release"; Handoff Network | Live (deployed 7 Nov) (mutuals read on click; needs db/024) |
+| N12 | Location read from profile pages the user opens, for regional segments | Q11 "left for later" | Live (deployed 7 Nov) (location read on click) |
 | N13 | Upload Shashi's real export | Handoff "Waiting for Shashi's real export" | Needs user action |
 
 ## Profile Studio
@@ -109,8 +109,8 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | DS12 | Digest = merged topics, priority score with editable weights, Crowded flag, top 10 plus Rising, Possible merge, top 3 cards plus ranked list | Q84 to Q90; 5 Nov 20:53 | Live |
 | DS13 | Tick topics and Send to Content Studio; angle decided there | Q91 | Live |
 | DS14 | Send to Discovery from LinkedIn (Prax bar on a post) | Q74 design ("Sources: LinkedIn") | Live |
-| DS15 | Send to Discovery from a LinkedIn profile you have opened | Q74 design "or on a profile you've opened" | Built not live (Send to Discovery from a profile) |
-| DS16 | News about a target company adds a note on that prospect in Pipeline | Q74 routing table | Built not live (note on prospect, Discovery and Dashboard Needs you) |
+| DS15 | Send to Discovery from a LinkedIn profile you have opened | Q74 design "or on a profile you've opened" | Live (deployed 7 Nov) (Send to Discovery from a profile) |
+| DS16 | News about a target company adds a note on that prospect in Pipeline | Q74 routing table | Live (deployed 7 Nov) (note on prospect, Discovery and Dashboard Needs you) |
 | DS17 | First real Discovery run with AI keys (never run yet; the live check showed "nothing run yet") | 5 Nov 23:16 "needs a Discovery run first" | Needs user action |
 
 ## Content Studio
@@ -122,7 +122,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CS3 | Angle step after the idea (4 suggested angles plus your own), saved on the post and shown in approval | Q92; 5 Nov 20:59 "confirm me whether the angle thing is in the content studio" | Live |
 | CS4 | "Copy and open LinkedIn" hand-off; Prax never posts | Q33 | Live |
 | CS5 | Image generation with an OpenAI or Google (Nano Banana, `gemini-2.5-flash-image`) key; "Connect image key" goes to the Extension page | Q34 "only we will add open or google nano bann api"; 5 Nov 18:45 | Live (never tried with a real key) |
-| CS6 | Save generated images with the post | Handoff "Generated images stay in the browser to download; only the brief is stored" | Built not live (images saved to storage; needs db/022) |
+| CS6 | Save generated images with the post | Handoff "Generated images stay in the browser to download; only the brief is stored" | Live (deployed 7 Nov) (images saved to storage; needs db/022) |
 | CS7 | Carousels from templates, downloaded as a PDF | Q34 | Live |
 | CS8 | Video as a content type: 3-second hook, beats (say and show), cover, captions | 5 Nov 18:25 "what about videos ??" | Live (script only; see I6) |
 | CS9 | LinkedIn formatter: bold, italic, bold italic, underline, strikethrough, serif, monospace, script, outline, bullets, numbers, arrows, checks, blank line keeper, divider, case, undo, clear, Markdown, shortcuts, 3,000 counter, mobile and desktop preview | Q33 "i want a linkedin formatter"; 5 Nov 18:16 "formatter looks incomplete" | Live |
@@ -144,13 +144,13 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CS25 | Point-of-view bank: approved stances, cleared proof points, stories, allowed numbers | Q61 | Live |
 | CS26 | Regulated-claims check before approval, with a tick to go on | Q64 | Live |
 | CS27 | LinkedIn newsletter track with its own cadence in Plan | Q66 | Live |
-| CS28 | What works: which types, pillars, days, times and hooks land, nudging plans; "not enough results yet" until there is data | Q67 | Built not live (fed by per-post results) |
-| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Built not live (manual entry plus extension Read analytics; needs db/022) |
-| CS30 | Repurpose: turn one article or long post into several pieces (posts, carousel, comments), each landing as an Idea | Q42; Handoff "Repurpose (one piece into several)" | Built not live (Repurpose) |
-| CS31 | First comment and reply prep, only on posts that need them | Q44 "not all but relevant ones" | Built not live (first comment and reply prep) |
+| CS28 | What works: which types, pillars, days, times and hooks land, nudging plans; "not enough results yet" until there is data | Q67 | Live (deployed 7 Nov) (fed by per-post results) |
+| CS29 | Post results: when the user opens a post's analytics page, the extension reads impressions, reactions and comments into that post | Q43 | Live (deployed 7 Nov) (manual entry plus extension Read analytics; needs db/022) |
+| CS30 | Repurpose: turn one article or long post into several pieces (posts, carousel, comments), each landing as an Idea | Q42; Handoff "Repurpose (one piece into several)" | Live (deployed 7 Nov) (Repurpose) |
+| CS31 | First comment and reply prep, only on posts that need them | Q44 "not all but relevant ones" | Live (deployed 7 Nov) (first comment and reply prep) |
 | CS32 | Company channel: company-gap content flagged "Company content, not for the profile" | Q71 | Live |
 | CS33 | "Is this citable?" draft test from the post editor | Q60 item 8 | Live |
-| CS34 | Write a post's grid of icon cards replaced (audit: template look) | Polish pass "Left for later" | Built not live (compact source list) |
+| CS34 | Write a post's grid of icon cards replaced (audit: template look) | Polish pass "Left for later" | Live (deployed 7 Nov) (compact source list) |
 | CS35 | Quote cards | Q46 | Declined by user |
 | CS36 | Mobile one-tap approval, tag check | Q63, Q65 | Declined by user |
 | CS37 | One merged Studio for posts and comments | Q35 | Declined by user (kept separate) |
@@ -166,7 +166,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | CM5 | Impact score next to Human score, in Engagement too | Q28 | Live |
 | CM6 | Safety: daily draft limit, VIP authors, read existing comments | Q29 | Live |
 | CM7 | Sign-off line only in messages and connection notes, never comments | Q30 | Live |
-| CM8 | "Draft a comment" entry point inside the app (the core daily task has none today) | Audit item 9; Q117 "item 9 follows" | Built not live (Draft a comment panel from Comment Studio, Today and ⌘K) |
+| CM8 | "Draft a comment" entry point inside the app (the core daily task has none today) | Audit item 9; Q117 "item 9 follows" | Live (deployed 7 Nov) (Draft a comment panel from Comment Studio, Today and ⌘K) |
 | CM9 | Comment voice for a second profile | Handoff "Known gaps" | Needs user action (write it in Settings per profile) |
 
 ## Engagement
@@ -194,24 +194,24 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | AC12 | Strict name matching: full name with context, otherwise "needs review" | Q69 | Live |
 | AC13 | Headline score weighted 70% person, 30% company | Q70 | Declined by user (confirmed Q126: person and company stay separate) |
 | AC14 | Facts sheet in two tabs (person and company) | Q72 | Live |
-| AC15 | Peer experts: Claude suggests 5 to 8 names from public sources, the user approves | Q73 | Built not live (suggestions from run answers, Approve or Dismiss; needs db/025) |
+| AC15 | Peer experts: Claude suggests 5 to 8 names from public sources, the user approves | Q73 | Live (deployed 7 Nov) (suggestions from run answers, Approve or Dismiss; needs db/025) |
 | AC16 | API keys start blank and are added by the user; never shown as connected without a key | 5 Nov 20:01 | Live |
 | AC17 | Detailed, institution-grade weekly report downloadable as a PDF | 5 Nov 20:01, 20:11 | Live |
 | AC18 | Charts show real values from runs | 5 Nov 20:11 | Live (charts appear after two weeks of runs) |
 | AC19 | Tracked profiles: Archive, Switch, New, Delete (owner, typed name) in a three-dot menu | Q107; 5 Nov 23:38 | Live |
 | AC20 | Redesign: one card style, no dashes, edit, add and remove tracked names and peers | 6 Nov 00:26 "typical AI slop... no option to edit" | Live |
-| AC21 | Provider logos in the PDF report | Handoff "the PDF uses names only" | Built not live (logos in the PDF tables) |
+| AC21 | Provider logos in the PDF report | Handoff "the PDF uses names only" | Live (deployed 7 Nov) (logos in the PDF tables) |
 | AC22 | First real run with keys | Handoff "Not verified yet" | Needs user action |
 
 ## Strategy
 
 | ID | Item, in plain English | Source | Status |
 |---|---|---|---|
-| S1 | Strategy as an open canvas like n8n or WorksBuddy: dotted wires, nodes showing only their name, view, edit and delete, custom nodes and flows | Q108; 5 Nov 23:38; 6 Nov 04:42 (screenshot) | Built not live (workflow canvas; needs db/021) |
-| S2 | Strategy drives the product: each node maps to real settings (Today quotas, post mix and pillars, target segments, Comment Studio rules) and shows what it affects | Q109 step 1 | Built not live (nodes write the real settings) |
-| S3 | If/else rules engine applied across Today, Pipeline and Content Studio | Q109 step 2; Q108 | Built not live (if/else rules in Today, Pipeline, Content Studio, Discovery) |
+| S1 | Strategy as an open canvas like n8n or WorksBuddy: dotted wires, nodes showing only their name, view, edit and delete, custom nodes and flows | Q108; 5 Nov 23:38; 6 Nov 04:42 (screenshot) | Live (deployed 7 Nov) (workflow canvas; needs db/021) |
+| S2 | Strategy drives the product: each node maps to real settings (Today quotas, post mix and pillars, target segments, Comment Studio rules) and shows what it affects | Q109 step 1 | Live (deployed 7 Nov) (nodes write the real settings) |
+| S3 | If/else rules engine applied across Today, Pipeline and Content Studio | Q109 step 2; Q108 | Live (deployed 7 Nov) (if/else rules in Today, Pipeline, Content Studio, Discovery) |
 | S4 | "Who does what" sections hidden from viewers and commenters | Audit item 10 | Live |
-| S5 | Merge Strategy and Notes into one Playbook | Step 4 list; Handoff "Next" item 3 | Built not live (Playbook: Strategy and Notes tabs; old links redirect) |
+| S5 | Merge Strategy and Notes into one Playbook | Step 4 list; Handoff "Next" item 3 | Live (deployed 7 Nov) (Playbook: Strategy and Notes tabs; old links redirect) |
 
 ## Templates and Notes
 
@@ -232,7 +232,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | X4 | Test the bar on real LinkedIn pages by hand and send screenshots (Claude may not automate LinkedIn) | Handoff "Not verified yet" | Needs user action |
 | X5 | Star icon on Extension in the sidebar | 5 Nov 23:38 | Live |
 | X6 | Provider logos and calm key rows in the side panel | 5 Nov 23:47 | Live |
-| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Built not live (Inbox plus extension Send to Prax Inbox; needs db/026) |
+| X7 | Inbox view for DMs and follow-ups, also in the extension (step 4) | Step 4 list; Q3 | Live (deployed 7 Nov) (Inbox plus extension Send to Prax Inbox; needs db/026) |
 | X8 | Unlisted Chrome Web Store listing so the extension auto-updates | Handoff "Known gaps" (option) | Needs user action (developer account, 5 USD) |
 
 ## Login and profiles
@@ -248,7 +248,7 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | L7 | Sign out top right (account menu) and in the sidebar | 6 Nov 00:34 | Live |
 | L8 | No built-in Shashi: add a profile, its name and strategy in Settings, archive, restore, delete; demo how a profile is added and removed | 5 Nov 23:39; 6 Nov 01:01 | Live |
 | L9 | Demo profile (Layla Haddad) with four weeks of history, marked Demo | Q120 | Live (SQL run) |
-| L10 | Leftover "he" and "his" in tour and help text (about 9 strings in Profile Studio, Network, Discovery) | Handoff profile-agnostic; 6 Nov 01:01 "it taken shashi sir as default" | Built not live (pronouns replaced) |
+| L10 | Leftover "he" and "his" in tour and help text (about 9 strings in Profile Studio, Network, Discovery) | Handoff profile-agnostic; 6 Nov 01:01 "it taken shashi sir as default" | Live (deployed 7 Nov) (pronouns replaced) |
 
 ## Design system
 
@@ -258,12 +258,12 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 | DZ2 | Entry moment once a day on the Dashboard only; quick fade elsewhere | 5 Nov 20:26; Q119 | Live |
 | DZ3 | Guided tours anchored to their target, "Step N of M" | 5 Nov 19:51 | Live |
 | DZ4 | Uniform tiles: same at rest, change only on hover, press, focus, selection | 5 Nov 23:45 | Live |
-| DZ5 | New logo (Corners) in the app, favicon and extension | 5 Nov 23:49; 23:59 "go with 2nd one corners" | Built not live (logo everywhere) |
+| DZ5 | New logo (Corners) in the app, favicon and extension | 5 Nov 23:49; 23:59 "go with 2nd one corners" | Live (deployed 7 Nov) (logo everywhere) |
 | DZ6 | Real provider logos with real names everywhere keys or AI tools show | 5 Nov 23:47 | Live (xAI Grok has no mark) |
 | DZ7 | Search menu: aligned icons and labels, no red half-ring | 6 Nov 00:07, 00:22 | Live |
 | DZ8 | 19 audit fixes (sidebar highlight, contrast, encoding, tabs, layouts) | Q100 | Live |
 | DZ9 | Polish pass: one red action, one card style, honest empty states, Geist, type scale, radii, layout at 1280 | Q117 items 1 to 8 and 10 | Live |
-| DZ10 | Sidebar in four groups (15 flat items today) | Audit item 9; Q117 | Built not live (Do, Create, Grow, Set up) |
+| DZ10 | Sidebar in four groups (15 flat items today) | Audit item 9; Q117 | Live (deployed 7 Nov) (Do, Create, Grow, Set up) |
 | DZ11 | Rerun the design audit, aiming for 8 of 10 | Q117 | Declined by user (6 Nov 01:01 "no need to re-audit") |
 | DZ12 | Deep audit subagent from every angle | Q112 | Live (done: 5 of 10 report) |
 | DZ13 | Check on a real phone (all phone checks so far were a 390 px frame) | 5 Nov 22:52 "Not done yet" item 3 | Not started |
@@ -289,12 +289,12 @@ Source column: a Q number, or the date and time (IST, from the log) and a short 
 
 | ID | Item, in plain English | Source | Status |
 |---|---|---|---|
-| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | Built not live (Check replies on notifications and posts; Engagement, Today, Inbox, Needs you; needs db/027) |
-| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | Built not live (Monday review page; needs db/027) |
+| I1 | Reply tracking: know when someone replies to a comment or post, captured only on click (replies are logged today only when the extension sees them on a page the user opens) | Claude's "what comes next" list, 5 Nov 23:39 | Live (deployed 7 Nov) (Check replies on notifications and posts; Engagement, Today, Inbox, Needs you; needs db/027) |
+| I2 | Weekly review page every Monday (overlaps D10, the step 4 weekly report) | Same list | Live (deployed 7 Nov) (Monday review page; needs db/027) |
 | I3 | Team roles and approvals, including the owner's approval queue on a phone (mobile approval was declined as Q63) | Same list | Not started (not agreed) |
 | I4 | Results by pillar and format feeding Strategy (overlaps CS28 and S2) | Same list | Not started (not agreed) |
-| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | Built not live (Google AI answers and Microsoft Copilot through SerpApi; needs db/028 and a SerpApi key) |
-| I6 | Record or upload video inside Prax (today Prax writes the script, cover and captions; the person records outside Prax) | 5 Nov 18:26 Claude's reply to "what about videos" | Built not live (record with teleprompter, trim, upload, captions; needs db/029; screen picture-in-picture left out) |
+| I5 | Google AI answers and Copilot as AI citations engines (need a paid data provider) | Ranko teardown, 5 Nov 18:27 | Live (deployed 7 Nov) (Google AI answers and Microsoft Copilot through SerpApi; needs db/028 and a SerpApi key) |
+| I6 | Record or upload video inside Prax (today Prax writes the script, cover and captions; the person records outside Prax) | 5 Nov 18:26 Claude's reply to "what about videos" | Live (deployed 7 Nov) (record with teleprompter, trim, upload, captions; needs db/029; screen picture-in-picture left out) |
 | I7 | xAI Grok logo (no CC0 or official asset) | Handoff providers | Declined: no legitimate Grok mark exists (xAI forbids altered files; simple-icons refused it); name shown |
 
 ---
@@ -334,9 +334,9 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 | R6 | The campaign's "warm up is on today's list" line was confusing ("why it's showing here") | 5 Nov 18:45 | Live (removed; no warm-up copy is left in Content Studio) |
 | R7 | "AI citation is not opening" from Content Studio (the preview sidebar had no link) | 5 Nov 19:42 | Live (AI citations is in the app sidebar) |
 | R8 | "Plan and library options are not opening" | 5 Nov 18:08 | Live (Plan and Library tabs work; CS10, CS12) |
-| R9 | "Unstructured toggles": only the AI citations filters were changed to segmented controls. Claude asked where else the user meant and the question was never followed up | 6 Nov 03:44 "have you fixed... the unstructured toggles" | Built not live (one switch style across the app) |
-| R10 | The new logo "everywhere" also means the public AI citations share view and the PDF reports (AI citations report, weekly report, carousel) | 5 Nov 23:59 "go with 2nd one corners, implement it everywhere" | Built not live (logo on share page and every PDF) |
-| R11 | No dashes as values anywhere | 6 Nov 00:26; polish pass rule | Built not live (no dash for an unscored draft) |
+| R9 | "Unstructured toggles": only the AI citations filters were changed to segmented controls. Claude asked where else the user meant and the question was never followed up | 6 Nov 03:44 "have you fixed... the unstructured toggles" | Live (deployed 7 Nov) (one switch style across the app) |
+| R10 | The new logo "everywhere" also means the public AI citations share view and the PDF reports (AI citations report, weekly report, carousel) | 5 Nov 23:59 "go with 2nd one corners, implement it everywhere" | Live (deployed 7 Nov) (logo on share page and every PDF) |
+| R11 | No dashes as values anywhere | 6 Nov 00:26; polish pass rule | Live (deployed 7 Nov) (no dash for an unscored draft) |
 | R12 | Run the new database files `db/021`, `022`, `024`, `025` and `026` as one saved Supabase query that Claude opens for the user, who only clicks Run ("no pasting") | 6 Nov 04:05 "I'm not a technical guy... these small things can't you do by your end"; Claude's promise at 04:19 and 09:43 | Not started (needed before S1, S2, CS6, CS29, N11, AC15, X7 and others work live) |
 | R13 | Deploy the 18 commits on `main` that are not on `origin/main`, then push (standing rule: push after every deploy) | Q17, Q20; 6 Nov 09:43 | Not started (waits for the user's "deploy" and R12) |
 | R14 | Reinstall the extension as 0.9.3, not 0.9.2 (`extension/manifest.json` and `LATEST_EXT` are 0.9.3 on `main`) | Follows from N11, N12, DS15, CS29, X7 | Needs user action (after the deploy) |
@@ -356,7 +356,7 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 | TN3 | Live | Live today, but `main` moves Notes into Playbook, which sits **above** Extension in the sidebar (Set up: Templates, Playbook, Extension, Settings). After the deploy, the user's "place note section after [Extension]" is no longer true. Confirm with the user or reorder | `src/components/sidebar.tsx` NAV |
 | X3, O7 | Needs user action (reinstall 0.9.2) | Reinstall 0.9.3 after the next deploy (see R14) | `extension/manifest.json` |
 | O10 | Live (all SQL up to `db/020` run) | Still true, but `db/021`, `022`, `024`, `025` and `026` are not run (see R12) | `ls db` |
-| DZ5 | Live | Partly done: not on the share view or in the PDFs (see R10) | Built not live (logo everywhere) |
+| DZ5 | Live | Partly done: not on the share view or in the PDFs (see R10) | Live (deployed 7 Nov) (logo everywhere) |
 | DZ9, AC20 | Live ("no dashes") | Live except one dash in Content Studio (see R11) | `write.tsx:553` |
 
 **Design complaints checked again in the code (all hold, except where noted):** wrapping buttons (R1); search menu alignment and red half ring (DZ7: `#cmdk:focus-visible { outline: none }`); black or red first tiles (DZ4: no `tile.dark`, `tile.red`, `kpiDark` or `kpiRed` left); black hero cards and uppercase labels (DZ9: uppercase is only in post and carousel previews, which is intended); dashes (R11); red repeated buttons (no `btn-primary` inside a list `.map`); AI citations Company editing (AC20: `TrackedNames` edits person, company, firms and experts on Competitors; Company links there); LinkedIn MCP button (D8: `linkedin-mcp.tsx` on the Dashboard, no "Coming soon"); account menu top right (L7: `AccountMenu` is in `Section`, `PageHeader`, Content Studio and AI citations, so it shows on every section, including Inbox, Weekly report, the lead page and Playbook); sign-in required fields (L1: `aria-required` and "Required" in `auth-card.tsx`); logo everywhere (R10); provider logos (DZ6: Grok has its name only); Strategy canvas look (S1: dotted canvas, ⋮ View, Edit, Delete, if/else lanes; "From strategy" labels in Today, Pipeline and Content Studio).
@@ -367,6 +367,6 @@ Done by a fresh subagent that built nothing. Sources: all 178 user messages in t
 
 No agreed feature was dropped. Seventeen items had no row: most are fixes already live, two are partly done (logo on the share view and PDFs, and the "unstructured toggles" follow-up), one dash is left, and three are next steps (one-click SQL run, deploy and push, reinstall 0.9.3). Ten statuses needed correcting, mainly the header's "Live" baseline, AC13 (decided by Claude, not the user) and the Notes placement that the Playbook merge changes.
 
-| T20 | Templates section as animated, colour-accented cards: one-word purpose, click for a pop-up, View, Edit and Delete with icons | 7 Nov user request | Built not live (animated accent cards, pop-up, view, edit, delete with Undo) |
+| T20 | Templates section as animated, colour-accented cards: one-word purpose, click for a pop-up, View, Edit and Delete with icons | 7 Nov user request | Live (deployed 7 Nov) (animated accent cards, pop-up, view, edit, delete with Undo) |
 
-| QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Built not live (fixes merged; db/030 turns on live updates for every table) |
+| QA1 | Live QA 6 Nov: AI buttons hung 2 minutes without the extension; lists not updating after add or delete; Today Delete task and activity logging never saved; Classify sent the link not the post | 6 Nov user request | Live (deployed 7 Nov) (fixes merged; db/030 turns on live updates for every table) |
