@@ -36,6 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       case "replies": return json({ marked: await rpc("ext_replies", { post_url: String(body.url ?? "") }) });
       // A post the user sent from the Prax bar while reading it: it lands in Discovery Studio as a finding.
       case "discovery": return json({ id: await rpc("ext_discovery_add", { p: { url: String(body.url ?? "").slice(0, 1000), title: String(body.title ?? "").slice(0, 300), text: String(body.text ?? "").slice(0, 6000), author: String(body.author ?? "").slice(0, 200), author_url: String(body.author_url ?? "").slice(0, 500), company: String(body.company ?? "").slice(0, 200) } }) });
+      // A LinkedIn message the user sent to the Inbox from a conversation they have open (user click only; db/026_step4.sql).
+      case "inbox": return json(await rpc("ext_inbox_add", { p: { name: String(body.name ?? "").slice(0, 200), company: String(body.company ?? "").slice(0, 200), url: String(body.url ?? "").slice(0, 500), thread_url: String(body.thread_url ?? "").slice(0, 500), text: String(body.text ?? "").slice(0, 4000), received_at: String(body.received_at ?? "").slice(0, 40) } }));
       case "snapshot":return json({ saved: await rpc("ext_snapshot", { metrics: body.metrics ?? {} }) });
       case "capture": {
         const me = await rpc("ext_me", {});

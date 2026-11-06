@@ -169,7 +169,7 @@ export default function Dashboard() {
     <Section id="dashboard" title={greeting(hour, firstName(name, email))} status={loading ? `${ws.name} · ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}` : sentence}
       entryStatus={loading ? `${ws.name}, ${fmtDay(t, { weekday: "long", day: "numeric", month: "long" })}.` : sentence}
       primary={<Link data-tour="open-today" href={`${base}/today`} className="btn btn-primary h-10 px-4">Open Today <ArrowUpRight size={14} /></Link>}
-      actions={<LinkedInMcp />}
+      actions={<><Link href={`${base}/weekly`} className="btn h-10 px-3.5">Weekly report</Link><LinkedInMcp /></>}
       steps={dashTour(first)}>
 
       {loading ? <Skeleton /> : (<>
