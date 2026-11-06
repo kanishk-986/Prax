@@ -110,6 +110,7 @@ export function groupOf(it: AgendaItem): GroupKey {
 }
 
 export function typeLabel(it: AgendaItem): string {
+  if (it.kind === "reply" && it.idx >= 500) return "Reply back"; // one per reply from a lead (db/027)
   const k: Record<string, string> = { comment: "Comment", reply: "Replies", request: "Request", dm: "Message", inmail: "InMail", post: "Post" };
   if (k[it.kind]) return k[it.kind];
   if (it.idx >= 2000 && it.idx < 3000) return "Comment";
@@ -236,7 +237,7 @@ export function pageName(link: string | null | undefined, slug: string, nav: { h
 }
 
 // ---------- Needs you now ----------
-export type NeedKind = "followup" | "post" | "approval" | "today" | "discovery" | "citations" | "warming" | "network";
+export type NeedKind = "followup" | "post" | "approval" | "today" | "discovery" | "citations" | "warming" | "network" | "replies" | "review";
 export type NeedInput = { kind: NeedKind; due?: string | null; count?: number };
 
 /** Higher is more urgent. Overdue follow-ups and posts lead and grow with age; housekeeping sits at the bottom. */
@@ -251,6 +252,8 @@ export function urgency(n: NeedInput, today: string): number {
     case "citations": return 40;
     case "warming": return 30;
     case "network": return 20;
+    case "replies": return 86; // new replies: under a post due today and approvals, above the Today plan
+    case "review": return 60; // the Monday review of last week
   }
 }
 

@@ -35,7 +35,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
       case "log": return json(await rpc("ext_log_comment", { p: body }));
       case "request": return json(await rpc("ext_log_request", { p: body }));
       case "usage": return json({ ok: await rpc("ext_log_usage", { p: body }) });
-      case "replies": return json({ marked: await rpc("ext_replies", { post_url: String(body.url ?? "") }) });
+      // Replies, comments and mentions the user read with Check replies (I1, db/027): on the notifications page or on a
+      // post they have open. Extension 0.9.3 and older send only { url }, which marks that post's logged comments as replied.
+      case "replies": {
+        if (!Array.isArray(body.replies)) return json({ marked: await rpc("ext_replies", { post_url: String(body.url ?? "") }) });
+        const s = (x: unknown, n: number) => String(x ?? "").slice(0, n);
+        const replies = body.replies.slice(0, 50).map((r: Record<string, unknown>) => ({
+          kind: ["comment_reply", "post_comment", "mention"].includes(String(r?.kind)) ? String(r.kind) : "comment_reply",
+          name: s(r?.name, 200), url: s(r?.url, 500), text: s(r?.text, 4000), post_url: s(r?.post_url, 1000), at: s(r?.at, 40), mine: s(r?.mine, 400),
+        }));
+        const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body.day ?? "")) ? String(body.day) : "";
+        return json(await rpc("ext_replies_add", { p: { replies, day } }));
+      }
       // A post the user sent from the Prax bar while reading it: it lands in Discovery Studio as a finding.
       // kind "profile": a profile the user has open (DS15), with its headline and the activity shown on it.
       case "discovery": return json({ id: await rpc("ext_discovery_add", { p: { kind: body.kind === "profile" ? "profile" : "post", url: String(body.url ?? "").slice(0, 1000), title: String(body.title ?? "").slice(0, 300), text: String(body.text ?? "").slice(0, 6000), author: String(body.author ?? "").slice(0, 200), author_url: String(body.author_url ?? "").slice(0, 500), company: String(body.company ?? "").slice(0, 200) } }) });

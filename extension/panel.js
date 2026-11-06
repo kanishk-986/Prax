@@ -89,14 +89,12 @@ function readProfile() {
   return { url: location.href.split("?")[0], raw: main.innerText.trim().slice(0, 40000) };
 }
 
-function findMyReplies(name) {
+// Check replies (I1): the replies shown under the profile's own comments on this post, and the comments on the
+// profile's own post. On the notifications page, the replies, comments and mentions shown there. Read on the click only.
+function findReplies(name) {
   const P = globalThis.PraxDOM;
-  const first = name.split(/\s+/)[0].toLowerCase();
-  const mine = [...document.querySelectorAll(P.COMMENT_SEL)]
-    .filter((c) => (c.querySelector(".comments-comment-meta__description-title, .comments-post-meta__name-text, a[href*='/in/']")?.textContent || "").toLowerCase().includes(first));
-  // A reply shows as a nested comment, or a "N replies" control under ours.
-  const replied = mine.filter((c) => c.querySelector(P.COMMENT_SEL) || /\b\d+\s+repl(y|ies)\b/i.test(c.innerText));
-  return { mine: mine.length, replied: replied.length, url: location.href.split("?")[0] };
+  if (P.isNotificationsPath(location.pathname)) return { page: "notifications", ...P.readNotifications(document, name) };
+  return { page: "post", ...P.readPostReplies(document, location, name) };
 }
 
 // ---------- Prax bar status ----------
@@ -236,11 +234,14 @@ $("drafts").addEventListener("click", async (e) => {
 $("replies").addEventListener("click", async () => {
   try {
     if (!me) me = await prax("me");
-    const r = await run(findMyReplies, [me.workspace]);
-    if (!r.mine) return toast(`No comment by ${me.workspace} is loaded on this page. Open the post and load its comments.`, true);
-    if (!r.replied) return toast("No replies yet.");
-    const j = await prax("replies", { url: r.url });
-    toast(j.marked ? `Marked ${j.marked} logged comment${j.marked > 1 ? "s" : ""} as replied` : "Reply found, but this post was not logged in Prax.");
+    const r = await run(findReplies, [me.workspace]);
+    if (r.page === "post" && !r.mine && !r.own) return toast(`No comment or post by ${me.workspace} is shown on this page. Open the post and show its comments.`, true);
+    if (!r.replies.length) return toast(r.page === "notifications" ? "No replies, comments or mentions are shown in these notifications yet." : "No replies shown yet.");
+    const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const j = await prax("replies", { replies: r.replies, day });
+    const n = r.replies.length;
+    toast(!j.added ? `Already in Prax: ${n} ${n === 1 ? "reply" : "replies"}. Nothing new.`
+      : [`Saved ${j.added} new ${j.added === 1 ? "reply" : "replies"} to Prax`, j.known ? `${j.known} already there` : "", j.tasks ? `${j.tasks} Reply back ${j.tasks === 1 ? "task" : "tasks"} on Today` : ""].filter(Boolean).join(". ") + ".");
   } catch (e) { fail(e); }
 });
 

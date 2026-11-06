@@ -37,7 +37,7 @@ await ctx.route(/^https:\/\/([\w-]+\.)?(linkedin|licdn)\.com\//, (route) => {
   const req = route.request();
   if (req.resourceType() !== "document") return route.abort();
   const p = new URL(req.url()).pathname;
-  const html = p.startsWith("/messaging/") ? fx("messaging-thread.html") : p.startsWith("/feed/update/") ? fx("single-post.html") : p.startsWith("/in/omar-saleh") ? fx("profile-classic.html") : p.startsWith("/in/") ? fx("profile.html")
+  const html = p.startsWith("/messaging/") ? fx("messaging-thread.html") : p.startsWith("/notifications/") ? fx("notifications.html") : p.startsWith("/feed/update/urn:li:activity:7390000000000000031/") ? fx("post-replies.html") : p.startsWith("/feed/update/") ? fx("single-post.html") : p.startsWith("/in/omar-saleh") ? fx("profile-classic.html") : p.startsWith("/in/") ? fx("profile.html")
     : p.startsWith("/analytics/post-summary/") ? fx("post-analytics.html") : p.includes("analytics") ? fx("analytics.html") : p.startsWith("/search/") ? fx("activity-and-search.html") : FEED;
   return route.fulfill({ status: 200, contentType: "text/html", body: html });
 });
@@ -57,6 +57,7 @@ async function stub(sw) {
       if (url.endsWith("/api/ext/capture")) return J({ name: "Lena Fischer", score: 72, created: true });
       if (url.endsWith("/api/ext/profile")) return J({ prospect: "Omar Saleh", prospect_id: "p1", person: true });
       if (url.endsWith("/api/ext/inbox")) return J({ id: "m1", prospect: "Omar Saleh" });
+      if (url.endsWith("/api/ext/replies")) return J({ added: (b.replies || []).length, known: 0, skipped: 0, comments: 1, posts: 1, tasks: 1, leads: ["Priya Nair"] });
       if (url.endsWith("/api/ext/post_results")) return J({ post: self.__noPost ? null : "post-1" });
       if (url.endsWith("/api/ext/snapshot")) return J({ saved: Object.keys(b.metrics || {}).length });
       return J({ ok: true });
@@ -175,6 +176,31 @@ const ib = await sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/a
 check("inbox: sends the person, thread and their last message shown", ib.length === 1 && ib[0].name === "Omar Saleh" && ib[0].company === "Gulf Union Bank" && ib[0].url === "https://www.linkedin.com/in/omar-saleh/" && ib[0].thread_url === "https://www.linkedin.com/messaging/thread/2-abc123/" && /Are you in Dubai/.test(ib[0].text) && ib[0].received_at === "2026-11-05T08:10:00Z", JSON.stringify(ib));
 check("inbox: the toast names the lead", /Sent to Prax Inbox: Omar Saleh, matched to Omar Saleh in Pipeline/.test(await page.evaluate(() => document.getElementById("prx-toast")?.textContent || "")));
 check("inbox: Prax opened no other thread", page.url() === "https://www.linkedin.com/messaging/thread/2-abc123/", page.url());
+
+// Check replies (I1) on the notifications page: one button above the list, read only on the click, nothing scrolled or opened.
+const repliesCalls = () => sw.evaluate(() => self.__calls.filter((c) => c.url.endsWith("/api/ext/replies")).map((c) => c.b));
+await page.goto("https://www.linkedin.com/notifications/?filter=all"); await wait(1200);
+check("replies: one Check replies button above the notifications", (await page.locator(".prx-notes").count()) === 1 && await page.evaluate(() => document.querySelector(".prx-notes").nextElementSibling.classList.contains("nt-card-list")));
+check("replies: nothing is sent before a click", (await repliesCalls()).length === 0);
+await page.locator(".prx-notes [data-act='replies']").click();
+await page.waitForFunction(() => /new replies/.test(document.getElementById("prx-toast")?.textContent || ""), null, { timeout: 5000 }).catch(() => {});
+const rn = await repliesCalls();
+check("replies: sends the replies, comments and mentions shown, never the profile's own", rn.length === 1 && JSON.stringify(rn[0].replies.map((r) => [r.name, r.kind])) === JSON.stringify([["Priya Nair", "comment_reply"], ["Tom Becker", "post_comment"], ["Hessa Al Marri", "mention"], ["Sara Lim", "comment_reply"]]) && /^\d{4}-\d{2}-\d{2}$/.test(rn[0].day), JSON.stringify(rn));
+check("replies: the toast says what was saved", /Saved 4 new replies to Prax\. 1 Reply back task on Today\./.test(await page.evaluate(() => document.getElementById("prx-toast")?.textContent || "")));
+check("replies: Prax opened and scrolled nothing", page.url() === "https://www.linkedin.com/notifications/?filter=all" && (await page.evaluate(() => scrollY)) === 0, page.url());
+await page.goto("https://www.linkedin.com/feed/"); await wait(800);
+check("replies: no button off the notifications page", (await page.locator(".prx-notes").count()) === 0);
+// The side panel's Check replies on a post the user has open.
+await page.goto("https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/"); await wait(1000);
+const rpanel = await ctx.newPage();
+await rpanel.goto(`chrome-extension://${extId}/panel.html`); await wait(600);
+await rpanel.evaluate(() => { window.activeTab = async () => (await chrome.tabs.query({ url: "https://www.linkedin.com/*" }))[0]; });
+await rpanel.evaluate(() => document.getElementById("replies").click());
+await rpanel.waitForFunction(() => /new replies|Nothing new|No /.test(document.getElementById("toast").textContent), null, { timeout: 5000 }).catch(() => {});
+const rp = (await repliesCalls())[1];
+check("panel: Check replies on a post sends the replies under the profile's comment and on its own post", !!rp && JSON.stringify(rp.replies.map((r) => [r.name, r.kind])) === JSON.stringify([["Priya Nair", "comment_reply"], ["Tom Becker", "comment_reply"], ["Lena Fischer", "post_comment"], ["Raj Mehta", "post_comment"]]) && /settlement layer/.test(rp.replies[0].mine), JSON.stringify(rp));
+check("panel: the toast says what was saved", /Saved 4 new replies to Prax/.test(await rpanel.locator("#toast").innerText()));
+await rpanel.close();
 
 await page.goto("https://www.linkedin.com/analytics/creator/"); await wait(500);
 await panel.click("#capstats"); await wait(500);

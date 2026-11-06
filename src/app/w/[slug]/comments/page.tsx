@@ -6,7 +6,8 @@ import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useLive } from "@/lib/live";
 import { useWorkspace, fmtDay, SEGMENTS, today, weekStart, addDays } from "@/lib/workspace";
-import { commentDays, weekOverWeek } from "@/lib/dashboard";
+import { commentDays, weekOverWeek, relTime } from "@/lib/dashboard";
+import { isNewReply, REPLY_KIND_LABEL, type ReplyRow, type InboxState } from "@/lib/inbox";
 import { useActiveStrategy } from "@/components/strategy/data";
 import { commentTarget } from "@/lib/strategy";
 
@@ -14,6 +15,7 @@ type C = { id: string; day: string; author: string; segment: string; mode: strin
 
 const ENG_TOUR: TourStep[] = [
   { target: "header", title: "What came of every comment", body: "Engagement fills itself from comments logged with the extension, so you can see which ones earn replies.", tab: "home" },
+  { target: "replies", title: "New replies", body: "Who replied to your comments, commented on your posts or mentioned you, read when you press Check replies on LinkedIn. A reply stays new until you answer or snooze it in the Inbox.", tab: "home" },
   { target: "kpis", title: "The numbers that matter", body: "Comments this week against the quota, the reply rate over 30 days, and prospects engaged.", tab: "home" },
   { target: "modes", title: "Which modes earn replies", body: "Each mode of comment with its share of replies. Lean on the ones that work.", tab: "home" },
   { target: "waiting", title: "Waiting for a reply", body: "Posts from the last 7 days with no reply yet. Open one, then press Check replies in the extension.", tab: "home" },
@@ -24,13 +26,22 @@ const ENG_TOUR: TourStep[] = [
 export default function CommentLog() {
   const { ws } = useWorkspace();
   const [tab, setTab] = useState("home");
+  const [replied, setReplied] = useState(false);
   const wk = weekStart(today());
   const { rows } = useLive<C>("comment_log", ws.id, { filter: (q) => q.gte("day", wk) });
   return (
-    <Section id="engagement" title="Engagement" status="Fills itself from comments logged with the extension. Replies are marked when you check a thread."
+    <Section id="engagement" title="Engagement" status="Fills itself from comments logged with the extension. Replies come in when you press Check replies on LinkedIn."
       entryStatus={`${rows.length} comments this week, ${rows.filter((r) => r.reply).length} with a reply.`}
       tabs={[{ id: "home", label: "Home" }, { id: "log", label: "Log" }]} tab={tab} onTab={setTab} steps={ENG_TOUR}>
-      {tab === "home" ? <Insights /> : <div data-tour="log" className="rounded-2xl"><RecordList table="comment_log" order="created_at" asc={false} empty="No comments logged yet. Comments posted with the Prax extension appear here automatically."
+      {tab === "home" ? <><NewReplies /><Insights /></> : <div data-tour="log" className="flex flex-col gap-3 rounded-2xl">
+        <div role="group" aria-label="Show" className="flex w-fit rounded-lg border border-line p-0.5">
+          {([[false, "All comments"], [true, "Replied"]] as const).map(([v, l]) => (
+            <button key={l} type="button" aria-pressed={replied === v} onClick={() => setReplied(v)}
+              className={`h-8 rounded-md px-3 text-meta font-medium transition-colors ${replied === v ? "bg-ink text-white" : "text-muted hover:text-ink"}`}>{l}</button>
+          ))}
+        </div>
+        <RecordList table="comment_log" order="created_at" asc={false} hide={replied ? (r) => !r.reply : undefined}
+          empty={replied ? "No logged comment has a reply yet. Press Check replies in the extension on a post or on LinkedIn notifications." : "No comments logged yet. Comments posted with the Prax extension appear here automatically."}
         defaults={{ day: new Date().toISOString().slice(0, 10), source: "manual" }}
         cols={[
           { key: "day", label: "Date", className: "num whitespace-nowrap text-muted", render: (r) => fmtDay(r.day) },
@@ -48,8 +59,57 @@ export default function CommentLog() {
           { key: "url", label: "Post URL", type: "url", wide: true },
           { key: "text", label: "Comment text", type: "textarea" },
           { key: "reply", label: "Reply received", type: "checkbox" },
-        ]} /></div>}
+        ]} />
+      </div>}
     </Section>
+  );
+}
+
+/** Replies read with Check replies (I1, db/027), newest first: the new ones (not done or snoozed in the Inbox) on top.
+ *  Each row says who, where and what they wrote, with the post and the lead. Nothing shows before db/027 runs. */
+function NewReplies() {
+  const { ws } = useWorkspace();
+  const t = today();
+  const rows = useLive<ReplyRow>("replies", ws.id, { order: "seen_at", asc: false, filter: (q) => q.gte("seen_at", new Date(addDays(t, -30) + "T00:00:00").toISOString()).limit(60) });
+  const states = useLive<InboxState>("inbox_state", ws.id, { filter: (q) => q.like("key", "reply:%") });
+  const [all, setAll] = useState(false);
+  const list = useMemo(() => rows.rows.map((r) => ({ ...r, fresh: isNewReply(r, states.error ? [] : states.rows, t) })), [rows.rows, states.rows, states.error, t]);
+  if (rows.loading || rows.error) return null;
+  const fresh = list.filter((r) => r.fresh);
+  const shown = (all ? list : fresh).slice(0, all ? 20 : 6);
+  const base = `/w/${ws.slug}`;
+  return (
+    <section data-tour="replies" className="panel">
+      <div className="panel-head">
+        <span className="flex items-center gap-2">New replies{fresh.length > 0 && <span className="count-badge">{fresh.length}</span>}</span>
+        {list.length > fresh.length && <button type="button" className="text-meta font-medium text-muted hover:text-ink" onClick={() => setAll((v) => !v)}>{all ? "Only new" : "Last 30 days"}</button>}
+      </div>
+      {shown.length === 0 ? (
+        <p className="border-t border-line px-[18px] py-4 text-body text-muted">{list.length ? "No new replies. Every reply has been answered or snoozed in the Inbox." : "None yet. On LinkedIn, open your notifications or a post and press Check replies in the extension."}</p>
+      ) : (
+        <ul className="border-t border-line">
+          {shown.map((r) => (
+            <li key={r.id} className="flex items-start gap-3 border-t border-line px-[18px] py-3 first:border-t-0">
+              <span className={`mt-[7px] h-[7px] w-[7px] shrink-0 rounded-full ${r.fresh ? "bg-accent" : "border-[1.5px] border-line-strong bg-white"}`} aria-hidden="true" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="flex flex-wrap items-baseline gap-x-2 text-body">
+                  <span className="font-semibold">{r.person}</span>
+                  <span className="text-meta text-muted">{REPLY_KIND_LABEL[r.kind] ?? "Replied"}</span>
+                  {r.fresh && <span className="sr-only">New.</span>}
+                </span>
+                {r.body && <span className="line-clamp-2 text-body text-ink-2">{r.body}</span>}
+                <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-meta">
+                  {r.post_url && <a href={r.post_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-muted hover:text-ink">Open the post <ExternalLink size={11} /></a>}
+                  {r.prospect_id && <Link href={`${base}/pipeline?p=${r.prospect_id}`} className="font-medium text-muted hover:text-ink">Open lead</Link>}
+                </span>
+              </span>
+              <span className="num shrink-0 whitespace-nowrap pt-px text-meta text-faint">{relTime(r.replied_at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {fresh.length > 0 && <div className="border-t border-line px-[18px] py-2.5"><Link href={`${base}/inbox`} className="text-meta font-medium text-muted underline decoration-line-strong underline-offset-[3px] hover:text-ink">Answer them in the Inbox</Link></div>}
+    </section>
   );
 }
 

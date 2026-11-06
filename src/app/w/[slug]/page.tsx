@@ -20,6 +20,7 @@ import { useExtension } from "@/lib/bridge";
 import { cap, firstNameOf, possessive, pillarsOf } from "@/lib/persona";
 import { deltaOf, pointsDelta, weekOverWeek, rankNeeds, commentDays, whenLabel, weekSentence, relTime, activityFeed, agenda, isSkipped, typeLabel, greeting, firstName, type NeedInput } from "@/lib/dashboard";
 import { isLeadClosed, FALLBACK_PIPELINE, type Pipeline } from "@/lib/pipeline";
+import { isNewReply, REPLY_KIND_LABEL, type ReplyRow, type InboxState } from "@/lib/inbox";
 import { ENGINES, personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { id: string; day: string; kind: string; idx: number; title: string; note: string | null; done: boolean };
@@ -74,6 +75,13 @@ export default function Dashboard() {
   const topics = useLive<{ id: string; title: string; rank: number | null; rising: boolean; sent_at: string | null }>("discovery_topics", ws.id, { filter: (q) => q.eq("week", wk) });
   // Target accounts in the news (DS16, db/024): Discovery writes one note per finding on the matching prospect.
   const news = useLive<{ id: string; ref_id: string; body: string; created_at: string }>("threads", ws.id, { order: "created_at", asc: false, filter: (q) => q.eq("ref_table", "prospects").eq("author_email", "Discovery Studio").gte("created_at", addDays(t, -14)).limit(20) });
+
+  // New replies read with Check replies (db/027): new until done or snoozed in the Inbox.
+  const replyRows = useLive<ReplyRow>("replies", ws.id, { order: "seen_at", asc: false, filter: (q) => q.gte("seen_at", new Date(addDays(t, -14) + "T00:00:00").toISOString()).limit(200) });
+  const replyStates = useLive<InboxState>("inbox_state", ws.id, { filter: (q) => q.like("key", "reply:%") });
+  // On Mondays, last week's review (db/027) until it is saved.
+  const monday = new Date(t + "T12:00:00").getDay() === 1;
+  const review = useLive<{ week: string }>("weekly_reviews", ws.id, { filter: (q) => q.eq("week", lastWk), skip: !monday });
 
   // Open prospects with a linked connection or a connection at their company (db/006_network.sql); null when there is no export.
   const [warm, setWarm] = useState<number | null>(null);
@@ -162,6 +170,9 @@ export default function Dashboard() {
     pipe.due.forEach((p) => list.push({ kind: "followup", due: p.next_date, title: `${p.name}${p.company ? `, ${p.company}` : ""}`, sub: `${p.stage} · ${p.next_action || "Next step due"}`, cta: "Open", href: `${base}/pipeline?p=${p.id}`, tone: "red" }));
     content.soon.forEach((p) => list.push({ kind: "post", due: p.publish_date, title: p.title || "Untitled post", sub: `${p.format} · ${p.status}${p.publish_date && p.publish_date < t ? " · planned date has passed" : ""}`, cta: p.status === "Ready" ? "Open" : "Finish", href: `${base}/studio-content?tab=plan`, tone: "red" }));
     if (content.review) list.push({ kind: "approval", title: `${content.review} post${content.review > 1 ? "s" : ""} waiting for approval`, sub: can("owner") ? "Approve or ask for changes" : `Waiting for ${first} to approve`, cta: "Review", href: `${base}/studio-content?tab=library&status=In%20review`, tone: "dark" });
+    const fresh = replyRows.error ? [] : replyRows.rows.filter((r) => isNewReply(r, replyStates.error ? [] : replyStates.rows, t));
+    if (fresh.length) list.push({ kind: "replies", title: `${fresh.length} new ${fresh.length === 1 ? "reply" : "replies"}`, sub: `Latest: ${fresh[0].person}, ${REPLY_KIND_LABEL[fresh[0].kind]?.toLowerCase() ?? "replied"}`, cta: "Answer", href: `${base}/inbox`, tone: "dark" });
+    if (monday && !review.loading && !review.error && !review.rows.length) list.push({ kind: "review", title: "Review last week", sub: "What worked, what to change, and next week's plan", cta: "Start", href: `${base}/review`, tone: "dark" });
     if (!week.today.total) list.push({ kind: "today", title: "Open today's plan", sub: "It builds from the daily quota", cta: "Start", href: `${base}/today`, tone: "dark" });
     else if (week.today.done < week.today.total) list.push({ kind: "today", title: `${week.today.total - week.today.done} of ${week.today.total} tasks left today`, sub: "Comments, posts, follow-ups and connections", cta: "Continue", href: `${base}/today`, tone: "dark" });
     if (news.rows.length) { const n = new Set(news.rows.map((r) => r.ref_id)).size; list.push({ kind: "discovery", title: `${n} target ${n === 1 ? "account" : "accounts"} in the news`, sub: news.rows[0].body.replace(/^In the news:\s*/, "").split(", http")[0], cta: "Open", href: `${base}/pipeline?p=${news.rows[0].ref_id}`, tone: "dim" }); }
@@ -171,7 +182,7 @@ export default function Dashboard() {
     // A new profile (nobody in Pipeline) has the import as a set-up step already, so it is not listed twice.
     if (warm == null && prospects.rows.length) list.push({ kind: "network", title: "Upload the LinkedIn export", sub: "Warm paths and segments come from it", cta: "Upload", href: `${base}/network`, tone: "dim" });
     return rankNeeds(list, t);
-  }, [pipe, content, week.today, disc, news.rows, cit, warm, base, t, can, first, prospects.rows.length]);
+  }, [pipe, content, week.today, disc, news.rows, cit, warm, base, t, can, first, prospects.rows.length, replyRows.rows, replyRows.error, replyStates.rows, replyStates.error, monday, review.loading, review.error, review.rows.length]);
   // A new profile has nobody in Pipeline yet: show what to do first instead of leaving a row of zeros to read.
   const setup = setupSteps({ base, first, hasStrategy: pillarsOf(ws).length > 0 && !!ws.voice?.trim(), extConnected: !!ext?.connected, people: people ?? 0, prospects: prospects.rows.length });
 

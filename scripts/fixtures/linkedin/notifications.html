@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- LinkedIn-like notifications page (/notifications/), with the classic nt-card layout and two newer cards without
+     classes. Replies, a comment on the profile's post, a mention, and notifications that must not count: a reaction,
+     someone commenting on another person's post, a job alert and the profile itself.
+     Written by hand for the Prax reply tests; not saved from linkedin.com. -->
+<html><head><meta charset="utf-8"><title>Notifications | LinkedIn</title></head>
+<body>
+<main class="scaffold-layout__main">
+  <section class="nt-card-list">
+    <article class="nt-card" data-urn="urn:li:fs_notification:1">
+      <a class="nt-card__image-link" href="https://www.linkedin.com/in/priya-nair/"><img alt="Priya Nair" src="x.png"></a>
+      <div class="nt-card__text">
+        <a class="nt-card__headline" href="https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/?commentUrn=urn%3Ali%3Acomment%3A%28activity%3A7390000000000000031%2C7390000000000000099%29">
+          <span class="nt-card__text--3-line"><strong>Priya Nair</strong> replied to your comment: “In my view the settlement layer decides it, and most banks have not priced that in yet.”</span>
+        </a>
+      </div>
+      <time class="nt-card__time-ago">2h</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:2">
+      <a class="nt-card__image-link" href="/in/tom-becker-123/"><img alt="Tom Becker" src="x.png"></a>
+      <div class="nt-card__text">
+        <a class="nt-card__headline" href="/feed/update/urn:li:activity:7390000000000000021/">
+          <span><strong>Tom Becker</strong> and 3 others commented on your post: "What about smaller banks?"</span>
+        </a>
+      </div>
+      <time class="nt-card__time-ago">1d</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:3">
+      <a class="nt-card__image-link" href="https://www.linkedin.com/in/hessa-al-marri/"><img alt="Hessa Al Marri" src="x.png"></a>
+      <div class="nt-card__text">
+        <a class="nt-card__headline" href="https://www.linkedin.com/posts/hessa-al-marri_tokenisation-activity-7390000000000000044-AbCd">
+          <span><strong>Hessa Al Marri</strong> mentioned you in a comment: "Shashi Pal made the same point on custody last week."</span>
+        </a>
+      </div>
+      <time class="nt-card__time-ago">3w</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:4">
+      <a class="nt-card__image-link" href="https://www.linkedin.com/in/omar-saleh/"><img alt="Omar Saleh" src="x.png"></a>
+      <div class="nt-card__text"><a class="nt-card__headline" href="/feed/update/urn:li:activity:7390000000000000021/"><span><strong>Omar Saleh</strong> reacted to your comment</span></a></div>
+      <time class="nt-card__time-ago">5h</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:5">
+      <div class="nt-card__text"><a class="nt-card__headline" href="/feed/update/urn:li:activity:7390000000000000055/"><span><strong>Lena Fischer</strong> also commented on Raj Mehta's post</span></a></div>
+      <time class="nt-card__time-ago">6h</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:6">
+      <div class="nt-card__text"><a class="nt-card__headline" href="/jobs/view/1/"><span>New jobs for Chief Operating Officer in Dubai</span></a></div>
+      <time class="nt-card__time-ago">1d</time>
+    </article>
+    <article class="nt-card" data-urn="urn:li:fs_notification:7">
+      <div class="nt-card__text"><a class="nt-card__headline" href="/feed/update/urn:li:activity:7390000000000000021/"><span><strong>Shashi Pal</strong> replied to your comment: "Thank you."</span></a></div>
+      <time class="nt-card__time-ago">1d</time>
+    </article>
+  </section>
+  <ul class="newer">
+    <li data-view-name="notification-card">
+      <a href="https://www.linkedin.com/in/sara-lim/"><span>Sara Lim</span></a>
+      <a href="https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/"><p data-view-name="notification-headline">Sara Lim replied to your comment: "Agreed, the audit trail is the product…"</p></a>
+      <span data-view-name="notification-time">45m</span>
+    </li>
+  </ul>
+</main>
+</body></html>

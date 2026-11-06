@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- LinkedIn-like page with two posts and their comments shown, for Check replies (I1).
+     Post 1 (classic layout) is by Amira Haddad: Shashi Pal commented, Priya Nair and Tom Becker replied to his comment,
+     Shashi answered Priya (his own words are not a reply), and Omar Saleh left a separate comment (not a reply to Shashi).
+     Post 2 (newer layout, no classes) is Shashi's own: Lena Fischer and Raj Mehta commented, and Shashi replied to Lena.
+     Written by hand for the Prax reply tests; not saved from linkedin.com. -->
+<html><head><meta charset="utf-8"><title>Feed | LinkedIn</title></head>
+<body>
+<main>
+  <div class="feed-shared-update-v2" data-urn="urn:li:activity:7390000000000000031">
+    <div class="update-components-actor">
+      <a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/amira-haddad/">
+        <span class="update-components-actor__title"><span aria-hidden="true">Amira Haddad</span></span>
+      </a>
+    </div>
+    <div class="update-components-text"><span dir="ltr">Tokenised deposits will move faster than stablecoins inside banks.</span></div>
+    <div class="feed-shared-social-action-bar">
+      <button aria-label="React Like"><span>Like</span></button>
+      <button aria-label="Comment"><span>Comment</span></button>
+      <button aria-label="Repost"><span>Repost</span></button>
+    </div>
+    <div class="comments-comments-list">
+      <article class="comments-comment-entity" data-id="urn:li:comment:(activity:7390000000000000031,1)">
+        <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/shashi-pal/"><img alt="Shashi Pal"></a>
+        <span class="comments-comment-meta__description-title">Shashi Pal <span class="visually-hidden">View Shashi Pal's profile</span></span>
+        <time class="comments-comment-meta__data">1d</time>
+        <div class="comments-comment-item__main-content">In my view the settlement layer decides it, and most banks have not priced that in yet.</div>
+        <div class="comments-comment-social-bar"><button aria-label="React Like to Shashi Pal's comment"><span>Like</span></button><button aria-label="Reply to Shashi Pal's comment"><span>Reply</span></button></div>
+        <div class="comments-replies-list">
+          <article class="comments-comment-entity comments-comment-entity--reply" data-id="urn:li:comment:(activity:7390000000000000031,2)">
+            <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/priya-nair/?miniProfileUrn=x"><img alt="Priya Nair"></a>
+            <span class="comments-comment-meta__description-title">Priya Nair • 2nd</span>
+            <time class="comments-comment-meta__data">2h</time>
+            <div class="comments-comment-item__main-content">Agreed, and the reconciliation work behind it is where most of the cost sits.</div>
+            <div class="comments-comment-social-bar"><button><span>Like</span></button><button><span>Reply</span></button></div>
+          </article>
+          <article class="comments-comment-entity comments-comment-entity--reply" data-id="urn:li:comment:(activity:7390000000000000031,3)">
+            <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/shashi-pal/"><img alt="Shashi Pal"></a>
+            <span class="comments-comment-meta__description-title">Shashi Pal Author</span>
+            <time class="comments-comment-meta__data">1h</time>
+            <div class="comments-comment-item__main-content">Priya, I think that is the part most plans leave out.</div>
+          </article>
+          <article class="comments-comment-entity comments-comment-entity--reply" data-id="urn:li:comment:(activity:7390000000000000031,4)">
+            <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/tom-becker-123/"><img alt="Tom Becker"></a>
+            <span class="comments-comment-meta__description-title">Tom Becker</span>
+            <time class="comments-comment-meta__data">5h</time>
+            <div class="comments-comment-item__main-content">What does that mean for smaller banks?</div>
+          </article>
+        </div>
+      </article>
+      <article class="comments-comment-entity" data-id="urn:li:comment:(activity:7390000000000000031,5)">
+        <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/omar-saleh/"><img alt="Omar Saleh"></a>
+        <span class="comments-comment-meta__description-title">Omar Saleh</span>
+        <time class="comments-comment-meta__data">3h</time>
+        <div class="comments-comment-item__main-content">Good thread.</div>
+      </article>
+    </div>
+  </div>
+
+  <div data-view-name="feed-full-update">
+    <a href="https://www.linkedin.com/in/shashi-pal/"><span data-view-name="feed-actor-name">Shashi Pal</span></a>
+    <a href="https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000021/"><span>1d</span></a>
+    <div data-view-name="feed-commentary"><span>Most banks will not build their own chain. They will buy controls.</span></div>
+    <div>
+      <button aria-label="Reaction button state: no reaction"><span>Like</span></button>
+      <button aria-label="Comment"><span>Comment</span></button>
+      <button aria-label="Repost"><span>Repost</span></button>
+    </div>
+    <div>
+      <div data-view-name="comment-container">
+        <a href="https://www.linkedin.com/in/lena-fischer/"><span data-view-name="comment-actor-name">Lena Fischer</span></a>
+        <span data-view-name="comment-timestamp">4d</span>
+        <p data-view-name="comment-commentary">Controls are what a board signs off. The chain is a detail.</p>
+        <div data-view-name="comment-container">
+          <a href="https://www.linkedin.com/in/shashi-pal/"><span data-view-name="comment-actor-name">Shashi Pal</span></a>
+          <span data-view-name="comment-timestamp">3d</span>
+          <p data-view-name="comment-commentary">Lena, in my view that is the whole point.</p>
+        </div>
+      </div>
+      <div data-view-name="comment-container">
+        <a href="https://www.linkedin.com/in/raj-mehta/"><span data-view-name="comment-actor-name">Raj Mehta</span></a>
+        <span data-view-name="comment-timestamp">1w</span>
+        <p data-view-name="comment-commentary">Which controls first?</p>
+      </div>
+    </div>
+  </div>
+</main>
+</body></html>

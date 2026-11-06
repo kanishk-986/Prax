@@ -1,6 +1,6 @@
 // Checks the Inbox (X7): which leads count as in conversation, the three sources, folding a person's sources
 // into one row, Done and Snooze by key, the ranking, and the labels. Run: node scripts/test-inbox.ts
-import { buildInbox, inConversation, itemKey, scoreOf, waitLabel, dueLabel, snoozeDates, matchLead, daysSince, replyPrompt, WEIGHT, type InboxPipeline, type InboxLead } from "../src/lib/inbox.ts";
+import { buildInbox, inConversation, itemKey, scoreOf, waitLabel, dueLabel, snoozeDates, matchLead, daysSince, replyPrompt, WEIGHT, inboxReplies, isNewReply, replyBackId, type InboxPipeline, type InboxLead, type ReplyRow } from "../src/lib/inbox.ts";
 
 let fails = 0;
 const eq = (name: string, got: unknown, want: unknown) => {
@@ -120,6 +120,35 @@ const pr = replyPrompt({ person: "Mariam Khan", company: "Gulf Bank", source: "d
 eq("prompt names both people", pr.includes("from Layla Haddad, Head of Digital Assets at Example to Mariam Khan at Gulf Bank"), true);
 eq("prompt quotes the message", pr.includes('They wrote: "Could you share the paper?"'), true);
 eq("prompt keeps the voice rules", /no em dashes, no contractions/.test(pr), true);
+
+// ---------- replies read with Check replies (I1, db/027) ----------
+{
+  const row = (id: string, o: Partial<ReplyRow> = {}): ReplyRow => ({ id, kind: "comment_reply", person: "Priya Nair", person_url: "https://www.linkedin.com/in/priya-nair/", body: "Agreed, and the reconciliation work behind it.", post_url: "https://www.linkedin.com/feed/update/urn:li:activity:1/", replied_at: "2026-11-04T06:00:00Z", seen_at: "2026-11-04T08:00:00Z", comment_log_id: "c1", post_id: null, prospect_id: null, ...o });
+  const logged = [
+    { id: "c1", author: "Amira Haddad", author_url: "", url: "u1", text: "My own comment", reply: true, replied_at: "2026-11-04T08:00:00", created_at: "2026-11-02T08:00:00" },
+    { id: "c2", author: "Old Reply", author_url: "", url: "u2", text: "Before 027", reply: true, replied_at: "2026-11-03T08:00:00", created_at: "2026-11-02T08:00:00" },
+  ];
+  const rows = [row("r1"), row("r2", { person: "Tom Becker", person_url: "", kind: "post_comment", body: "What about smaller banks?", comment_log_id: null, post_id: "p1" }), row("r3", { person: "Hessa Al Marri", kind: "mention", body: "", comment_log_id: null })];
+  const mixed = inboxReplies(logged, rows);
+  eq("reply rows replace the logged comment they explain, older logged replies stay", mixed.map((r) => r.id), ["r1", "r2", "r3", "c2"]);
+  const ib = buildInbox({ ...base, leads: [], replies: mixed, today: T });
+  const by = (p: string) => ib.open.find((i) => i.person === p)!;
+  eq("the replier is the person, not the post author", [by("Priya Nair")?.key, by("Amira Haddad")], [itemKey.reply("r1"), undefined]);
+  eq("their words in the snippet, by kind", [by("Priya Nair").snippet, by("Tom Becker").snippet, by("Hessa Al Marri").snippet],
+    ['Replied to your comment: "Agreed, and the reconciliation work behind it."', 'Commented on your post: "What about smaller banks?"', "Mentioned you"]);
+  eq("waits from when it was seen", by("Priya Nair").waited, 2);
+  const lead = buildInbox({ ...base, leads: [L("a", { name: "Priya Nair", linkedin: "https://www.linkedin.com/in/priya-nair/", next_date: T })], replies: inboxReplies([], [row("r1", { prospect_id: "a" })]), today: T });
+  eq("a reply from a lead folds into the lead's row", [lead.open.length, lead.open[0].sources.sort()], [1, ["lead", "reply"]]);
+  const st = (key: string, done: string | null, snooze: string | null = null) => ({ key, done_at: done, snoozed_until: snooze });
+  eq("new until done or snoozed, for 14 days", [
+    isNewReply(row("r1"), [], T), isNewReply(row("r1"), [st(itemKey.reply("r1"), "2026-11-05T09:00:00Z")], T), isNewReply(row("r1"), [st(itemKey.reply("r1"), null, "2026-11-09")], T),
+    isNewReply(row("r1"), [st(itemKey.reply("r1"), null, "2026-11-01")], T), isNewReply(row("r1", { seen_at: "2026-10-01T08:00:00Z" }), [], T),
+  ], [true, false, false, true, false]);
+  eq("Reply back notes", [replyBackId("replyback:6f1c0f3e-1d1a-4a51-9a51-111111111111"), replyBackId("skip:replyback:6f1c0f3e-1d1a-4a51-9a51-111111111111"), replyBackId("strategy:x:y"), replyBackId(null)],
+    ["6f1c0f3e-1d1a-4a51-9a51-111111111111", "6f1c0f3e-1d1a-4a51-9a51-111111111111", null, null]);
+  const pc = replyPrompt({ person: "Tom Becker", company: "", source: "reply", snippet: 'Commented on your post: "What about smaller banks?"', stage: "" }, "Shashi Pal, COO at Antier");
+  eq("prompt: a comment on the profile's own post", pc.includes("They commented on a post by Shashi Pal."), true);
+}
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

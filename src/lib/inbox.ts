@@ -8,7 +8,35 @@
 export type InboxSource = "lead" | "reply" | "dm";
 export type InboxPipeline = { id: string; template: string; stages: string[]; won_stage: string; lost_stage: string };
 export type InboxLead = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; linkedin: string; pipeline_id?: string | null; stage_changed_at?: string | null; created_at: string };
-export type InboxReply = { id: string; author: string; author_url: string; url: string; text: string; reply: boolean; replied_at?: string | null; created_at: string; prospect_id?: string | null };
+/** A reply for the Inbox. From comment_log (026: the profile's own comment, marked replied) or, with kind, from the
+ *  replies table (027: what the person wrote, read with Check replies). */
+export type InboxReply = { id: string; author: string; author_url: string; url: string; text: string; reply: boolean; replied_at?: string | null; created_at: string; prospect_id?: string | null; kind?: ReplyKind };
+
+// ---------- replies read with Check replies (I1, db/027_replies_review.sql) ----------
+export type ReplyKind = "comment_reply" | "post_comment" | "mention";
+export type ReplyRow = { id: string; kind: ReplyKind; person: string; person_url: string; body: string; post_url: string; replied_at: string; seen_at: string; comment_log_id: string | null; post_id: string | null; prospect_id: string | null };
+export const REPLY_KIND_LABEL: Record<ReplyKind, string> = { comment_reply: "Replied to your comment", post_comment: "Commented on your post", mention: "Mentioned you" };
+
+/** The Inbox's replies: every reply row (one person each), plus comment_log replies that no reply row explains yet
+ *  (marked before 027, or by hand in the Log). A logged comment with reply rows is shown through them, never twice. */
+export function inboxReplies(logged: InboxReply[], rows: ReplyRow[]): InboxReply[] {
+  const explained = new Set(rows.map((r) => r.comment_log_id).filter(Boolean));
+  return [
+    ...rows.map((r): InboxReply => ({ id: r.id, author: r.person, author_url: r.person_url, url: r.post_url, text: r.body, reply: true, replied_at: r.seen_at, created_at: r.replied_at, prospect_id: r.prospect_id, kind: r.kind })),
+    ...logged.filter((c) => c.reply && !explained.has(c.id)),
+  ];
+}
+
+/** A reply is new until it is done or snoozed in the Inbox (its Today task marks it done there), for 14 days after it was seen. */
+export function isNewReply(r: Pick<ReplyRow, "id" | "seen_at">, states: InboxState[], today: string, days = 14): boolean {
+  if (daysSince(r.seen_at, today) > days) return false;
+  const s = states.find((x) => x.key === itemKey.reply(r.id));
+  return !s?.done_at && !((s?.snoozed_until ?? "") > today);
+}
+
+/** "Reply back" tasks on Today come from db/027 with this note: kind reply, index 500 and up. */
+export const REPLY_BACK_IDX = 500;
+export const replyBackId = (note: string | null | undefined) => (note ?? "").replace(/^skip:/, "").match(/^replyback:([0-9a-f-]{36})$/i)?.[1] ?? null;
 export type InboxDm = { id: string; person: string; company: string; linkedin: string; thread_url: string; body: string; received_at: string; prospect_id?: string | null };
 export type InboxState = { key: string; done_at: string | null; snoozed_until: string | null };
 
@@ -114,7 +142,8 @@ export function buildInbox(x: InboxInput): InboxResult {
     if (daysSince(since, x.today) > replyFloor) continue;
     const lead = matchLead(x.leads, r.prospect_id, r.author_url, r.author);
     fold({ key: itemKey.reply(r.id), keys: [itemKey.reply(r.id)], source: "reply", sources: ["reply"], person: r.author || "Someone", company: lead?.company ?? "",
-      snippet: r.text ? `Replied to your comment: "${clip(r.text, 140)}"` : "Replied to your comment", since, waited: daysSince(since, x.today), due: null, overdue: 0,
+      snippet: r.kind ? (r.text ? `${REPLY_KIND_LABEL[r.kind]}: "${clip(r.text, 140)}"` : REPLY_KIND_LABEL[r.kind])
+        : r.text ? `Replied to your comment: "${clip(r.text, 140)}"` : "Replied to your comment", since, waited: daysSince(since, x.today), due: null, overdue: 0,
       prospectId: null, link: r.url, stage: "", score: 0 }, lead);
   }
   for (const m of x.dms) {
@@ -168,7 +197,11 @@ export function snoozeDates(today: string): { label: string; date: string }[] {
 
 /** What the AI is asked for: one reply, copied and sent by the user. who is "Name, Role at Company". */
 export function replyPrompt(it: Pick<InboxItem, "person" | "company" | "source" | "snippet" | "stage">, who: string, extra = ""): string {
-  const what = it.source === "dm" ? `They wrote: "${it.snippet}"` : it.source === "reply" ? `They replied on LinkedIn to a comment ${who.split(",")[0]} left on their post. ${it.snippet}` : `This is a follow-up. ${it.snippet}`;
+  const me = who.split(",")[0];
+  const replyWhat = it.snippet.startsWith(REPLY_KIND_LABEL.post_comment) ? `They commented on a post by ${me}. ${it.snippet}`
+    : it.snippet.startsWith(REPLY_KIND_LABEL.mention) ? `They mentioned ${me} on LinkedIn. ${it.snippet}`
+    : `They replied on LinkedIn to a comment ${me} left. ${it.snippet}`;
+  const what = it.source === "dm" ? `They wrote: "${it.snippet}"` : it.source === "reply" ? replyWhat : `This is a follow-up. ${it.snippet}`;
   return `Draft one short LinkedIn reply from ${who} to ${it.person}${it.company ? ` at ${it.company}` : ""}.
 ${what}
 ${it.stage ? `Pipeline stage: ${it.stage}. ` : ""}${extra ? `Notes: ${extra.slice(0, 600)}. ` : ""}

@@ -185,6 +185,46 @@ eq("profile path", [D.isProfilePath("/in/omar-saleh/"), D.isProfilePath("/in/oma
   eq("newer layout: no message from them yet", k.text, "");
 }
 
+// ---------- Check replies (I1) ----------
+{
+  const NOW = Date.parse("2026-11-07T12:00:00Z");
+  const ago = (ms: number) => new Date(NOW - ms).toISOString();
+  const H = 36e5, Dy = 864e5;
+  eq("relative times", ["2h", "45m", "1d", "3w", "2mo", "1yr", "now", "2h • Edited", "Edited", ""].map((x) => D.relTimeIso(x, NOW)),
+    [ago(2 * H), ago(45 * 6e4), ago(Dy), ago(21 * Dy), ago(60 * Dy), ago(365 * Dy), ago(0), ago(2 * H), "", ""]);
+  eq("the profile by name", [D.isMe("Shashi Pal", "Shashi Pal"), D.isMe("Shashi Pal Author", "Shashi Pal"), D.isMe("shashi pal • 1st", "Shashi Pal"), D.isMe("Shashi Palmer", "Shashi Pal"), D.isMe("Priya Nair", "Shashi Pal"), D.isMe("", "Shashi Pal")],
+    [true, true, true, false, false, false]);
+  eq("notifications path", [D.isNotificationsPath("/notifications/"), D.isNotificationsPath("/notifications/?filter=all"), D.isNotificationsPath("/feed/")], [true, true, false]);
+
+  const n = D.readNotifications(load("notifications.html"), "Shashi Pal", NOW);
+  eq("notifications: every card looked at", n.cards, 8);
+  eq("notifications: only replies, comments on the post and mentions, never the profile itself", n.replies.map((r: { name: string; kind: string }) => [r.name, r.kind]),
+    [["Priya Nair", "comment_reply"], ["Tom Becker", "post_comment"], ["Hessa Al Marri", "mention"], ["Sara Lim", "comment_reply"]]);
+  eq("notifications: the reply text without quotes", n.replies[0].text, "In my view the settlement layer decides it, and most banks have not priced that in yet.");
+  eq("notifications: profile links", n.replies.map((r: { url: string }) => r.url),
+    ["https://www.linkedin.com/in/priya-nair/", "https://www.linkedin.com/in/tom-becker-123/", "https://www.linkedin.com/in/hessa-al-marri/", "https://www.linkedin.com/in/sara-lim/"]);
+  eq("notifications: post links by activity id, also from /posts/ links", n.replies.map((r: { post_url: string }) => r.post_url),
+    ["https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/", "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000021/",
+      "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000044/", "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/"]);
+  eq("notifications: times", n.replies.map((r: { at: string }) => r.at), [ago(2 * H), ago(Dy), ago(21 * Dy), ago(45 * 6e4)]);
+  eq("notifications: a cut-off reply keeps its text", n.replies[3].text, "Agreed, the audit trail is the product…");
+  eq("notifications: none without a name to match", D.readNotifications(load("notifications.html"), "", NOW).replies.length, 5);
+
+  const p = D.readPostReplies(load("post-replies.html"), at("https://www.linkedin.com/feed/"), "Shashi Pal", NOW);
+  eq("post: both posts, the profile's comments and its own post", [p.posts, p.mine, p.own], [2, 3, 1]);
+  eq("post: replies under the profile's comment, then comments on its own post", p.replies.map((r: { name: string; kind: string }) => [r.name, r.kind]),
+    [["Priya Nair", "comment_reply"], ["Tom Becker", "comment_reply"], ["Lena Fischer", "post_comment"], ["Raj Mehta", "post_comment"]]);
+  eq("post: reply fields", [p.replies[0].url, p.replies[0].text, p.replies[0].post_url, p.replies[0].at],
+    ["https://www.linkedin.com/in/priya-nair/", "Agreed, and the reconciliation work behind it is where most of the cost sits.", "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000031/", ago(2 * H)]);
+  eq("post: the comment it answers goes along for matching", p.replies[0].mine, "In my view the settlement layer decides it, and most banks have not priced that in yet.");
+  eq("post: the newer layout", [p.replies[2].url, p.replies[2].text, p.replies[2].post_url, p.replies[2].at],
+    ["https://www.linkedin.com/in/lena-fischer/", "Controls are what a board signs off. The chain is a detail.", "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000021/", ago(4 * Dy)]);
+  const other = D.readPostReplies(load("post-replies.html"), at("https://www.linkedin.com/feed/"), "Kim Park", NOW);
+  eq("post: someone else's view has nothing to record", [other.mine, other.own, other.replies.length], [0, 0, 0]);
+  const single = D.readPostReplies(load("single-post.html"), at("https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000021/"), "Shashi Pal", NOW);
+  eq("single post page: comments on the profile's own post", single.replies.map((r: { name: string }) => r.name), ["Priya Nair", "Tom Becker"]);
+}
+
 // ---------- pages ----------
 eq("linkedin feed is LinkedIn", D.isLinkedIn("https://www.linkedin.com/feed/"), true);
 eq("prax is not LinkedIn", D.isLinkedIn("https://prax-gamma.vercel.app/extension"), false);
