@@ -7,9 +7,11 @@
 --    content_editor). Members read; editors
 --    add rows. Prax stores the hash, never the text.
 -- 3. humanize_results: the cache, one Pangram result per profile and text hash, so unchanged text is never re-checked.
+--    It keeps the score and the flagged sentences as character offsets into the normalised text, never the text.
 -- 4. posts.humanize and saved_drafts.humanize (jsonb: score, level, service, checked_at, passed, hash, flagged).
--- 5. ext_humanize_state and ext_humanize_record for the extension (token checked by ext_auth, the token's profile
---    only), and ext_save_draft again so drafts saved on LinkedIn keep their badge.
+-- 5. ext_humanize_state and ext_humanize_record for the extension (token checked by ext_auth). They act on the profile
+--    on screen (p.profile_id) when the token's user is an editor there (has_role_of, the token-user form of has_role),
+--    else on the token's own profile; and ext_save_draft again so drafts saved on LinkedIn keep their badge.
 -- Keys for Pangram and Walter stay in the extension in each browser; nothing here holds a key.
 
 -- 1. Settings.
@@ -97,14 +99,28 @@ do $$ begin alter publication supabase_realtime add table humanize_settings; exc
 do $$ begin alter publication supabase_realtime add table humanize_usage; exception when duplicate_object then null; end $$;
 
 -- 5. The extension's door.
+-- Which profile a call is for: the page's profile (p.profile_id) when the token's user is an editor of it, the token's
+-- own profile when none is given (the LinkedIn bar). Any other profile is refused.
+create or replace function ext_humanize_ws(tok_ws uuid, tok_uid uuid, p jsonb) returns uuid
+language plpgsql stable security definer set search_path = public, pg_catalog as $$
+declare pid text := coalesce(p->>'profile_id', '');
+begin
+  if pid = '' then return tok_ws; end if;
+  if pid !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then raise exception 'unknown profile'; end if;
+  if not has_role_of(pid::uuid, tok_uid, 'editor') then raise exception 'not an editor of that profile' using errcode = '42501'; end if;
+  return pid::uuid;
+end $$;
+revoke all on function ext_humanize_ws(uuid, uuid, jsonb) from public, anon, authenticated;
+
 -- Settings (defaults when none are saved), this month's words and cost per service, and the cached results for the
 -- hashes asked about (at most 60, one per article paragraph).
 create or replace function ext_humanize_state(tok text, p jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_catalog as $$
-declare a record; s humanize_settings; hashes text[]; m date := date_trunc('month', current_date)::date;
+declare a record; pw uuid; s humanize_settings; hashes text[]; m date := date_trunc('month', current_date)::date;
 begin
   select * into a from ext_auth(tok);
-  select * into s from humanize_settings where workspace_id = a.ws;
+  pw := ext_humanize_ws(a.ws, a.uid, p);
+  select * into s from humanize_settings where workspace_id = pw;
   select coalesce(array_agg(h), '{}') into hashes from (select jsonb_array_elements_text(coalesce(p->'hashes', '[]'::jsonb)) h limit 60) x;
   return jsonb_build_object(
     'settings', jsonb_build_object(
@@ -112,10 +128,10 @@ begin
       'pangram_cap', coalesce(s.pangram_cap, 0), 'walter_cap', coalesce(s.walter_cap, 0),
       'pangram_cost_100', coalesce(s.pangram_cost_100, 0.05), 'walter_cost_100', coalesce(s.walter_cost_100, 0)),
     'usage', jsonb_build_object(
-      'pangram', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = a.ws and service = 'pangram' and day >= m),
-      'walter', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = a.ws and service = 'walter' and day >= m)),
+      'pangram', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = pw and service = 'pangram' and day >= m),
+      'walter', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = pw and service = 'walter' and day >= m)),
     'results', coalesce((select jsonb_object_agg(r.text_hash, jsonb_build_object('score', r.score, 'words', r.words, 'result', r.result, 'checked_at', r.checked_at))
-      from humanize_results r where r.workspace_id = a.ws and r.text_hash = any(hashes)), '{}'::jsonb));
+      from humanize_results r where r.workspace_id = pw and r.text_hash = any(hashes)), '{}'::jsonb), 'profile_id', pw);
 end $$;
 
 -- One paid call: the usage row (cost from the profile's rate) and, for Pangram, the cached result.
@@ -123,26 +139,29 @@ create or replace function ext_humanize_record(tok text, p jsonb) returns jsonb
 language plpgsql security definer set search_path = public, pg_catalog as $$
 declare a record; s humanize_settings; svc text := p->>'service'; k text := coalesce(p->>'kind', 'post');
   w int := greatest(0, least(coalesce((p->>'words')::int, 0), 200000)); sc int := (p->>'score')::int; h text := left(coalesce(p->>'hash', ''), 64);
-  rate numeric; lvl int; c numeric; outcome text; m date := date_trunc('month', current_date)::date;
+  rate numeric; lvl int; c numeric; outcome text; m date := date_trunc('month', current_date)::date; pw uuid;
   sec text := case when p->>'section' in ('comment_studio', 'linkedin_bar', 'content_write', 'content_editor') then p->>'section' else '' end;
 begin
   select * into a from ext_auth(tok);
+  pw := ext_humanize_ws(a.ws, a.uid, p);
   if svc not in ('pangram', 'walter') then raise exception 'unknown service'; end if;
   if k not in ('comment', 'post', 'article') then k := 'post'; end if;
-  select * into s from humanize_settings where workspace_id = a.ws;
+  if sc is not null and (sc < 0 or sc > 100) then raise exception 'score out of range'; end if;
+  if svc = 'pangram' and h !~ '^[0-9a-f]{64}$' then raise exception 'bad text hash'; end if;
+  select * into s from humanize_settings where workspace_id = pw;
   rate := case when svc = 'pangram' then coalesce(s.pangram_cost_100, 0.05) else coalesce(s.walter_cost_100, 0) end;
   lvl := case k when 'comment' then coalesce(s.level_comment, 0) when 'article' then coalesce(s.level_article, 0) else coalesce(s.level_post, 0) end;
   c := round(w / 100.0 * rate, 4);
   outcome := case when svc = 'walter' then 'rewrite' when sc is null then 'failed' when sc >= lvl then 'passed' else 'needs work' end;
   insert into humanize_usage(workspace_id, user_id, service, kind, words, cost, text_hash, result, score, job, section)
-  values (a.ws, a.uid, svc, k, w, c, h, outcome, sc, case when svc = 'walter' then 'humanize_rewrite' else 'humanize_check' end, sec);
+  values (pw, a.uid, svc, k, w, c, h, outcome, sc, case when svc = 'walter' then 'humanize_rewrite' else 'humanize_check' end, sec);
   if svc = 'pangram' and sc is not null and h <> '' then
     insert into humanize_results(workspace_id, text_hash, service, score, words, result, checked_at)
-    values (a.ws, h, 'pangram', greatest(0, least(sc, 100)), w, coalesce(p->'result', '{}'::jsonb), now())
+    values (pw, h, 'pangram', sc, w, coalesce(p->'result', '{}'::jsonb), now())
     on conflict (workspace_id, text_hash) do update set score = excluded.score, words = excluded.words, result = excluded.result, checked_at = now();
   end if;
   return jsonb_build_object('cost', c, 'level', lvl, 'outcome', outcome,
-    'used', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = a.ws and service = svc and day >= m));
+    'used', (select coalesce(sum(words), 0) from humanize_usage where workspace_id = pw and service = svc and day >= m), 'profile_id', pw);
 end $$;
 
 -- 007's ext_save_draft, now also keeping the badge (p.humanize) with a draft saved on LinkedIn.

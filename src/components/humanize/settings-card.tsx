@@ -9,8 +9,8 @@ import { useToast, haptic } from "@/components/toaster";
 import { CheckerLogo, CheckerName, KeyState } from "@/components/provider-mark";
 import { useExtension } from "@/lib/bridge";
 import { CHECKERS, SAVED_KEY, checkerConnected, saveCheckerKey, removeCheckerKey, type CheckerId } from "@/lib/providers";
-import { PRESETS, meter, money, clampLevel, type Settings, type Kind } from "@/lib/humanize";
-import { useHumanizeSettings } from "./use-humanize";
+import { PRESETS, meter, money, clampLevel, HUMANIZE_EXT, type Settings, type Kind } from "@/lib/humanize";
+import { useHumanizeSettings, extStateOf } from "./use-humanize";
 
 const LEVELS: [Kind, keyof Settings, string, string][] = [
   ["comment", "level_comment", "Comments", "A badge only; comments are never held back."],
@@ -58,7 +58,7 @@ export function HumanizeSettings() {
     <section id="humanization" className="card min-w-0 p-5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="text-body font-semibold">Humanization</h2>
-        <span className="flex items-center gap-1.5 text-meta text-muted"><CheckerLogo id="pangram" size={14} /> Pangram judges <span aria-hidden="true">·</span> <CheckerLogo id="walter" size={14} /> Walter (beta) fixes</span>
+        <span className="flex items-center gap-1.5 text-meta text-muted"><CheckerLogo id="pangram" size={14} /> Pangram judges <span aria-hidden="true">·</span> <CheckerLogo id="walter" size={14} /> {CHECKERS.walter.ready ? "Walter (beta) fixes" : "Walter (beta), waiting for its API"}</span>
       </div>
       <p className="mt-1 text-meta text-muted">Pangram checks only the final text, when the free Human score is near your level, and never the same text twice. At 0% Pangram is never called. The keys stay in the extension.</p>
       {missing && <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-meta text-ink">Run <code className="kbd">db/031_humanize.sql</code> in Supabase to turn this on. Until then nothing is checked or held back.</p>}
@@ -111,6 +111,9 @@ function CheckerKeys() {
   const [open, setOpen] = useState<CheckerId | null>(null);
   const [key, setKey] = useState("");
   const installed = !!status?.installed;
+  // Older extensions answer "saved" but have nowhere to keep these keys: below 0.9.6 there is no form at all.
+  const ext = extStateOf(status);
+  const usable = installed && ext === "ok";
   async function save(id: CheckerId) {
     try { await send("settings", saveCheckerKey(id, key)); setKey(""); setOpen(null); haptic(); toast(`${CHECKERS[id].name} key saved in this browser`); }
     catch (e) { toast((e as Error).message); }
@@ -123,6 +126,7 @@ function CheckerKeys() {
     <div id="checker-keys" className="mt-4 flex flex-col border-t border-line pt-4">
       <span className="label">Keys in this browser</span>
       {status && !installed && <p className="mt-1 text-meta text-muted">Install Prax for Chrome to add a key. Keys stay in the extension.</p>}
+      {ext === "old" && <p className="mt-1 text-meta font-semibold text-dark-red">Update Prax for Chrome to {HUMANIZE_EXT}. This browser has {status?.version}, which cannot keep these keys. <a className="underline underline-offset-2" href="/prax-extension.zip" download>Download {HUMANIZE_EXT}</a></p>}
       {(["pangram", "walter"] as const).map((id) => {
         const on = checkerConnected(status, id);
         return (
@@ -130,9 +134,9 @@ function CheckerKeys() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
               <CheckerName id={id} className="text-body" />
               <KeyState on={on} className="text-meta" />
-              <button type="button" className="btn ml-auto h-8 w-[112px]" disabled={!installed} aria-expanded={open === id} onClick={() => { setOpen(open === id ? null : id); setKey(""); }}>{open === id ? "Cancel" : on ? "Replace key" : "Connect"}</button>
+              {usable && <button type="button" className="btn ml-auto h-8 w-[112px]" aria-expanded={open === id} onClick={() => { setOpen(open === id ? null : id); setKey(""); }}>{open === id ? "Cancel" : on ? "Replace key" : "Connect"}</button>}
             </div>
-            {open === id && (
+            {usable && open === id && (
               <form className="anim-rise mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (key.trim()) save(id); }}>
                 <label htmlFor={`ck-${id}`} className="sr-only">{CHECKERS[id].name} key</label>
                 <input id={`ck-${id}`} autoFocus type="password" autoComplete="off" spellCheck={false} className="field h-9 min-w-0 flex-[1_1_220px] font-mono text-meta" placeholder={on ? `${SAVED_KEY}  Paste a new key` : `Paste your ${CHECKERS[id].name} key`} value={key} onChange={(e) => setKey(e.target.value)} />

@@ -73,7 +73,7 @@ export const providerName = (id: string, short = false) => { const p = providerO
 // extension/marks.js holds the same Pangram paths; scripts/test-humanize.ts checks the copies match.
 export type CheckerId = "pangram" | "walter";
 export type CheckerMark = { viewBox: string; paths: { d: string; fill: string; evenodd?: boolean }[]; source: string } | { image: string; source: string };
-export type Checker = { id: CheckerId; name: string; label: string; console: string; keyHint: string; beta?: boolean; mark: CheckerMark };
+export type Checker = { id: CheckerId; name: string; label: string; console: string; keyHint: string; beta?: boolean; ready?: boolean; mark: CheckerMark };
 export const CHECKERS: Record<CheckerId, Checker> = {
   pangram: {
     id: "pangram", name: "Pangram", label: "Pangram", console: "https://www.pangram.com/dashboard", keyHint: "",
@@ -85,7 +85,8 @@ export const CHECKERS: Record<CheckerId, Checker> = {
     ] },
   },
   walter: {
-    id: "walter", name: "Walter AI", label: "Walter (beta)", console: "https://walterwrites.ai/api/", keyHint: "", beta: true,
+    // ready mirrors WALTER.confirmed in extension/walter.js (scripts/test-humanize.ts checks they agree).
+    id: "walter", name: "Walter AI", label: "Walter (beta)", console: "https://walterwrites.ai/api/", keyHint: "", beta: true, ready: false,
     mark: { image: "/brand/walter.png", source: "https://walterwrites.ai/wp-content/uploads/2024/12/cropped-Walter-Alterated-Logo_Icon_gradient-192x192.png" },
   },
 };

@@ -21,7 +21,7 @@ const WALTER = {
   /** Rewrites one piece of text. Throws a plain message on any failure. */
   async humanize(key, text) {
     if (!this.confirmed) throw new Error("Walter (beta) is waiting for its API to be confirmed. Prax did not call it.");
-    if (!key) throw new Error("No Walter key in this browser. Add one in Prax, Settings, Humanization.");
+    if (!key) throw new Error("No Walter key in this browser. Add one in Prax, Settings → Humanization.");
     let r;
     try { r = await fetch(this.endpoint, { method: "POST", headers: this.headers(key), body: JSON.stringify(this.body(text)) }); }
     catch { throw new Error("Walter could not be reached. Check the internet connection and try again."); }

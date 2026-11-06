@@ -30,7 +30,7 @@
     search: (d) => ({ type: "search", engine: String(d.engine || ""), prompt: String(d.prompt || ""), country: String(d.country || "") }),
     image: (d) => ({ type: "image", provider: String(d.provider || "openai"), prompt: String(d.prompt || "").slice(0, 4000), size: String(d.size || "") }),
     // Humanization (db/031): plan, check with Pangram, or rewrite with Walter (beta). The keys stay in the background.
-    humanize: (d) => ({ type: "humanize", op: ["plan", "check", "walter"].includes(d.op) ? d.op : "plan", kind: String(d.kind || "post"), texts: (Array.isArray(d.texts) ? d.texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 60000)), local: Number(d.local) || 0, confirm: !!d.confirm, rounds: Number(d.rounds) || 0, failing: !!d.failing, section: String(d.section || "") }) };
+    humanize: (d) => ({ type: "humanize", op: ["plan", "check", "walter"].includes(d.op) ? d.op : "plan", kind: String(d.kind || "post"), texts: (Array.isArray(d.texts) ? d.texts : []).slice(0, 60).map((t) => String(t || "").slice(0, 60000)), local: Number(d.local) || 0, confirm: !!d.confirm, rounds: Number(d.rounds) || 0, failing: !!d.failing, section: String(d.section || ""), profile: String(d.profile || "") }) };
 
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.origin !== location.origin || !e.data?.praxWeb) return;

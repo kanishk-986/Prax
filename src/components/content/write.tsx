@@ -9,9 +9,9 @@ import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { ProviderMark, KeyState, ModelId } from "@/components/provider-mark";
 import { humanScore } from "@/lib/studio";
-import { useHumanize } from "@/components/humanize/use-humanize";
+import { useHumanize, passGate } from "@/components/humanize/use-humanize";
 import { VerdictCard, VerdictBadge, gateText } from "@/components/humanize/verdict";
-import { kindOfFormat, gate, gateLabel, textHash, type Verdict } from "@/lib/humanize";
+import { kindOfFormat, type Verdict } from "@/lib/humanize";
 import { cap, fullNameOf, firstNameOf, companyOf, pillarsOf, regionText, possessive, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
 import { type Idea, type Hook, type Draft, povText, parseIdeas, parseHooks, parseDrafts, claimsCheck, hookFits, sayableIn3s, FOLD, suggestAngles, angleLine, ANGLE_KINDS,
   REPURPOSE_KINDS, parseRepurpose, repurposeFormat, repurposeLabel, hasResults, type RepurposeKey, type Piece } from "@/lib/content";
@@ -367,25 +367,25 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
   async function sendForApproval() {
     if (flags.length && !ack) { toast("Read the flags below and tick that you checked them"); return; }
     // The gate (Q131): at or above the level per Pangram, or the free score when Pangram cannot be used.
-    let v: Verdict | null = null;
-    if (hz.level > 0) {
-      v = await hz.ensure();
-      const g = gate(hzKind, hz.level, v, await textHash(body));
-      if (!g.ok) { toast(g.why === "below" ? `${gateLabel(hz.level)}. Use Fix it in the Pangram card.` : "Check it with Pangram first, in the Pangram card. Long pieces check on click."); return; }
-    }
+    const g = await passGate(hz, body);
+    if (!g.ok) { toast(g.note); return; }
+    const v = g.v;
     const p = await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "", ...(v ? { humanize: v } : {}) });
     if (!p) return;
     await syncApprovalSession(ws.id, ws.slug, posts.map((x) => (x.id === p.id ? p : x)).concat(posts.some((x) => x.id === p.id) ? [] : [p]));
     logActivity(ws.id, "approval", `Sent for approval: ${p.title}`, p.id); haptic();
-    toast(`Sent to ${first}. It is in the weekly approval session on Today.`, async () => { await supabase().from("posts").update({ status: "Drafting", requested_at: null, requested_by: null }).eq("id", p.id); });
+    toast(`Sent to ${first}. It is in the weekly approval session on Today.${g.note ? ` ${g.note}` : ""}`, async () => { await supabase().from("posts").update({ status: "Drafting", requested_at: null, requested_by: null }).eq("id", p.id); });
   }
   async function decide(approved: boolean) {
     if (!approved && !note.trim()) { toast("Add a short note so the team knows what to change"); return; }
     if (flags.length && !ack && approved) { toast("Read the flags below and tick that you checked them"); return; }
-    const p = await save({ status: approved ? "Ready" : "Drafting", decided_by: userId, decided_at: new Date().toISOString(), decision: approved ? "approved" : "changes", decision_note: note.trim() });
+    // Approving (in review, or Approve it myself) passes the same gate as Send for approval.
+    const g = approved ? await passGate(hz, body) : { ok: true, v: null, note: "" };
+    if (!g.ok) { toast(g.note); return; }
+    const p = await save({ status: approved ? "Ready" : "Drafting", decided_by: userId, decided_at: new Date().toISOString(), decision: approved ? "approved" : "changes", decision_note: note.trim(), ...(g.v ? { humanize: g.v } : {}) });
     if (!p) return;
     logActivity(ws.id, "approval", `${approved ? "Approved" : "Changes asked"}: ${p.title}`, p.id); setNote(""); haptic();
-    toast(approved ? "Approved. It can go on the plan." : "Changes asked. The team sees your note.");
+    toast(approved ? `Approved. It can go on the plan.${g.note ? ` ${g.note}` : ""}` : "Changes asked. The team sees your note.");
   }
   async function withdraw() {
     if (!postId) return;
