@@ -2,6 +2,8 @@
 import { useMemo } from "react";
 import { type Finding, type Band, BANDS, DIMENSIONS, hostOf } from "@/lib/discovery";
 import { Modal } from "@/components/content/shared";
+import { useWorkspace } from "@/lib/workspace";
+import { firstNameOf } from "@/lib/persona";
 import { type Data, BandPill, Tag, SidePanel, foundBy, foundKinds, engineName, warmLine, dateLabel } from "./shared";
 
 export type Filters = { band: string; pillar: string; geo: string; type: string; engine: string; service: string; found: string; status: string; comp: boolean };
@@ -40,6 +42,7 @@ export function FindingsTab({ d, filters, setFilters, open, act }: { d: Data; fi
 }
 
 function FindingCard({ f, d, first, open, act }: { f: Finding; d: Data; first: boolean; open: (f: Finding) => void; act: FindingActions }) {
+  const { ws } = useWorkspace();
   const b = d.band(f), w = d.warm(f.orgs), li = f.found_by.includes("linkedin"), reg = f.source_type === "Regulator";
   const hrs = li ? Math.max(0, 24 - Math.round((Date.now() - Date.parse(f.found_at)) / 36e5)) : 0;
   return (
@@ -71,7 +74,7 @@ function FindingCard({ f, d, first, open, act }: { f: Finding; d: Data; first: b
         })}
       </div>
       <div data-tour={first ? "why" : undefined} className="grid gap-2.5 rounded-[10px] md:grid-cols-2">
-        <span className="rounded-[10px] border-l-[3px] border-[#d64545] bg-[#fafafa] px-3 py-2.5 text-[13px] leading-snug"><b>Why it matters for Shashi.</b> {f.why || (f.scored_by === "ai" ? "None given." : "Scored by the page's words. The AI check adds the reason when it runs.")}</span>
+        <span className="rounded-[10px] border-l-[3px] border-[#d64545] bg-[#fafafa] px-3 py-2.5 text-[13px] leading-snug"><b>Why it matters for {firstNameOf(ws)}.</b> {f.why || (f.scored_by === "ai" ? "None given." : "Scored by the page's words. The AI check adds the reason when it runs.")}</span>
         <span className="rounded-[10px] border-l-[3px] border-[#141414] bg-[#fafafa] px-3 py-2.5 text-[13px] leading-snug"><b>Suggested angle.</b> {f.angle || "None yet."}</span>
       </div>
       {d.editable && (
@@ -90,7 +93,7 @@ function FindingCard({ f, d, first, open, act }: { f: Finding; d: Data; first: b
 
 const WHY = (f: Finding, j: number) => {
   const v = f.scores[j] ?? 0;
-  return [v >= 4 ? "A buyer has a decision to make now." : "Interesting, no decision yet.", v >= 4 ? `Squarely in ${f.pillar || "a pillar"}.` : "Touches a pillar at most.", f.geo || "No region named.", v >= 4 ? "Matches a top Antier service." : "Partial service match.",
+  return [v >= 4 ? "A buyer has a decision to make now." : "Interesting, no decision yet.", v >= 4 ? `Squarely in ${f.pillar || "a pillar"}.` : "Touches a pillar at most.", f.geo || "No region named.", v >= 4 ? "Matches a top service." : "Partial service match.",
     f.confirmed ? dateLabel(f) : "Date not confirmed on the page.", v >= 4 ? "Primary or two independent sources." : v <= 2 ? "Vendor or single source only." : "One good source.", v >= 4 ? "He can speak from running it." : "Thin operator angle."][j];
 };
 export function FindingPanel({ f, d, onClose }: { f: Finding; d: Data; onClose: () => void }) {

@@ -1,8 +1,13 @@
 "use client";
 import { createContext, useContext } from "react";
+import { SEGMENT_BASE, segmentsOf, firstNameOf, fullNameOf, companyOf, roleOf } from "./persona";
 
 export type Role = "owner" | "editor" | "commenter" | "viewer";
-export type Workspace = { id: string; slug: string; name: string; headline: string; linkedin_url: string; start_date: string; quotas: Quotas; topics?: string[]; voice?: string };
+// company, pillars, regions, segments and archived_at arrive with db/016; until it runs they are undefined and src/lib/persona.ts falls back.
+export type Workspace = {
+  id: string; slug: string; name: string; headline: string; linkedin_url: string; start_date: string; quotas: Quotas; topics?: string[]; voice?: string;
+  company?: string; pillars?: string[]; regions?: string[]; segments?: Record<string, string>; archived_at?: string | null;
+};
 export type Quotas = { comment: number; request: number; dm: number; inmail: number; reply: number };
 
 const rank: Record<Role, number> = { owner: 4, editor: 3, commenter: 2, viewer: 1 };
@@ -16,6 +21,13 @@ export function useWorkspace() {
   const v = useContext(C);
   if (!v) throw new Error("useWorkspace outside provider");
   return v;
+}
+/** This profile's five segments: fixed letters and colours, names from Settings. */
+export const useSegments = () => segmentsOf(useWorkspace().ws);
+/** Who this profile is, for copy: first and full name, company and role, with neutral fallbacks (src/lib/persona.ts). */
+export function useWho() {
+  const { ws } = useWorkspace();
+  return { first: firstNameOf(ws), name: fullNameOf(ws), company: companyOf(ws), role: roleOf(ws) };
 }
 
 // ---- dates (local calendar days) ----
@@ -35,10 +47,5 @@ export const KINDS = [
 ] as const;
 
 export const STAGES = ["Target", "Warming", "Requested", "Connected", "In conversation", "Resource sent", "Call booked", "Won", "Parked"] as const;
-export const SEGMENTS: Record<string, { label: string; color: string }> = {
-  A: { label: "Fintech & payments", color: "#d64545" },
-  B: { label: "MENA & India institutions", color: "#a3231c" },
-  C: { label: "Partnerships & growth", color: "#e8837b" },
-  D: { label: "Africa", color: "#7a2e2a" },
-  E: { label: "Industry voices", color: "#b9a19d" },
-};
+/** Segment letters and colours. Names differ per profile: use segmentsOf(ws) from src/lib/persona.ts for labels. */
+export const SEGMENTS = SEGMENT_BASE;

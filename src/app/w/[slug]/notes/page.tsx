@@ -18,7 +18,7 @@ export default function Notes() {
         { label: "This week", value: rows.filter((r) => r.created_at.slice(0, 10) >= d7).length, sub: "last 7 days" },
         { label: "Latest note", value: rows[0] ? fmtDay(rows[0].created_at.slice(0, 10), { day: "numeric", month: "short" }) : "None", sub: rows[0] ? "added" : "nothing added yet" },
       ]} />
-      <RecordList table="notes" order="created_at" asc={false} filter={(q) => q.eq("kind", "note")} defaults={{ kind: "note" }} empty="No notes yet." adding={adding} onAdding={setAdding}
+      <RecordList table="notes" order="created_at" asc={false} filter={(q) => q.eq("kind", "note")} defaults={{ kind: "note" }} empty="No notes yet." adding={adding} onAdding={setAdding} author
         cols={[{ key: "title", label: "Title", className: "font-medium w-[240px]" }, { key: "body", label: "", className: "text-ink-2", render: (r) => <span className="line-clamp-2">{r.body}</span> }]}
         fields={[{ key: "title", label: "Title", wide: true }, { key: "body", label: "Note", type: "textarea" }]} />
     </Section>

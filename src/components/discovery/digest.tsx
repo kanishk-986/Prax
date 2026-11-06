@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { type Finding, PRIORITY_FACTORS, priorityParts, priorityMinus, sourcesOf, servicesLine, replyDraft } from "@/lib/discovery";
 import { type Data, type Ranked, Box, Tag, SidePanel } from "./shared";
+import { useWorkspace } from "@/lib/workspace";
+import { fullNameOf, firstNameOf, roleOf, companyOf, regionText } from "@/lib/persona";
 
 export type Opp = { f: Finding; kind: "pitch" | "press" | "sales"; due: number | null };
 export type DigestActions = {
@@ -14,6 +16,8 @@ export function DigestTab({ d, week, weeks, setWeek, opps, act }: { d: Data; wee
   const [sel, setSel] = useState<string[]>([]);
   const [why, setWhy] = useState<Ranked | null>(null);
   const [reply, setReply] = useState<{ o: Opp; text: string } | null>(null);
+  const { ws } = useWorkspace();
+  const who = { name: fullNameOf(ws, ""), first: firstNameOf(ws, ""), role: roleOf(ws), company: companyOf(ws, ""), region: regionText(ws) };
   const { top, list, rising, rest, all } = d.digest;
   const ten = [...top, ...list];
   const rankOf = (t: Ranked) => ten.findIndex((x) => x.key === t.key) + 1;
@@ -45,7 +49,7 @@ export function DigestTab({ d, week, weeks, setWeek, opps, act }: { d: Data; wee
   if (!all.length) return (
     <div className="anim-rise flex flex-col gap-4">
       <div data-tour="dtop" className="rounded-2xl"><WeekBar d={d} week={week} weeks={weeks} setWeek={setWeek} head="No topics yet" sub="The Digest builds from this week's findings once AI search or Crawl has run." copy={null} /></div>
-      <Opps d={d} opps={opps} act={act} openReply={(o) => setReply({ o, text: replyDraft({ service: o.f.service, title: o.f.title, ask: o.f.opp.ask ?? o.f.excerpt.slice(0, 160) }) })} />
+      <Opps d={d} opps={opps} act={act} openReply={(o) => setReply({ o, text: replyDraft({ service: o.f.service, title: o.f.title, ask: o.f.opp.ask ?? o.f.excerpt.slice(0, 160) }, who) })} />
       {reply && <ReplyPanel r={reply} setText={(text) => setReply({ ...reply, text })} onClose={() => setReply(null)} onCopy={() => { act.copy(reply.text, "Reply copied. Send it yourself."); act.replied(reply.o); setReply(null); }} />}
     </div>
   );
@@ -105,7 +109,7 @@ export function DigestTab({ d, week, weeks, setWeek, opps, act }: { d: Data; wee
         })}
         {!list.length && <p className="m-0 border-t border-[#ececec] px-[18px] py-4 text-[13px] text-muted">None. Fewer than four topics this week.</p>}
       </section>
-      <Opps d={d} opps={opps} act={act} openReply={(o) => setReply({ o, text: replyDraft({ service: o.f.service, title: o.f.title, ask: o.f.opp.ask ?? o.f.excerpt.slice(0, 160) }) })} />
+      <Opps d={d} opps={opps} act={act} openReply={(o) => setReply({ o, text: replyDraft({ service: o.f.service, title: o.f.title, ask: o.f.opp.ask ?? o.f.excerpt.slice(0, 160) }, who) })} />
       {why && <WhyPanel t={why} d={d} rank={rankOf(why)} sent={act.sentOf(why)} onSend={() => act.send([why])} onClose={() => setWhy(null)} />}
       {reply && <ReplyPanel r={reply} setText={(text) => setReply({ ...reply, text })} onClose={() => setReply(null)} onCopy={() => { act.copy(reply.text, "Reply copied. Send it yourself."); act.replied(reply.o); setReply(null); }} />}
     </div>
@@ -128,7 +132,7 @@ function WeekBar({ d, week, weeks, setWeek, head, sub, services, copy }: { d: Da
   void d;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#141414] px-[18px] py-3.5 text-white">
-      <span className="flex min-w-0 flex-1 basis-[300px] flex-col gap-0.5"><span className="text-[15px] font-[650]">{head}</span><span className="text-[12.5px] text-[#cfcfcf]">{sub}</span>{services != null && <span className="text-[12.5px]"><b className="text-[#ff8a80]">Antier services in the news</b> {services}</span>}</span>
+      <span className="flex min-w-0 flex-1 basis-[300px] flex-col gap-0.5"><span className="text-[15px] font-[650]">{head}</span><span className="text-[12.5px] text-[#cfcfcf]">{sub}</span>{services != null && <span className="text-[12.5px]"><b className="text-[#ff8a80]">Services in the news</b> {services}</span>}</span>
       <span className="flex flex-wrap items-center gap-2">
         {weeks.map((w) => <button key={w} type="button" onClick={() => setWeek(w)} className="h-8 rounded-lg px-3 text-[12.5px] font-semibold text-white" style={{ background: w === week ? "#d64545" : "rgba(255,255,255,.1)" }}>Week of {fmt(w)}</button>)}
         {copy && <button type="button" onClick={copy} className="h-8 rounded-lg border border-white/25 px-3 text-[12.5px] font-semibold text-white hover:bg-white/10">Copy as text</button>}
@@ -137,7 +141,7 @@ function WeekBar({ d, week, weeks, setWeek, head, sub, services, copy }: { d: Da
   );
 }
 
-const OPMETA = { pitch: ["Speaking and pitch", "Calls for speakers, panels, awards and consultations open for comment."], press: ["Journalist and analyst requests", "People asking for expert sources on Antier topics. Prax drafts a reply; you send it."], sales: ["For sales", "Public tenders and requests for proposals. Never turned into posts."] } as const;
+const OPMETA = { pitch: ["Speaking and pitch", "Calls for speakers, panels, awards and consultations open for comment."], press: ["Journalist and analyst requests", "People asking for expert sources on this profile's topics. Prax drafts a reply; you send it."], sales: ["For sales", "Public tenders and requests for proposals. Never turned into posts."] } as const;
 function Opps({ d, opps, act, openReply }: { d: Data; opps: Opp[]; act: DigestActions; openReply: (o: Opp) => void }) {
   return (
     <div data-tour="opps" className="grid gap-3.5 rounded-2xl md:grid-cols-3">
@@ -181,7 +185,7 @@ function WhyPanel({ t, d, rank, sent, onSend, onClose }: { t: Ranked; d: Data; r
         </div>
       ))}
       {priorityMinus(t, d.settings.penalties).map(([l, p]) => <div key={l} className="flex justify-between gap-2.5 text-[13px] text-[#9e1c1c]"><b>{l}</b><span className="num">{p}</span></div>)}
-      <span className="rounded-xl bg-[#141414] px-3.5 py-3 text-[13px] leading-relaxed text-white"><b>{t.move}</b><span className="block text-[#e3e3e3]">Suggested angle: {t.angle || "None given"}</span>{t.crowded && <span className="mt-1 block text-[#ff8a80]">Crowded: take a contrarian or GCC-specific line rather than the common one.</span>}</span>
+      <span className="rounded-xl bg-[#141414] px-3.5 py-3 text-[13px] leading-relaxed text-white"><b>{t.move}</b><span className="block text-[#e3e3e3]">Suggested angle: {t.angle || "None given"}</span>{t.crowded && <span className="mt-1 block text-[#ff8a80]">Crowded: take a contrarian or regional line rather than the common one.</span>}</span>
       <span className="label text-ink">{sourcesOf(t)} sources · AI search {t.ai} · Crawl {t.crawl} · LinkedIn {t.li}</span>
       {t.sources.slice(0, 12).map((s) => (
         <div key={s.url} className="flex min-w-0 items-center gap-2 rounded-[10px] border border-[#ececec] px-2.5 py-2 text-[12.5px]">

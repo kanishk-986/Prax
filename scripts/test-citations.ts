@@ -149,7 +149,10 @@ eq("share link live", shareValid({ expires_at: "2026-11-07T00:00:00Z", revoked: 
 eq("share link expired", shareValid({ expires_at: "2026-11-06T11:00:00Z", revoked: false }, nowMs), false);
 eq("share link turned off", shareValid({ expires_at: "2026-11-09T00:00:00Z", revoked: true }, nowMs), false);
 eq("expiry is capped at 30 days", expiryFrom(90, nowMs), new Date(nowMs + 30 * 864e5).toISOString());
-eq("twenty starter questions, none branded", [starterQuestions().length, starterQuestions().some((q) => isBranded({ question: q.question }, self))], [20, false]);
+const sixPillars = ["Money That Moves Itself", "The Liquid Balance Sheet", "Regulation-to-Architecture", "Production-Grade or Nothing", "Agentic Finance", "Build, Buy or Partner"];
+eq("twenty starter questions, none branded", [starterQuestions(sixPillars, "the UAE").length, starterQuestions(sixPillars, "the UAE").some((q) => isBranded({ question: q.question }, self))], [20, false]);
+eq("starter questions follow the profile's pillars and region", starterQuestions(["Hospital operations"], "Kenya").map((q) => q.question).slice(0, 2), ["Who are the leading experts on hospital operations in Kenya?", "Which companies are best at hospital operations in Kenya?"]);
+eq("no pillars, no starter questions", starterQuestions([]).length, 0);
 const campQs: Question[] = [{ ...qs[0], topic: "Agentic Finance" }, { ...qs[1], topic: "Custody" }];
 const campRuns = [run("c1", campQs[0].id, "claude", "2026-10-01T10:00:00Z", "Ledgerline."), run("c2", campQs[0].id, "claude", "2026-11-03T10:00:00Z", "Antier.")];
 eq("campaign lift before and after", campaignLift(campRuns, campQs, self, { id: "x", start: "2026-10-15", topic: "Agentic Finance" }), { questions: 1, before: 0, after: 100 });
@@ -213,7 +216,7 @@ eq("no direction from one week", sameDirection([null, 1], [null, 2]), null);
 
 const gaps = promptGaps(pr, pq, person, company, [peer], [rival], ctx);
 eq("gaps: vendor goes to company, expert to Shashi", gaps.map((g) => [g.question.id, g.channel, g.rivals, g.engines]), [["e1", "shashi", ["Rina Okafor"], ["openai"]], ["v1", "company", ["Ledgerline"], ["openai"]]]);
-eq("gap topic wording", gaps.map(gapTopic), ["Answer it as Shashi: Which experts write about stablecoin rails in the UAE", "Company content: Who builds stablecoin rails for banks"]);
+eq("gap topic wording", gaps.map((g) => gapTopic(g, "Shashi")), ["Answer it as Shashi: Which experts write about stablecoin rails in the UAE", "Company content: Who builds stablecoin rails for banks"]);
 eq("weeks with runs, newest first", runWeeks(pr), ["2026-11-02", "2026-10-26"]);
 
 // ---------- PDF ----------

@@ -6,7 +6,8 @@ import { useWorkspace, fmtDay } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { Threads } from "@/components/threads";
 import { askExtension, parseJSON } from "@/lib/bridge";
-import { FORMATS, PILLARS, reshareFallback } from "@/lib/campaigns";
+import { FORMATS, reshareFallback } from "@/lib/campaigns";
+import { cap, fullNameOf, firstNameOf, companyOf, roleOf, pillarsOf, possessive, initialsOf, PROFILE_CHANNEL, type Channel } from "@/lib/persona";
 import { claimsCheck, povText } from "@/lib/content";
 import { type Post, type Campaign, StatusPill, ChannelFlag, statusOf, logActivity, syncApprovalSession, Modal } from "./shared";
 import type { ContentSettings } from "./settings";
@@ -16,17 +17,18 @@ const stamp = (s: string | null) => (s ? new Date(s).toLocaleString("en-GB", { d
 
 /** Read-only view of a post, opened from Library, Plan and campaign rows. */
 export function PostView({ post, campaigns, members, onClose, onEdit }: { post: Post; campaigns: Campaign[]; members: Record<string, string>; onClose: () => void; onEdit: () => void }) {
-  const { can } = useWorkspace();
+  const { ws, can } = useWorkspace();
+  const first = firstNameOf(ws), name = fullNameOf(ws), company = companyOf(ws);
   const camp = campaigns.find((c) => c.id === post.campaign_id);
   const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="flex justify-between gap-3 border-b border-line py-2 text-[13px] last:border-0"><span className="text-muted">{k}</span><span className="text-right font-medium">{v}</span></div>;
   return (
     <Modal title={post.title || "Untitled post"} onClose={onClose} wide footer={<>{can("editor") && <button className="btn btn-primary" onClick={onEdit}>Edit</button>}<button className="btn" onClick={onClose}>Close</button></>}>
-      {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] font-semibold text-white">Company content, not for Shashi&apos;s profile</p>}
+      {post.channel === "company" && <p className="m-0 mb-4 rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] font-semibold text-white">Company content, not for {possessive(first)} profile</p>}
       <div className="grid gap-5 md:grid-cols-[1fr_300px]">
         <div className="min-w-0">
           <div className="label mb-2">Draft, as it reads on LinkedIn</div>
           <div className="rounded-xl border border-line bg-white p-4 shadow-[var(--shadow)]">
-            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-[13px] font-semibold text-white">{post.channel === "company" ? "A" : "SP"}</span><span className="flex flex-col"><span className="text-[14px] font-semibold">{post.channel === "company" ? "Antier" : "Shashi Pal"}</span><span className="text-[12px] text-muted">{post.channel === "company" ? "Company page" : "Co-Founder and COO, Antier"}</span></span></div>
+            <div className="mb-3 flex items-center gap-2.5"><span className="grid h-10 w-10 place-items-center rounded-full bg-[#141414] text-[13px] font-semibold text-white">{initialsOf(post.channel === "company" ? companyOf(ws, "") : fullNameOf(ws, ""))}</span><span className="flex flex-col"><span className="text-[14px] font-semibold">{post.channel === "company" ? cap(company) : cap(name)}</span><span className="text-[12px] text-muted">{post.channel === "company" ? "Company page" : ws.headline || "LinkedIn profile"}</span></span></div>
             <p className="m-0 whitespace-pre-wrap text-[14px] leading-relaxed">{post.draft || <span className="text-muted">No draft yet.</span>}</p>
           </div>
           <div className="mt-5"><Threads refTable="posts" refId={post.id} /></div>
@@ -36,7 +38,7 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
           {post.source_kind === "discovery" && <Row k="From" v={`Discovery Studio${post.discovery?.rank ? ` · #${post.discovery.rank}` : ""}${post.discovery?.score != null ? ` · ${post.discovery.score}` : ""}`} />}
           <Row k="Campaign" v={camp ? <span className="text-[#d64545]">{camp.name}</span> : "Independent"} />
           <Row k="Type" v={post.format || "Text post"} />
-          <Row k="Where" v={post.channel === "company" ? <ChannelFlag p={post} /> : "Shashi's profile"} />
+          <Row k="Where" v={post.channel === "company" ? <ChannelFlag p={post} /> : `${possessive(cap(first))} profile`} />
           {post.newsletter && <Row k="Newsletter" v="Yes" />}
           <Row k="Pillar" v={post.pillar || post.topic || "Not set"} />
           <Row k="Status" v={<StatusPill s={post.status} />} />
@@ -46,7 +48,7 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
           {!post.requested_at && !post.decided_at ? <p className="text-[13px] text-muted">Not sent for approval.</p> : (
             <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[13px]">
               {post.requested_at && <li>Sent for approval by {members[post.requested_by ?? ""] || "the team"}, {stamp(post.requested_at)}</li>}
-              {post.decided_at && <li>{post.decision === "approved" ? "Approved" : "Changes asked"} by {members[post.decided_by ?? ""] || "Shashi"}, {stamp(post.decided_at)}</li>}
+              {post.decided_at && <li>{post.decision === "approved" ? "Approved" : "Changes asked"} by {members[post.decided_by ?? ""] || first}, {stamp(post.decided_at)}</li>}
               {post.decision_note && <li className="rounded-lg bg-surface-2 px-2.5 py-1.5">&ldquo;{post.decision_note}&rdquo;</li>}
             </ul>
           )}
@@ -59,6 +61,8 @@ export function PostView({ post, campaigns, members, onClose, onEdit }: { post: 
 /** Edit a post: text, type, pillar, campaign, AI draft, approval, plan, hand off, reshare notes. Never posts. */
 export function PostEditor({ post, campaigns, posts, settings, companies, onClose }: { post: Post; campaigns: Campaign[]; posts: Post[]; settings?: ContentSettings; companies?: string[]; onClose: () => void }) {
   const { ws, can, userId } = useWorkspace();
+  const first = firstNameOf(ws), company = companyOf(ws), pillars = pillarsOf(ws);
+  const who = { name: fullNameOf(ws), first, role: roleOf(ws) };
   const toast = useToast();
   const [f, setF] = useState<Post>(post);
   const [busy, setBusy] = useState("");
@@ -77,7 +81,7 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     const next = { ...f, ...patch };
     const body = { title: next.title, format: next.format, pillar: next.pillar, campaign_id: next.campaign_id, draft: next.draft, publish_date: next.publish_date || null, planned_time: next.planned_time, status: next.status,
       requested_by: next.requested_by, requested_at: next.requested_at, decided_by: next.decided_by, decided_at: next.decided_at, decision: next.decision, decision_note: next.decision_note, phase: next.phase,
-      channel: next.channel ?? "shashi", newsletter: next.format === "Article" && !!next.newsletter, claims_ack: ack };
+      channel: next.channel ?? PROFILE_CHANNEL, newsletter: next.format === "Article" && !!next.newsletter, claims_ack: ack };
     const { error } = await supabase().from("posts").update(body).eq("id", post.id);
     if (error) { toast(error.message); return false; }
     setF(next); haptic();
@@ -90,12 +94,12 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     setBusy("draft");
     try {
       const brief = camp?.brief;
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Write a LinkedIn ${f.format || "text post"} for this profile.\nTitle or idea: ${f.title}\nPillar: ${f.pillar || f.topic}\n${brief ? `Campaign: ${camp!.name}. Phase: ${f.phase || "any"}. Core message: ${brief.message}. Call to action: ${brief.cta}. Keywords: ${brief.keywords.join(", ")}.` : ""}\n${settings ? povText(settings.pov) + "\n" : ""}${f.channel === "company" ? "Write it for the Antier company page, as the company.\n" : ""}${f.draft ? `Current draft to improve:\n${f.draft}\n` : ""}Open with a line under 140 characters that stands alone. 120 to 220 words for a text post; for a carousel give slide lines; for a video give a short script with what to say and show. Use only facts given here.\nReturn only JSON: {"draft": "..."}` });
+      const out = await askExtension<string>("ai", { kind: "studio", user: `Write a LinkedIn ${f.format || "text post"} for this profile.\nTitle or idea: ${f.title}\nPillar: ${f.pillar || f.topic}\n${brief ? `Campaign: ${camp!.name}. Phase: ${f.phase || "any"}. Core message: ${brief.message}. Call to action: ${brief.cta}. Keywords: ${brief.keywords.join(", ")}.` : ""}\n${settings ? povText(settings.pov, first) + "\n" : ""}${f.channel === "company" ? `Write it for the ${company} company page, as the company.\n` : ""}${f.draft ? `Current draft to improve:\n${f.draft}\n` : ""}Open with a line under 140 characters that stands alone. 120 to 220 words for a text post; for a carousel give slide lines; for a video give a short script with what to say and show. Use only facts given here.\nReturn only JSON: {"draft": "..."}` });
       const j = parseJSON<{ draft: string }>(out);
       if (!j?.draft) throw new Error("No draft came back. Try again.");
       const prev = f.draft;
       setF((x) => ({ ...x, draft: j.draft }));
-      toast("Draft written in Shashi's voice", () => setF((x) => ({ ...x, draft: prev })));
+      toast(`Draft written in ${possessive(first)} voice`, () => setF((x) => ({ ...x, draft: prev })));
     } catch (e) { toast((e as Error).message); }
     setBusy("");
   }
@@ -104,7 +108,7 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     if (!f.draft.trim()) { toast("Write the draft first"); return; }
     if (flags.length && !ack) { toast("Read the claims check and tick that you checked them"); return; }
     const undo = { status: f.status, requested_by: f.requested_by, requested_at: f.requested_at, decision: f.decision, decision_note: f.decision_note };
-    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "" }, "Sent to Shashi. It is in his weekly approval session on Today.", undo))
+    if (await save({ status: "In review", requested_by: userId, requested_at: new Date().toISOString(), decision: "", decision_note: "" }, `Sent to ${first}. It is in the weekly approval session on Today.`, undo))
       logActivity(ws.id, "approval", `Sent for approval: ${f.title}`, post.id);
   }
   async function decide(approved: boolean) {
@@ -124,10 +128,10 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
     const colleagues = camp?.brief.colleagues ?? [];
     setBusy("reshare");
     try {
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Shashi is posting this on LinkedIn:\n${f.draft || f.title}\n\nWrite (1) a short version for the Antier company page that credits him, and (2) one reshare note of under 40 words for each colleague: ${colleagues.join(", ") || "none"}. Calm B2B tone.\nReturn only JSON: {"page": "...", "notes": [{"name": "...", "text": "..."}]}` });
+      const out = await askExtension<string>("ai", { kind: "studio", user: `${fullNameOf(ws)} is posting this on LinkedIn:\n${f.draft || f.title}\n\nWrite (1) a short version for the ${company} company page that credits ${first}, and (2) one reshare note of under 40 words for each colleague: ${colleagues.join(", ") || "none"}. Calm B2B tone.\nReturn only JSON: {"page": "...", "notes": [{"name": "...", "text": "..."}]}` });
       const j = parseJSON<{ page: string; notes: { name: string; text: string }[] }>(out);
-      setReshare(j?.page ? { page: j.page, notes: j.notes ?? [] } : reshareFallback(f.title, colleagues));
-    } catch { setReshare(reshareFallback(f.title, colleagues)); toast("No AI key: standard notes written instead"); }
+      setReshare(j?.page ? { page: j.page, notes: j.notes ?? [] } : reshareFallback(f.title, colleagues, who));
+    } catch { setReshare(reshareFallback(f.title, colleagues, who)); toast("No AI key: standard notes written instead"); }
     setBusy("");
   }
   const copy = async (t: string, label: string) => { try { await navigator.clipboard.writeText(t); } catch {} haptic(); toast(`${label} copied`); };
@@ -143,14 +147,14 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
           <fieldset disabled={!editable} className="m-0 grid grid-cols-2 gap-3 border-0 p-0">
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Title or idea</span><input className="field" value={f.title} onChange={(e) => set("title", e.target.value)} /></label>
             <label className="flex flex-col gap-1"><span className="label">Type</span><select className="field" value={f.format || "Text post"} onChange={(e) => set("format", e.target.value)}>{FORMATS.map((x) => <option key={x}>{x}</option>)}</select></label>
-            <label className="flex flex-col gap-1"><span className="label">Pillar</span><select className="field" value={f.pillar} onChange={(e) => set("pillar", e.target.value)}><option value="">Not set</option>{PILLARS.map((x) => <option key={x}>{x}</option>)}</select></label>
-            <label className="flex flex-col gap-1"><span className="label">Where it goes</span><select className="field" value={f.channel ?? "shashi"} onChange={(e) => set("channel", e.target.value as "shashi" | "company")}><option value="shashi">Shashi&apos;s own profile</option><option value="company">Antier company page</option></select></label>
+            <label className="flex flex-col gap-1"><span className="label">Pillar</span><select className="field" value={f.pillar} onChange={(e) => set("pillar", e.target.value)}><option value="">Not set</option>{pillars.map((x) => <option key={x}>{x}</option>)}</select></label>
+            <label className="flex flex-col gap-1"><span className="label">Where it goes</span><select className="field" value={f.channel ?? PROFILE_CHANNEL} onChange={(e) => set("channel", e.target.value as Channel)}><option value={PROFILE_CHANNEL}>{possessive(first)} own profile</option><option value="company">{cap(company)} company page</option></select></label>
             <label className="flex items-end gap-2 pb-2 text-[13px]">{f.format === "Article" && settings?.newsletter.name ? <><input type="checkbox" checked={!!f.newsletter} onChange={(e) => set("newsletter", e.target.checked)} />Part of {settings.newsletter.name}</> : null}</label>
-            {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-[#141414] px-3 py-2 text-[12.5px] font-semibold text-white">Company content, not for Shashi&apos;s profile</p>}
+            {f.channel === "company" && <p className="col-span-2 m-0 rounded-lg bg-[#141414] px-3 py-2 text-[12.5px] font-semibold text-white">Company content, not for {possessive(first)} profile</p>}
             <label className="col-span-2 flex flex-col gap-1"><span className="label">Campaign</span><select className="field" value={f.campaign_id ?? ""} onChange={(e) => set("campaign_id", e.target.value || null)}><option value="">Independent</option>{campaigns.filter((c) => !c.template).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <div className="col-span-2 flex flex-col gap-1">
               <div className="flex items-center justify-between gap-2"><span className="label">Draft</span>{post.id && f.draft.trim().length > 80 && <a className="ml-auto text-[12px] font-semibold underline underline-offset-2" href={`/w/${ws.slug}/citations?draft=${post.id}`} title="Test whether AI tools would cite this draft. Save first.">Is this citable?</a>}<button type="button" className="btn btn-dark h-7 text-[12px]" disabled={!!busy} onClick={aiDraft}><Sparkles size={13} /> {busy === "draft" ? "Writing" : f.draft ? "Improve with AI" : "AI draft"}</button></div>
-              <textarea className="field min-h-[220px] text-[14px]" value={f.draft} onChange={(e) => set("draft", e.target.value)} placeholder="Write here, or press AI draft. Shashi's voice and locked rules apply." />
+              <textarea className="field min-h-[220px] text-[14px]" value={f.draft} onChange={(e) => set("draft", e.target.value)} placeholder={`Write here, or press AI draft. ${cap(possessive(first))} voice and locked rules apply.`} />
               <span className="num text-right text-[11.5px] text-muted">{Array.from(f.draft).length.toLocaleString()} / 3000</span>
             </div>
             <label className="flex flex-col gap-1"><span className="label">Day</span><input type="date" className="field" value={f.publish_date ?? ""} onChange={(e) => set("publish_date", e.target.value || null)} /></label>
@@ -173,15 +177,15 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
                 <div className="flex gap-2"><button className="btn btn-primary" onClick={() => decide(true)}>Approve</button><button className="btn" onClick={() => decide(false)}>Ask for changes</button></div>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2"><p className="m-0 text-[13px]">With Shashi since {stamp(f.requested_at)}.</p>
-                {editable && <button className="btn" onClick={() => save({ status: "Drafting", requested_at: null, requested_by: null }, "Withdrawn. Shashi no longer sees it.", { status: "In review", requested_at: f.requested_at, requested_by: f.requested_by })}>Withdraw</button>}</div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="m-0 text-[13px]">With {first} since {stamp(f.requested_at)}.</p>
+                {editable && <button className="btn" onClick={() => save({ status: "Drafting", requested_at: null, requested_by: null }, `Withdrawn. ${cap(first)} no longer sees it.`, { status: "In review", requested_at: f.requested_at, requested_by: f.requested_by })}>Withdraw</button>}</div>
             )) : st === "Ready" || st === "Posted" ? (
               <p className="m-0 text-[13px]">{f.decision === "approved" ? `Approved ${stamp(f.decided_at)}.` : st === "Posted" ? "Posted." : "Ready to post."}</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {f.decision === "changes" && f.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">Shashi asked for changes: &ldquo;{f.decision_note}&rdquo;</p>}
-                <p className="m-0 text-[13px] text-muted">Shashi approves team drafts in one weekly session on his Today list.</p>
-                {editable && <div><button className="btn btn-primary" onClick={sendForApproval}>Send to Shashi</button>{owner && <button className="btn btn-ghost ml-1" onClick={() => decide(true)}>Approve it myself</button>}</div>}
+                {f.decision === "changes" && f.decision_note && <p className="m-0 rounded-lg bg-surface-2 px-3 py-2 text-[13px]">{cap(first)} asked for changes: &ldquo;{f.decision_note}&rdquo;</p>}
+                <p className="m-0 text-[13px] text-muted">{cap(first)} approves team drafts in one weekly session on Today.</p>
+                {editable && <div><button className="btn btn-primary" onClick={sendForApproval}>Send to {first}</button>{owner && <button className="btn btn-ghost ml-1" onClick={() => decide(true)}>Approve it myself</button>}</div>}
               </div>
             )}
           </section>
@@ -190,15 +194,15 @@ export function PostEditor({ post, campaigns, posts, settings, companies, onClos
             <section className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-4">
               <button className="btn btn-primary" onClick={handOff}><Copy size={14} /> Copy and open LinkedIn</button>
               {st !== "Posted" && editable && <button className="btn" onClick={() => save({ status: "Posted", publish_date: f.publish_date || new Date().toISOString().slice(0, 10) }, "Marked as posted", { status: f.status, publish_date: f.publish_date })}>Mark as posted</button>}
-              <span className="text-[12px] text-muted">Prax never posts. Shashi presses Post on LinkedIn.</span>
+              <span className="text-[12px] text-muted">Prax never posts. {cap(first)} presses Post on LinkedIn.</span>
             </section>
           )}
 
           <section className="mt-3 rounded-xl border border-line p-4">
             <div className="mb-2 flex items-center justify-between"><span className="label">Company page and reshare notes</span><button className="btn h-7 text-[12px]" disabled={!!busy} onClick={genReshare}>{busy === "reshare" ? "Writing" : reshare ? "Write again" : "Write them"}</button></div>
-            {!reshare ? <p className="m-0 text-[12.5px] text-muted">A version for the Antier page and a short note for each colleague named in the campaign. Copy them by hand; nothing is posted.</p> : (
+            {!reshare ? <p className="m-0 text-[12.5px] text-muted">A version for the {company} page and a short note for each colleague named in the campaign. Copy them by hand; nothing is posted.</p> : (
               <div className="flex flex-col gap-2">
-                <div className="rounded-lg bg-surface-2 p-3 text-[13px]"><div className="label mb-1">Antier page</div><p className="m-0 whitespace-pre-wrap">{reshare.page}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-[12px]" onClick={() => copy(reshare.page, "Page text")}>Copy</button><button className="btn btn-ghost h-7 text-[12px]" onClick={() => { logActivity(ws.id, "reshare", `Antier page shared: ${f.title}`, post.id); toast("Logged as shared on the Antier page"); }}>Log as shared</button></div></div>
+                <div className="rounded-lg bg-surface-2 p-3 text-[13px]"><div className="label mb-1">{cap(company)} page</div><p className="m-0 whitespace-pre-wrap">{reshare.page}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-[12px]" onClick={() => copy(reshare.page, "Page text")}>Copy</button><button className="btn btn-ghost h-7 text-[12px]" onClick={() => { logActivity(ws.id, "reshare", `${cap(company)} page shared: ${f.title}`, post.id); toast(`Logged as shared on the ${company} page`); }}>Log as shared</button></div></div>
                 {reshare.notes.map((n) => (
                   <div key={n.name} className="rounded-lg bg-surface-2 p-3 text-[13px]"><div className="label mb-1">{n.name}</div><p className="m-0">{n.text}</p><div className="mt-2 flex gap-2"><button className="btn h-7 text-[12px]" onClick={() => copy(n.text, `Note for ${n.name}`)}>Copy</button><button className="btn btn-ghost h-7 text-[12px]" onClick={() => { logActivity(ws.id, "reshare", `${n.name} reshared: ${f.title}`, post.id); toast(`Logged: ${n.name} reshared`); }}>Log as reshared</button></div></div>
                 ))}

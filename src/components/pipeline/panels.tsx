@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Check, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useWorkspace, SEGMENTS, today as todayYmd } from "@/lib/workspace";
+import { useWorkspace, useSegments, SEGMENTS, today as todayYmd } from "@/lib/workspace";
+import { firstNameOf } from "@/lib/persona";
 import { csvObjects, normCompany, normName, normUrl, seniority } from "@/lib/network";
 import { TEMPLATES, addDays, isClosed, moveGate, newPipelineName, planFor, type MoveInput, type Pipeline, type Prospect } from "@/lib/pipeline";
 import { useToast, haptic } from "@/components/toaster";
@@ -252,9 +253,9 @@ export function ImportPanel({ data, api, pipe, onClose }: { data: PipelineData; 
   return (
     <SidePanel title="Add leads" sub={`Into ${pipe.name}, at ${first}.`} onClose={onClose}>
       <div className="flex flex-col gap-2.5">
-        <span className="flex flex-col gap-0.5"><span className="text-[14px] font-semibold">From Network</span><span className="text-[12.5px] text-muted">People Shashi knows at target accounts who are not in a pipeline yet.</span></span>
-        {!data.network.length ? <span className="text-[13px] text-muted">No LinkedIn export yet. <Link href={`/w/${ws.slug}/network`} className="font-semibold text-ink underline">Upload it in Network</Link> to add people Shashi knows.</span>
-          : !net.length ? <span className="text-[13px] text-muted">None. Everyone Shashi knows at these companies is already in a pipeline.</span>
+        <span className="flex flex-col gap-0.5"><span className="text-[14px] font-semibold">From Network</span><span className="text-[12.5px] text-muted">People {firstNameOf(ws)} knows at target accounts who are not in a pipeline yet.</span></span>
+        {!data.network.length ? <span className="text-[13px] text-muted">No LinkedIn export yet. <Link href={`/w/${ws.slug}/network`} className="font-semibold text-ink underline">Upload it in Network</Link> to add people {firstNameOf(ws)} knows.</span>
+          : !net.length ? <span className="text-[13px] text-muted">None. Everyone {firstNameOf(ws)} knows at these companies is already in a pipeline.</span>
           : net.map((x) => {
             const on = pick.includes(x.key);
             return (
@@ -287,6 +288,7 @@ export function ImportPanel({ data, api, pipe, onClose }: { data: PipelineData; 
 
 // ---------- add one ----------
 export function AddLeadPanel({ data, api, pipe, onClose, onAdded }: { data: PipelineData; api: PipelineApi; pipe: Pipeline; onClose: () => void; onAdded: (id: string) => void }) {
+  const segs = useSegments();
   const toast = useToast();
   const open = pipe.stages.filter((s) => !isClosed(pipe, s));
   const [f, setF] = useState({ name: "", role: "", company: "", linkedin: "", segment: "", region: "", stage: open[0] ?? pipe.stages[0], next_action: "", next_date: "" });
@@ -307,7 +309,7 @@ export function AddLeadPanel({ data, api, pipe, onClose, onAdded }: { data: Pipe
         <label className={`${label} col-span-2`}>Name<input autoFocus className="field h-9! font-normal" value={f.name} onChange={set("name")} /></label>
         <label className={`${label} max-sm:col-span-2`}>Role<input className="field h-9! font-normal" value={f.role} onChange={set("role")} /></label>
         <label className={`${label} max-sm:col-span-2`}>Company<input className="field h-9! font-normal" value={f.company} onChange={set("company")} /></label>
-        <label className={`${label} max-sm:col-span-2`}>Segment<select className="field h-9! font-normal" value={f.segment} onChange={set("segment")}><option value="">None</option>{Object.entries(SEGMENTS).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></label>
+        <label className={`${label} max-sm:col-span-2`}>Segment<select className="field h-9! font-normal" value={f.segment} onChange={set("segment")}><option value="">None</option>{Object.entries(segs).map(([k, v]) => <option key={k} value={k}>{v.label.replace("&", "and")}</option>)}</select></label>
         <label className={`${label} max-sm:col-span-2`}>Region<input className="field h-9! font-normal" value={f.region} onChange={set("region")} /></label>
         <label className={`${label} col-span-2`}>LinkedIn URL<input className="field h-9! font-normal" value={f.linkedin} onChange={set("linkedin")} placeholder="https://www.linkedin.com/in/" /></label>
         <label className={`${label} col-span-2`}>Stage<select className="field h-9! font-normal" value={f.stage} onChange={set("stage")}>{open.map((s) => <option key={s}>{s}</option>)}</select></label>

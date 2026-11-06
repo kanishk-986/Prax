@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, MoreHorizontal, Compass, Quote } from "lucid
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
 import { useWorkspace, today, fmtDay, addDays, weekStart } from "@/lib/workspace";
+import { firstNameOf, possessive } from "@/lib/persona";
 import { useToast, haptic } from "@/components/toaster";
 import { FORMATS, balanceWarnings } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, ChannelFlag, statusOf, DayPopover, ActionMenu, Modal } from "@/components/content/shared";
@@ -24,9 +25,9 @@ type Tab = (typeof TABS)[number][0];
 const SUB: Record<Tab, string> = {
   home: "What needs you today, and where to start.",
   campaigns: "Plan a run of posts around one goal, aimed at the people who matter.",
-  plan: "The week as it stands today. Prax reminds Shashi on Today at each planned time.",
+  plan: "The week as it stands today. Prax sends a reminder on Today at each planned time.",
   library: "Every idea, draft and posted piece, with its campaign and status.",
-  write: "Eight steps from any starting point to a post Shashi approves.",
+  write: "Eight steps from any starting point to an approved post.",
   formatter: "Bold, italic, lists and spacing that survive the paste into LinkedIn.",
 };
 
@@ -105,7 +106,7 @@ export default function ContentStudio() {
       {view && <PostView post={fresh(view)!} campaigns={campaigns.rows} members={members} onClose={() => setView(null)} onEdit={() => { setEdit(fresh(view)); setView(null); }} />}
       {edit && <PostEditor post={fresh(edit)!} campaigns={campaigns.rows} posts={posts.rows} settings={settings} companies={companies} onClose={() => setEdit(null)} />}
       {pov && <PovModal settings={settings} save={saveSettings} onClose={() => setPov(false)} />}
-      <EntryMoment id="content-studio" title="Content Studio" line="Posts, campaigns and the plan for Shashi's profile, in one place." />
+      <EntryMoment id="content-studio" title="Content Studio" line={`Posts, campaigns and the plan for ${possessive(firstNameOf(ws))} profile, in one place.`} />
       <Tour id="content-studio" steps={STEPS} open={tour} onClose={() => setTour(false)} onTab={onTab} />
     </div>
   );
@@ -316,7 +317,7 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
       })()}
       {disc && <SidePanel width={460} kicker={<span className="text-[#d64545]">From Discovery Studio{disc.discovery?.rank ? ` · #${disc.discovery.rank} this week` : ""}{disc.discovery?.score != null ? ` · score ${disc.discovery.score}` : ""}</span>} title={disc.title} onClose={() => setDisc(null)}>
         <span className="rounded-xl bg-[#141414] px-3.5 py-2.5 text-[13px] leading-snug text-white"><b className="text-[#ff8a80]">Suggested angle</b> {disc.discovery?.angle || disc.angle || "None given"}</span>
-        {disc.discovery?.service && <span className="text-[12.5px]"><b>Antier service</b> <span className="text-muted">{disc.discovery.service}</span>{disc.discovery.campaign ? <><b className="ml-2">Campaign</b> <span className="text-muted">{disc.discovery.campaign}</span></> : null}</span>}
+        {disc.discovery?.service && <span className="text-[12.5px]"><b>Service</b> <span className="text-muted">{disc.discovery.service}</span>{disc.discovery.campaign ? <><b className="ml-2">Campaign</b> <span className="text-muted">{disc.discovery.campaign}</span></> : null}</span>}
         <span className="label text-ink">{disc.discovery?.sources?.length ?? 0} sources</span>
         {(disc.discovery?.sources ?? []).map((r) => <div key={r.url} className="flex min-w-0 items-center gap-2 rounded-[10px] border border-[#ececec] px-2.5 py-2 text-[12.5px]"><Tag tone={r.via === "AI" ? "dark" : r.via === "Crawl" ? "white" : "red"}>{r.via}</Tag><span className="min-w-0 flex-1 truncate"><b>{r.pub}</b> {r.url.startsWith("linkedin:") ? <span className="text-muted">sent from the Prax bar</span> : <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-muted hover:text-ink">{r.url}</a>}</span></div>)}
         {!disc.discovery?.sources?.length && <span className="text-[13px] text-muted">None stored with this idea.</span>}
@@ -330,18 +331,18 @@ function LibraryTab({ posts, campaigns, openPost, status, setStatus, newPost }: 
 }
 
 const STEPS: TourStep[] = [
-  { target: "tabs", tab: "home", title: "Six parts, one studio", body: "Home, Write a post, Campaigns, Plan, Library and Formatter. Everything about Shashi's posts lives here." },
-  { target: "tiles", tab: "home", title: "The week at a glance", body: "What is due, what waits for Shashi, what is ready and which campaigns are running. Press any number to go there." },
+  { target: "tabs", tab: "home", title: "Six parts, one studio", body: "Home, Write a post, Campaigns, Plan, Library and Formatter. Everything about this profile's posts lives here." },
+  { target: "tiles", tab: "home", title: "The week at a glance", body: "What is due, what waits for approval, what is ready and which campaigns are running. Press any number to go there." },
   { target: "needs", tab: "home", title: "Needs you", body: "Approvals, posts due today or tomorrow, ideas not written yet and new topics from Discovery Studio and AI citations." },
   { target: "start", tab: "home", title: "Start something", body: "Write a post, plan a campaign, check the week or format any text." },
   { target: "works", tab: "home", title: "What works", body: "Once five posted pieces have results, this shows the formats, pillars, days and openings that work best." },
   { target: "steps", tab: "write", title: "Eight steps to a post", body: "Start, type, idea, angle, hook, draft, visual and plan. The angle step comes before the opening line: four suggested angles or your own, and it steers the hooks and drafts. A Discovery or AI citations topic opens straight at the angle, with Discovery's suggestion preselected." },
-  { target: "sources", tab: "write", title: "Start from anything", body: "An idea, a link, a PDF, a rough draft, one of his comments or a topic gap. Links are read by Prax, never LinkedIn pages." },
+  { target: "sources", tab: "write", title: "Start from anything", body: "An idea, a link, a PDF, a rough draft, one of their comments or a topic gap. Links are read by Prax, never LinkedIn pages." },
   { target: "preview", tab: "write", title: "The live preview", body: "The post as it reads in the feed, on mobile or desktop, with the real see more cut at 140 or 210 characters." },
-  { target: "campaigns", tab: "campaigns", title: "Campaigns", body: "A run of posts around one goal, aimed at named people, with a time budget Shashi can keep." },
-  { target: "plan", tab: "plan", title: "The plan", body: "The week as it stands, and Today reminds Shashi at each planned time. Undated Discovery and AI citations topics wait in To plan: drag one onto a day, or press Pick a date." },
-  { target: "library", tab: "library", title: "The library", body: "Every idea, draft and posted piece. Filter by source (Discovery Studio, AI citations, Campaign, Written here); the From Discovery tag opens the topic's sources. Company content is flagged so it never goes on Shashi's profile." },
+  { target: "campaigns", tab: "campaigns", title: "Campaigns", body: "A run of posts around one goal, aimed at named people, with a time budget the profile owner can keep." },
+  { target: "plan", tab: "plan", title: "The plan", body: "The week as it stands, and Today sends a reminder at each planned time. Undated Discovery and AI citations topics wait in To plan: drag one onto a day, or press Pick a date." },
+  { target: "library", tab: "library", title: "The library", body: "Every idea, draft and posted piece. Filter by source (Discovery Studio, AI citations, Campaign, Written here); the From Discovery tag opens the topic's sources. Company content is flagged so it never goes on the personal profile." },
   { target: "formatter", tab: "formatter", title: "The formatter", body: "Bold, italic, lists and spacing that survive the paste into LinkedIn, with shortcuts and a 3,000 counter." },
-  { target: "pov", title: "Point of view", body: "His stances, cleared proof points and the numbers he allows. Every draft uses only what is here." },
-  { target: "guide", title: "Open this again any time", body: "The Guide button replays this tour. Prax never posts for Shashi; he presses Post on LinkedIn himself." },
+  { target: "pov", title: "Point of view", body: "Stances, cleared proof points and the numbers allowed. Every draft uses only what is here." },
+  { target: "guide", title: "Open this again any time", body: "The Guide button replays this tour. Prax never posts; the profile owner presses Post on LinkedIn." },
 ];

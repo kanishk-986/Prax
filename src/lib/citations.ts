@@ -29,7 +29,7 @@ export function domainOf(url: string): string {
 }
 const pathOf = (url: string) => { try { return new URL(url).pathname.toLowerCase().replace(/\/+$/, ""); } catch { return ""; } };
 
-/** An owned entry is a host ("antiersolutions.com", subdomains included) or a host with a path ("linkedin.com/in/shashipal"). */
+/** An owned entry is a host ("acme.com", subdomains included) or a host with a path ("linkedin.com/in/mayarao"). */
 export function owns(url: string, domains: string[]): boolean {
   const host = domainOf(url), path = pathOf(url);
   if (!host) return false;
@@ -134,7 +134,7 @@ export function statusOf(p: Parsed): Run["status"] {
 
 // ---------- detection ----------
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-/** Whole-word, case-insensitive: "Antier" matches "Antier's" but not "Antiers"; "Shashi Pal" never matches another Shashi. */
+/** Whole-word, case-insensitive: "Acme" matches "Acme's" but not "Acmes"; a full name never matches someone else with the same first name. */
 export function aliasRegex(alias: string): RegExp {
   const a = alias.trim().replace(/\s+/g, "\\s+");
   return new RegExp(`(?<![\\p{L}\\p{N}_])${a.split("\\s+").map(esc).join("\\s+")}(?![\\p{L}\\p{N}_])`, "giu");
@@ -309,7 +309,7 @@ export function parseJudge(text: string): { sentiment: Sentiment; issues: FactIs
 
 export type Facts = { titles: string; company: string; products: string; licences: string; regions: string; founded: string; other: string };
 export const EMPTY_FACTS: Facts = { titles: "", company: "", products: "", licences: "", regions: "", founded: "", other: "" };
-/** The check Prax can do without AI: a wrong founding year in a sentence that names him or Antier. */
+/** The check Prax can do without AI: a wrong founding year in a sentence that names the person or the company. */
 export function factIssues(answer: string, facts: Partial<Facts>, aliases: string[]): FactIssue[] {
   const out: FactIssue[] = [];
   const year = (facts.founded ?? "").match(/\d{4}/)?.[0];
@@ -359,12 +359,12 @@ export function recommend(runs: Run[], questions: Question[], self: Entity, riva
   for (const q of active) {
     const v = verdicts(q.id);
     if (!v.length) continue;
-    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: "No engine names Shashi or Antier for this question. A clear, specific article from him gives the AI something to cite.", question_ids: [q.id] });
-    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link an Antier page when he writes about ${q.topic || "this topic"}`, detail: `He is named for "${q.question}" but no answer links his sites. A post or article that links the right Antier page can turn mentions into links.`, question_ids: [q.id] });
+    if (v.every((a) => !a.named)) out.push({ kind: "profile", title: `Publish a LinkedIn article that answers: ${q.question}`, detail: `No engine names ${self.name} for this question. A clear, specific article gives the AI something to cite.`, question_ids: [q.id] });
+    else if (v.some((a) => a.named && a.linked === false)) out.push({ kind: "profile", title: `Link an owned page in posts about ${q.topic || "this topic"}`, detail: `${self.name} is named for "${q.question}" but no answer links an owned site. A post or article that links the right page can turn mentions into links.`, question_ids: [q.id] });
   }
   for (const g of citationGaps(runs, self, rivals).slice(0, 5)) {
     const qids = [...new Set(runs.filter((r) => r.sources.some((x) => x.domain === g.domain)).map((r) => r.question_id))];
-    out.push({ kind: "elsewhere", title: `Get mentioned on ${g.domain}`, detail: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name Antier. A guest piece, a quote or data there would help.`, question_ids: qids });
+    out.push({ kind: "elsewhere", title: `Get mentioned on ${g.domain}`, detail: `AI answers cite ${g.domain} when they name ${g.competitors.join(", ")}, and never when they name ${self.name}. A guest piece, a quote or data there would help.`, question_ids: qids });
   }
   return out;
 }
@@ -381,7 +381,7 @@ export function alerts(runs: Run[], questions: Question[], self: Entity, rivals:
     const nowS = shareOfVoice(runs, questions, self, self).named, prevS = shareOfVoice(prevRuns, questions, self, self).named;
     for (const c of rivals) {
       const nowC = shareOfVoice(runs, questions, c, self).named, prevC = shareOfVoice(prevRuns, questions, c, self).named;
-      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more questions than Antier (${nowC} against ${nowS})` });
+      if (nowC > nowS && prevC <= prevS) out.push({ kind: "overtook", at: runs[0]?.run_at ?? "", text: `${c.name} is now named on more questions than ${self.name} (${nowC} against ${nowS})` });
     }
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : -1));
@@ -392,32 +392,22 @@ export const shareValid = (row: { expires_at: string; revoked: boolean } | null 
 export const expiryFrom = (days: number, now = Date.now()) => new Date(now + Math.max(1, Math.min(30, days)) * 864e5).toISOString();
 
 // ---------- starters, campaigns, ask ----------
-/** Used when no AI key is set: twenty buyer questions across the six pillars, phrased the way a buyer asks. */
-export function starterQuestions(region = "the UAE") {
-  const r = region || "the UAE";
-  const qs: [string, string][] = [
-    [`Who builds stablecoin payment infrastructure for banks in ${r}?`, "Money That Moves Itself"],
-    ["Which companies help banks reconcile stablecoin transfers with their ledgers?", "Money That Moves Itself"],
-    ["Best tokenised deposit platform vendors for mid-size banks", "Money That Moves Itself"],
-    ["Who can build a cross-border stablecoin remittance product for a licensed fintech?", "Money That Moves Itself"],
-    ["Which firms help asset managers tokenise a fund?", "The Liquid Balance Sheet"],
-    ["Who builds real-world asset tokenisation platforms for institutions?", "The Liquid Balance Sheet"],
-    ["How do I tokenise private credit, and which vendors do it?", "The Liquid Balance Sheet"],
-    ["Which technology partners understand VARA rules for digital asset products?", "Regulation-to-Architecture"],
-    ["Who helps banks design compliance by design for stablecoins under CBUAE rules?", "Regulation-to-Architecture"],
-    ["Which vendors build travel rule compliance into digital asset platforms?", "Regulation-to-Architecture"],
-    ["Who builds institutional digital asset custody and key management?", "Production-Grade or Nothing"],
-    ["Which blockchain engineering firms are trusted by banks for production systems?", "Production-Grade or Nothing"],
-    ["How should a bank prepare tokenised assets for post-quantum risk?", "Production-Grade or Nothing"],
-    ["Who builds payment infrastructure for AI agents?", "Agentic Finance"],
-    ["Which companies work on agentic payments and know-your-intent controls?", "Agentic Finance"],
-    ["How can a bank let AI agents make payments safely?", "Agentic Finance"],
-    ["Should a bank build or buy its stablecoin stack?", "Build, Buy or Partner"],
-    ["What does it cost to build a tokenisation platform, and who can build one?", "Build, Buy or Partner"],
-    [`Top blockchain development companies for financial institutions in ${r}`, "Build, Buy or Partner"],
-    ["Who are the leading voices on programmable finance in the Middle East?", "Agentic Finance"],
+/** Used when no AI key is set: up to twenty buyer questions across the profile's pillars (Settings), phrased the way
+ *  a buyer asks, never naming a company. region is the profile's focus regions as text; empty asks globally.
+ *  No pillars gives no questions: Prax does not guess what a profile is about. */
+export function starterQuestions(pillars: string[], region = "") {
+  const at = region ? ` in ${region}` : "";
+  const forms = [
+    (p: string) => `Who are the leading experts on ${p}${at}?`,
+    (p: string) => `Which companies are best at ${p}${at}?`,
+    (p: string) => `What should a business know about ${p} this year?`,
+    (p: string) => `Who should I listen to on ${p}?`,
+    (p: string) => `How do I choose a partner for ${p}${at}?`,
   ];
-  return qs.map(([question, topic]) => ({ question, topic }));
+  const topics = pillars.map((p) => p.trim()).filter(Boolean);
+  const out: { question: string; topic: string }[] = [];
+  for (const form of forms) for (const t of topics) if (out.length < 20) out.push({ question: form(t.charAt(0).toLowerCase() + t.slice(1)), topic: t });
+  return out;
 }
 
 /** A campaign's AI citation change: its topic and keywords pick the questions; before and after its start date. */
@@ -445,7 +435,7 @@ export function askContext(runs: Run[], questions: Question[], self: Entity, riv
   const gaps = citationGaps(runs, self, rivals).slice(0, 10).map((g) => `${g.domain} (cites ${g.competitors.join(", ")})`);
   return `Named in ${sov.named} of ${sov.total} answers (latest batch, branded and failed excluded).\n\nLATEST PER QUESTION AND ENGINE:\n${rows.join("\n") || "(none)"}\n\nCHANGES:\n${ch.join("\n") || "(none)"}\n\nCITATION GAPS:\n${gaps.join("\n") || "(none)"}`;
 }
-// AI citations, person and company. Shashi (the person) and Antier (the company) are scored separately.
+// AI citations, person and company. The profile's person and its company are scored separately.
 // A person counts as named only by a full name that sits next to context (his company, his role or one of his
 // topics). A bare full name waits for a one-click review, and a first or last name alone never counts.
 // Pure functions, shared by the page and scripts/test-citations.ts.
@@ -519,7 +509,7 @@ export function personContext(questions: Question[], company?: Entity) {
   return [...t];
 }
 
-/** True when the prompt's subject (Shashi for expert and leadership, Antier for vendor and leadership) is named in its latest batch on any engine. */
+/** True when the prompt's subject (the person for expert and leadership, the company for vendor and leadership) is named in its latest batch on any engine. */
 function namedOnPrompt(q: Question, batches: ReturnType<typeof latestBatches>, person: Entity | undefined, company: Entity | undefined, ctx: string[]) {
   const aud = audienceOf(q);
   let hit = false;
@@ -556,7 +546,7 @@ export const runWeeks = (runs: Run[]) => [...new Set(runs.map((r) => weekStartOf
 export const runsInWeek = (runs: Run[], week: string) => runs.filter((r) => weekStartOf(r.run_at) === week);
 
 export type TrendPoint = { week: string; engines: Partial<Record<Engine, number | null>>; median: number | null; person: number | null; company: number | null };
-/** Eight weeks ending this week, from that week's runs only; null where nothing ran. Engine lines count prompts naming Shashi or Antier. */
+/** Eight weeks ending this week, from that week's runs only; null where nothing ran. Engine lines count prompts naming the person or the company. */
 export function weeklyTrend(runs: Run[], questions: Question[], person: Entity | undefined, company: Entity | undefined, rivals: Entity[], ctx: string[], today = new Date()): TrendPoint[] {
   const last = weekStartOf(today);
   return Array.from({ length: 8 }, (_, i) => shiftWeek(last, i - 7)).map((week) => {
@@ -585,8 +575,9 @@ export function sameDirection(a: (number | null)[], b: (number | null)[]) {
 }
 
 // ---------- prompt gaps ----------
+// channel is posts.channel: "shashi" is the stored value for the profile's own posts (PROFILE_CHANNEL in src/lib/persona.ts).
 export type PromptGap = { question: Question; rivals: string[]; engines: Engine[]; channel: "shashi" | "company" };
-/** Prompts where a tracked rival is named and the right subject is not: experts and leadership for Shashi, vendors for Antier. */
+/** Prompts where a tracked rival is named and the right subject is not: experts and leadership for the person, vendors for the company. */
 export function promptGaps(runs: Run[], questions: Question[], person: Entity | undefined, company: Entity | undefined, peerExperts: Entity[], peerFirms: Entity[], ctx: string[]): PromptGap[] {
   const out: PromptGap[] = [];
   const batches = latestBatches(runs);
@@ -611,9 +602,9 @@ export function promptGaps(runs: Run[], questions: Question[], person: Entity | 
 }
 
 /** The topic a gap becomes in Content Studio. */
-export function gapTopic(g: PromptGap) {
+export function gapTopic(g: PromptGap, first = "the profile") {
   const q = g.question.question.replace(/\?\s*$/, "");
-  return g.channel === "company" ? `Company content: ${q}` : `Answer it as Shashi: ${q}`;
+  return g.channel === "company" ? `Company content: ${q}` : `Answer it as ${first}: ${q}`;
 }
 
 // ---------- tracked profiles (db/017) ----------

@@ -2,18 +2,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Printer, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { useWorkspace, fmtDay, today, SEGMENTS, STAGES } from "@/lib/workspace";
+import { useWorkspace, useSegments, fmtDay, today, STAGES } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { warmPaths, indexPeople, type Person, type ProspectLite } from "@/lib/network";
 import { campaignLift, scoped, type Run, type Question, type Entity, type Source } from "@/lib/citations";
 import { useCitationProfile } from "@/lib/citation-profile";
 import {
-  OBJECTIVES, FORMATS, PILLARS, MEASURES, objective, defaultBrief, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
+  OBJECTIVES, FORMATS, MEASURES, objective, defaultBrief, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
 } from "@/lib/campaigns";
 import { type Post, type Campaign, type Target, type Request, StatusPill, statusOf, logActivity, upsertToday, Modal } from "./shared";
 import { povText } from "@/lib/content";
+import { cap, firstNameOf, pillarsOf, possessive, regionText } from "@/lib/persona";
 import type { ContentSettings } from "./settings";
 
 type Prospect = ProspectLite & { warmth: string };
@@ -32,7 +33,9 @@ const chipCls = (on: boolean) => `h-8 rounded-full px-3 text-[12.5px] font-semib
 const Label = ({ children, req }: { children: React.ReactNode; req?: boolean }) => <span className="label">{children}{req && <span className="text-[#d64545]"> *</span>}</span>;
 
 export function CampaignsTab({ posts, campaigns, targets, requests, prospects, comments, openPost, editPost, start, settings }: Props) {
+  const segs = useSegments();
   const { ws, can } = useWorkspace();
+  const first = firstNameOf(ws), pillars = pillarsOf(ws);
   const toast = useToast();
   const editable = can("editor");
   const live = campaigns.filter((c) => !c.template);
@@ -41,7 +44,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
   const [sel, setSel] = useState<string | null>(live[0]?.id ?? null);
   const [kind, setKind] = useState<Campaign["kind"]>("standard");
   const [name, setName] = useState("");
-  const [brief, setBrief] = useState<Brief>(defaultBrief(today()));
+  const [brief, setBrief] = useState<Brief>(() => defaultBrief(today(), undefined, pillarsOf(ws)));
   const [editing, setEditing] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlanItem[]>([]);
   const [tried, setTried] = useState(false);
@@ -53,7 +56,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
 
   function startNew(k: Campaign["kind"]) {
     setKind(k); setName(""); setEditing(null); setTried(false); setPlan([]);
-    setBrief(k === "fast" ? fastBrief(today(), "", "") : k === "event" ? { ...defaultBrief(today(), "event"), event: { name: "", start: "", end: "" } } : defaultBrief(today()));
+    setBrief(k === "fast" ? fastBrief(today(), "", "", pillars) : k === "event" ? { ...defaultBrief(today(), "event", pillars), event: { name: "", start: "", end: "" } } : defaultBrief(today(), undefined, pillars));
     setView("brief");
   }
   function edit(c: Campaign) { setKind(c.kind); setName(c.name); setBrief({ ...defaultBrief(today()), ...c.brief }); setEditing(c.id); setTried(false); setView("brief"); }
@@ -61,13 +64,13 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
   async function propose() {
     if (!name.trim()) { setTried(true); toast("Give the campaign a name first"); return; }
     if (kind === "event" && !brief.event?.start) { toast("Add the event dates first"); return; }
-    const skeleton = kind === "fast" ? fastPlan(brief) : kind === "event" ? eventPlan(brief) : proposePlan(brief);
+    const skeleton = kind === "fast" ? fastPlan(brief) : kind === "event" ? eventPlan(brief) : proposePlan(brief, undefined, pillars);
     setPlan(skeleton); setView("proposal");
     if (kind !== "standard") return;
     setBusy("propose");
     try {
       const o = objective(brief.objective);
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => SEGMENTS[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\n${settings ? `${povText(settings.pov)}\n` : ""}Return only JSON: {"titles": ["...", "..."]}` }, 60000);
+      const out = await askExtension<string>("ai", { kind: "studio", user: `Plan LinkedIn post titles for a campaign by this profile.\nCampaign: ${name}. Objective: ${o.label} (${o.sub}). Topic: ${brief.topic}. Keywords: ${brief.keywords.join(", ") || "none"}. Audience segments: ${brief.segments.map((s) => segs[s]?.label ?? s).join(", ") || "any"}. Core message: ${brief.message || "not given"}. Call to action: ${brief.cta}.\nThere are ${skeleton.length} slots, in this order, each with a phase and a format:\n${skeleton.map((s, i) => `${i + 1}. ${s.phase}, ${s.format}`).join("\n")}\nOpen introduces the problem, Prove shows experience, Deepen gives a framework, Ask makes a calm offer. One specific title per slot, under 90 characters, no hashtags.\n${settings ? `${povText(settings.pov, first)}\n` : ""}Return only JSON: {"titles": ["...", "..."]}` }, 60000);
       const j = parseJSON<{ titles: string[] }>(out);
       if (j?.titles?.length) setPlan(skeleton.map((s, i) => ({ ...s, title: j.titles[i] || s.title })));
     } catch { toast("Planned without AI: connect the extension and a key for sharper titles"); }
@@ -78,7 +81,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     setBusy("keys");
     let found: string[] = [];
     try {
-      const out = await askExtension<string>("ai", { kind: "studio", user: `Suggest 6 short search keywords (2 to 4 words each) that buyers would use for a LinkedIn campaign named "${name}" on the topic "${brief.topic}". Fintech and banking buyers in MENA and India. Return only JSON: {"keywords": ["..."]}` }, 30000);
+      const out = await askExtension<string>("ai", { kind: "studio", user: `Suggest 6 short search keywords (2 to 4 words each) that buyers would use for a LinkedIn campaign named "${name}" on the topic "${brief.topic}".${regionText(ws) ? ` Buyers in ${regionText(ws)}.` : ""} Return only JSON: {"keywords": ["..."]}` }, 30000);
       found = parseJSON<{ keywords: string[] }>(out)?.keywords ?? [];
     } catch {}
     if (!found.length) found = KEYS[brief.topic] ?? [];
@@ -95,7 +98,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     const rows = plan.map((p, i) => ({ workspace_id: ws.id, campaign_id: c.id, title: p.title, format: p.format, pillar: p.pillar, topic: p.pillar, phase: p.phase, publish_date: p.date, planned_time: p.time, status: kind === "fast" && i === 0 ? "Drafting" : "Idea" }));
     const { error: e2 } = await supabase().from("posts").insert(rows);
     if (e2) { toast(e2.message); return; }
-    if (kind === "fast") await upsertToday([{ day: addDays(brief.start, 1), kind: "custom", idx: 3100 + hashIdx(c.id, 100), title: `Fast response: Shashi approves the first take by ${fmtDay(addDays(brief.start, 2))} · ${name}`, link: `/w/${ws.slug}/studio-content?tab=campaigns`, note: `campaign:${c.id}:fast` }], ws.id);
+    if (kind === "fast") await upsertToday([{ day: addDays(brief.start, 1), kind: "custom", idx: 3100 + hashIdx(c.id, 100), title: `Fast response: ${first} approves the first take by ${fmtDay(addDays(brief.start, 2))} · ${name}`, link: `/w/${ws.slug}/studio-content?tab=campaigns`, note: `campaign:${c.id}:fast` }], ws.id);
     logActivity(ws.id, "campaign", `Campaign started: ${name.trim()}`, c.id);
     haptic(12);
     toast(`${rows.length} posts added to the plan as ideas`, async () => { await supabase().from("campaigns").delete().eq("id", c.id); await supabase().from("posts").delete().eq("campaign_id", c.id); });
@@ -107,11 +110,11 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
     const old = campaigns.find((c) => c.id === editing)!;
     const { error } = await supabase().from("campaigns").update({ name: name.trim(), brief }).eq("id", editing!);
     if (error) { toast(error.message); return; }
-    if (brief.topic !== old.brief.topic && PILLARS.includes(brief.topic))
+    if (brief.topic !== old.brief.topic && pillars.includes(brief.topic))
       await supabase().from("posts").update({ pillar: brief.topic, topic: brief.topic }).eq("campaign_id", editing!).eq("status", "Idea");
     if (andReplan) {
       const mine = posts.filter((p) => p.campaign_id === editing);
-      const { add } = replanUnwritten(mine, brief, today());
+      const { add } = replanUnwritten(mine, brief, today(), pillars);
       setPlan(add); setView("proposal"); return;
     }
     toast("Campaign saved", async () => { await supabase().from("campaigns").update({ name: old.name, brief: old.brief }).eq("id", old.id); });
@@ -120,7 +123,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
 
   async function replan() {
     const mine = posts.filter((p) => p.campaign_id === editing);
-    const { remove } = replanUnwritten(mine, brief, today());
+    const { remove } = replanUnwritten(mine, brief, today(), pillars);
     const removed = mine.filter((p) => remove.includes(p.id));
     if (remove.length) await supabase().from("posts").delete().in("id", remove);
     const { data, error } = await supabase().from("posts").insert(plan.map((p) => ({ workspace_id: ws.id, campaign_id: editing, title: p.title, format: p.format, pillar: p.pillar, topic: p.pillar, phase: p.phase, publish_date: p.date, planned_time: p.time, status: "Idea" }))).select("id");
@@ -206,7 +209,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
         {view === "proposal" && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-end justify-between gap-2">
-              <div><h2 className="m-0 text-[19px] font-semibold">{name}</h2><p className="m-0 mt-1 text-[13px] text-muted">{busy === "propose" ? "Writing titles in Shashi's voice" : `${plan.length} posts${editing ? " replace the unwritten ideas" : ""}. Change the format or remove any post, then accept.`}</p></div>
+              <div><h2 className="m-0 text-[19px] font-semibold">{name}</h2><p className="m-0 mt-1 text-[13px] text-muted">{busy === "propose" ? `Writing titles in ${possessive(first)} voice` : `${plan.length} posts${editing ? " replace the unwritten ideas" : ""}. Change the format or remove any post, then accept.`}</p></div>
               <button className="btn" onClick={() => setView("brief")}>Edit the brief</button>
             </div>
             <div className="flex flex-wrap gap-1.5">{(["Open", "Prove", "Deepen", "Ask"] as const).map((ph, i) => <span key={ph} className="pill" style={{ background: ["#141414", "#9e1c1c", "#d64545", "#fff"][i], color: i === 3 ? "#141414" : "#fff", border: i === 3 ? "1px solid #d4d4d4" : undefined }}>{ph} · {plan.filter((p) => p.phase === ph).length}</span>)}</div>
@@ -221,7 +224,7 @@ export function CampaignsTab({ posts, campaigns, targets, requests, prospects, c
               ))}
               {!plan.length && <p className="p-6 text-center text-[13px] text-muted">No posts left. Edit the brief to plan again.</p>}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[12.5px] text-muted">Each post goes through the editor and Shashi&apos;s approval as usual.</span><button className="btn btn-primary h-10 px-5" disabled={!plan.length || busy === "propose"} onClick={accept}>{editing ? "Replace unwritten ideas" : "Accept and add to Plan"}</button></div>
+            <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-[12.5px] text-muted">Each post goes through the editor and {possessive(first)} approval as usual.</span><button className="btn btn-primary h-10 px-5" disabled={!plan.length || busy === "propose"} onClick={accept}>{editing ? "Replace unwritten ideas" : "Accept and add to Plan"}</button></div>
           </div>
         )}
         {view === "detail" && selected && <Detail c={selected} posts={posts.filter((p) => p.campaign_id === selected.id).sort((a, b) => (a.publish_date ?? "").localeCompare(b.publish_date ?? ""))} targets={targets.filter((t) => t.campaign_id === selected.id)} requests={requests.filter((r) => r.campaign_id === selected.id)} prospects={prospects} comments={comments} onEdit={() => edit(selected)} onTemplate={() => saveTemplate(selected)} openPost={openPost} editPost={editPost} />}
@@ -238,6 +241,9 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
   kind: Campaign["kind"]; name: string; setName: (s: string) => void; brief: Brief; setBrief: React.Dispatch<React.SetStateAction<Brief>>; tried: boolean; editing: boolean; templates: Campaign[]; fromTemplate: (id: string) => void;
   onPropose: () => void; onSave: () => void; onReplan: () => void; onCancel: () => void; suggestKeys: () => void; busy: string;
 }) {
+  const segs = useSegments();
+  const { ws } = useWorkspace();
+  const first = firstNameOf(ws), pillars = pillarsOf(ws);
   const [key, setKey] = useState("");
   const [colleague, setColleague] = useState("");
   const set = <K extends keyof Brief>(k: K, v: Brief[K]) => setBrief((b) => ({ ...b, [k]: v }));
@@ -245,7 +251,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
   const addKey = () => { const k = key.trim(); if (k && !brief.keywords.includes(k)) set("keywords", [...brief.keywords, k]); setKey(""); };
   const load = weeklyLoad(brief, commentsPerWeek(brief, 20));
   const title = editing ? "Edit the campaign" : kind === "fast" ? "Fast response" : kind === "event" ? "Event campaign" : "Brief the campaign";
-  const sub = editing ? "Save keeps the posts as they are. Re-plan replaces only the ideas not yet written." : kind === "fast" ? "Start from a rule change or a news link. A first take reaches Shashi for approval within 48 hours." : kind === "event" ? "Before, during and after. Add the people to meet once it is created; their follow-ups land on Today the day after." : "Set the goal and the shape. Prax proposes the posts; you change anything before it goes on the plan.";
+  const sub = editing ? "Save keeps the posts as they are. Re-plan replaces only the ideas not yet written." : kind === "fast" ? `Start from a rule change or a news link. A first take reaches ${first} for approval within 48 hours.` : kind === "event" ? "Before, during and after. Add the people to meet once it is created; their follow-ups land on Today the day after." : "Set the goal and the shape. Prax proposes the posts; you change anything before it goes on the plan.";
   return (
     <div className="flex flex-col gap-4">
       <div><h2 className="m-0 text-[19px] font-semibold">{title}</h2><p className="m-0 mt-1 text-[13px] text-muted">{sub}</p></div>
@@ -257,7 +263,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
 
         {kind === "fast" && <>
           <label className="flex flex-col gap-1.5"><Label req>Link to the rule or news</Label><input className="field h-10" type="url" value={brief.link ?? ""} onChange={(e) => set("link", e.target.value)} placeholder="https://" /></label>
-          <label className="flex flex-col gap-1.5"><Label>Shashi&apos;s angle, in one line</Label><input className="field h-10" value={brief.message} onChange={(e) => set("message", e.target.value)} placeholder="What it means for banks building on it" /></label>
+          <label className="flex flex-col gap-1.5"><Label>{cap(possessive(first))} angle, in one line</Label><input className="field h-10" value={brief.message} onChange={(e) => set("message", e.target.value)} placeholder="What it means for the people building on it" /></label>
         </>}
         {kind === "event" && (
           <div className="grid gap-3 sm:grid-cols-3">
@@ -267,7 +273,8 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
           </div>
         )}
 
-        <label className="flex flex-col gap-1.5"><Label>Topic</Label><select className="field h-10" value={brief.topic} onChange={(e) => set("topic", e.target.value)}>{PILLARS.map((p) => <option key={p}>{p}</option>)}</select></label>
+        <label className="flex flex-col gap-1.5"><Label>Topic</Label>{pillars.length ? <select className="field h-10" value={brief.topic} onChange={(e) => set("topic", e.target.value)}>{[...new Set([...pillars, brief.topic].filter(Boolean))].map((p) => <option key={p}>{p}</option>)}</select>
+          : <input className="field h-10" value={brief.topic} onChange={(e) => set("topic", e.target.value)} placeholder="A topic, or add pillars in Settings" />}</label>
 
         {kind !== "fast" && <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2"><Label>Keywords</Label><button type="button" className="btn btn-dark h-8 text-[12.5px]" disabled={busy === "keys"} onClick={suggestKeys}>{busy === "keys" ? "Thinking" : "Suggest from name and topic"}</button></div>
@@ -283,7 +290,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
           ))}</div>
         </div>}
 
-        {kind !== "fast" && <div className="flex flex-col gap-2"><Label>Who it is for</Label><div className="flex flex-wrap gap-1.5">{Object.entries(SEGMENTS).map(([k, v]) => <button key={k} type="button" className={chipCls(brief.segments.includes(k))} onClick={() => toggle("segments", k)}>{k} · {v.label}</button>)}</div></div>}
+        {kind !== "fast" && <div className="flex flex-col gap-2"><Label>Who it is for</Label><div className="flex flex-wrap gap-1.5">{Object.entries(segs).map(([k, v]) => <button key={k} type="button" className={chipCls(brief.segments.includes(k))} onClick={() => toggle("segments", k)}>{k} · {v.label}</button>)}</div></div>}
 
         {kind === "standard" && <div className="flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1.5"><Label>Starts</Label><input className="field w-[160px]" type="date" value={brief.start} onChange={(e) => set("start", e.target.value)} /></label>
@@ -297,7 +304,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
         {kind !== "fast" && <>
           <label className="flex flex-col gap-1.5"><Label>Core message</Label><textarea className="field" rows={2} value={brief.message} onChange={(e) => set("message", e.target.value)} placeholder="The one idea every post comes back to" /></label>
           <label className="flex flex-col gap-1.5"><Label>What readers should do</Label><input className="field h-10" value={brief.cta} onChange={(e) => set("cta", e.target.value)} /></label>
-          <label className="flex flex-col gap-1.5"><Label>How we will judge it</Label><select className="field h-10" value={brief.measure} onChange={(e) => set("measure", e.target.value)}>{MEASURES.map((m) => <option key={m}>{m}</option>)}</select></label>
+          <label className="flex flex-col gap-1.5"><Label>How we will judge it</Label><select className="field h-10" value={brief.measure} onChange={(e) => set("measure", e.target.value)}>{[...new Set([...MEASURES, brief.measure].filter(Boolean))].map((m) => <option key={m}>{m}</option>)}</select></label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5"><Label>Resource to offer (optional)</Label><input className="field" value={brief.resource.name} onChange={(e) => set("resource", { ...brief.resource, name: e.target.value })} placeholder="For example: Reconciliation checklist" /></label>
             <label className="flex flex-col gap-1.5"><Label>Resource link</Label><input className="field" type="url" value={brief.resource.link} onChange={(e) => set("resource", { ...brief.resource, link: e.target.value })} placeholder="https://" /></label>
@@ -310,7 +317,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
         </div>
 
         <div className="rounded-xl bg-surface-2 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2"><Label>Shashi&apos;s time each week</Label><span className="num text-[13px]">{brief.minutes} minutes</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><Label>{cap(possessive(first))} time each week</Label><span className="num text-[13px]">{brief.minutes} minutes</span></div>
           <input type="range" min={15} max={180} step={5} value={brief.minutes} onChange={(e) => set("minutes", Number(e.target.value))} className="mt-2 w-full accent-[#d64545]" aria-label="Minutes per week" />
           <p className="m-0 mt-1 text-[12.5px] text-muted">Posts take about {load.posts} minutes a week (reading, approving and posting{brief.mix.includes("Video") ? ", recording" : ""}). That leaves room for {commentsPerWeek(brief, 40)} comments on target accounts.{load.over ? ` ${load.advice}` : ""}</p>
         </div>
@@ -323,7 +330,7 @@ function BriefForm({ kind, name, setName, brief, setBrief, tried, editing, templ
   );
 }
 
-const NEXT: Record<string, string> = { Idea: "Write", Drafting: "Continue", "In review": "With Shashi", Ready: "Open", Posted: "Open" };
+const NEXT: Record<string, string> = { Idea: "Write", Drafting: "Continue", "In review": "In review", Ready: "Open", Posted: "Open" };
 
 function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTemplate, openPost, editPost }: { c: Campaign; posts: Post[]; targets: Target[]; requests: Request[]; prospects: Prospect[]; comments: Comment[]; onEdit: () => void; onTemplate: () => void; openPost: (p: Post) => void; editPost: (p: Post) => void }) {
   const { ws, can } = useWorkspace();
@@ -362,7 +369,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
     return n?.is_connection ? "Connected" : "From Network";
   };
 
-  // Engagement found in Prax's own records (replies to Shashi's comments, resource requests) marks a target engaged and
+  // Engagement found in Prax's own records (replies to the profile's comments, resource requests) marks a target engaged and
   // puts a message task on Today. Nothing here reads LinkedIn.
   useEffect(() => {
     if (!editable || c.status === "paused") return;
@@ -373,7 +380,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
       for (const tg of targets.filter((x) => !x.engaged_at)) {
         const replied = tg.prospect_id && comments.some((x) => x.prospect_id === tg.prospect_id && x.reply && x.day >= b.start && x.day <= end);
         const asked = requests.some((r) => (tg.prospect_id && r.prospect_id === tg.prospect_id) || (tg.linkedin && r.linkedin && r.linkedin === tg.linkedin));
-        if (replied || asked) await markEngaged(tg, replied ? "Replied to Shashi's comment" : "Asked for the resource", true);
+        if (replied || asked) await markEngaged(tg, replied ? `Replied to ${possessive(firstNameOf(ws))} comment` : "Asked for the resource", true);
       }
       const tasks = c.kind === "event" ? [] : weekCommentTasks(c.id, c.name, targets.map((x) => ({ ...x, linkedin: x.linkedin || (x.prospect_id ? pById.get(x.prospect_id)?.linkedin : "") || "" })), b, t);
       await upsertToday(tasks, ws.id);
@@ -451,7 +458,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
 
       {paused && <p className="m-0 rounded-xl bg-[#141414] px-4 py-3 text-[13px] text-white">Paused since {fmtDay((c.paused_at ?? "").slice(0, 10) || t, { day: "numeric", month: "short" })}. Today gets no tasks from it, and its ideas are hidden from Plan. Resume moves them forward by the days paused.</p>}
       <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-line bg-white sm:grid-cols-4">
-        {[["Write each post", "Open an idea; the brief and voice are already in."], ["Shashi approves", "All the week's drafts reach him in one approval session on Today."], ["Post on the day", "Prax reminds him. He copies, opens LinkedIn and posts."], ["See results", "Numbers come in when he opens the post analytics."]].map(([h, s], i) => (
+        {[["Write each post", "Open an idea; the brief and voice are already in."], [`${cap(firstNameOf(ws))} approves`, "All the week's drafts arrive in one approval session on Today."], ["Post on the day", "Prax sends a reminder. The post is copied, LinkedIn opens, and it is posted by hand."], ["See results", "Numbers come in when the post analytics are opened."]].map(([h, s], i) => (
           <div key={h} className={`flex flex-col gap-1.5 p-4 ${i ? "border-l border-line" : ""}`}><span className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-semibold text-white" style={{ background: i === 0 ? "#d64545" : "#141414" }}>{i + 1}</span><span className="text-[13px] font-semibold">{h}</span><span className="text-[12px] leading-snug text-muted">{s}</span></div>
         ))}
       </div>
@@ -490,7 +497,7 @@ function Detail({ c, posts, targets, requests, prospects, comments, onEdit, onTe
           <div><span className="text-[14px] font-semibold">{c.kind === "event" ? "People to meet" : "Target accounts"}</span><span className="num ml-2 text-[12px] text-muted">{targets.length}</span></div>
           {editable && <button className="btn h-8" onClick={() => setPicker(true)}>Add people</button>}
         </div>
-        <p className="m-0 mb-2 text-[12.5px] text-muted">{c.kind === "event" ? "Their follow-ups land on Today the day after the event." : `About ${cpw} comment tasks a week go on Today for these people, within Shashi's ${b.minutes} minutes. Comment Studio drafts each comment on their post; Shashi posts it himself.`}</p>
+        <p className="m-0 mb-2 text-[12.5px] text-muted">{c.kind === "event" ? "Their follow-ups land on Today the day after the event." : `About ${cpw} comment tasks a week go on Today for these people, within ${possessive(firstNameOf(ws))} ${b.minutes} minutes. Comment Studio drafts each comment on their post; ${firstNameOf(ws)} posts it by hand.`}</p>
         {load.over && <p className="m-0 mb-2 rounded-lg bg-[#fbeaea] px-3 py-2 text-[12.5px] text-[#9e1c1c]">This week needs about {load.minutes} minutes against a budget of {b.minutes}. {load.advice}</p>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[620px] text-[13px]">
@@ -600,7 +607,7 @@ function DmDraft({ c, tg, prospect, onClose }: { c: Campaign; tg: Target; prospe
   return (
     <Modal title={`${connected ? "Message" : "Connection note"} to ${tg.name}`} onClose={onClose} footer={<><button className="btn" onClick={async () => { try { await navigator.clipboard.writeText(text); } catch {} toast("Copied. Paste it on LinkedIn and press Send there."); if (tg.linkedin) window.open(tg.linkedin, "_blank", "noopener"); }}>Copy and open profile</button><button className="btn btn-primary" disabled={busy} onClick={sent}>I sent it</button></>}>
       <p className="m-0 mb-2 text-[12.5px] text-muted">Why now: {tg.engaged_reason || "they engaged"}. Prax drafts; you send it yourself on LinkedIn.</p>
-      <textarea className="field min-h-[160px] text-[14px]" value={busy ? "Writing in Shashi's voice" : text} disabled={busy} onChange={(e) => setText(e.target.value)} />
+      <textarea className="field min-h-[160px] text-[14px]" value={busy ? `Writing in ${possessive(firstNameOf(ws))} voice` : text} disabled={busy} onChange={(e) => setText(e.target.value)} />
       {!connected && <p className={`num m-0 mt-1 text-right text-[12px] ${text.length > 300 ? "text-[#d64545]" : "text-muted"}`}>{text.length} / 300</p>}
     </Modal>
   );
@@ -670,7 +677,7 @@ function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Ca
     })();
   }, [cit.ready, cit.scope]); // eslint-disable-line react-hooks/exhaustive-deps
   const replies = comments.filter((x) => x.reply && x.prospect_id && ids.includes(x.prospect_id) && x.day >= c.brief.start && x.day <= end).length;
-  const r = report(c.brief, { posts: posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format })), replies, conversations: extra?.conversations ?? 0, requests, stageMoves: extra?.moves ?? 0, targets: targets.length, engaged: targets.filter((x) => x.engaged_at).length, citations: extra?.citations });
+  const r = report(c.brief, { posts: posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format })), replies, conversations: extra?.conversations ?? 0, requests, stageMoves: extra?.moves ?? 0, targets: targets.length, engaged: targets.filter((x) => x.engaged_at).length, citations: extra?.citations }, firstNameOf(ws));
   return (
     <Modal title={`${c.name}: report`} onClose={onClose} wide footer={<><button className="btn" onClick={() => window.print()}><Printer size={14} /> Print</button><button className="btn btn-primary" onClick={onClose}>Close</button></>}>
       <div className="print-area">

@@ -44,8 +44,9 @@ export class Pdf {
 }
 
 export type Slide = { title: string; body: string };
-/** Antier carousel template: 4:5 pages, dark cover and closing slide, white middle slides, a red rule and a byline. */
-export function carouselPdf(slides: Slide[], byline = "Shashi Pal - Antier") {
+/** The house carousel template: 4:5 pages, dark cover and closing slide, white middle slides, a red rule and a byline
+ *  (the profile's name and company). */
+export function carouselPdf(slides: Slide[], byline = "") {
   const W = 540, H = 675, M = 48, pdf = new Pdf(W, H);
   slides.forEach((s, i) => {
     const p = pdf.page(), dark = i === 0 || i === slides.length - 1;

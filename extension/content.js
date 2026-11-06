@@ -17,7 +17,7 @@
     "Agree and add": "50 to 70 words. Agree with the main point in one sentence, then add the layer the author did not cover.",
     "Respectful disagree": "50 to 70 words. Accept what is right, then offer a different view on one point with a reason. Courteous, never correcting the author, never against a regulator or government.",
     "Data point": "50 to 70 words. Build around one number or fact that is in the post or its source, and what it implies.",
-    "COO lens": "50 to 70 words. What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline.",
+    "Operator lens": "50 to 70 words. What this means for operations: delivery, controls, timelines, reconciliation, the work behind the headline.",
     "Board lens": "50 to 70 words. What a board or risk committee would ask: exposure, governance, decision timing.",
     "Partner lens": "50 to 70 words. What this means for partners: who needs to work with whom for this to happen.",
     "Congratulate with substance": "40 to 60 words. Congratulate in one plain sentence, then one specific observation about why the milestone matters. No flattery.",
@@ -294,7 +294,7 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
   }
 
   let meName = "";
-  const CHIPS = ["Short", "Question", "Agree and add", "Data point", "COO lens", "Board lens", "Partner lens", "Respectful disagree", "Punchy", "Congratulate with substance"];
+  const CHIPS = ["Short", "Question", "Agree and add", "Data point", "Operator lens", "Board lens", "Partner lens", "Respectful disagree", "Punchy", "Congratulate with substance"];
 
   // The always-visible Prax bar under each post's action row, like a second comment box.
   // Idempotent per post: a row keeps its bar while the bar is still on the page and the row still

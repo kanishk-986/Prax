@@ -1,11 +1,15 @@
 "use client";
 import { useState } from "react";
 import { foldCut, FOLD, hookFits } from "@/lib/content";
+import { useWorkspace } from "@/lib/workspace";
+import { cap, companyOf, fullNameOf, initialsOf } from "@/lib/persona";
 
 /** The post as it reads in the LinkedIn feed, with the real "see more" cut for mobile or desktop. */
 export function LinkedInPreview({ text, image, video, company, device, setDevice, footer }: {
   text: string; image?: string | null; video?: React.ReactNode; company?: boolean; device: "mobile" | "desktop"; setDevice: (d: "mobile" | "desktop") => void; footer?: React.ReactNode;
 }) {
+  const { ws } = useWorkspace();
+  const who = company ? cap(companyOf(ws)) : cap(fullNameOf(ws));
   const [open, setOpen] = useState(false);
   const f = foldCut(text || "", device);
   const firstLine = (text || "").split("\n")[0];
@@ -20,8 +24,8 @@ export function LinkedInPreview({ text, image, video, company, device, setDevice
       </div>
       <div className="mx-auto w-full overflow-hidden rounded-[14px] border border-[#e3e3e3] bg-white shadow-[0_8px_24px_rgba(20,20,20,.06)]" style={{ maxWidth: device === "mobile" ? 360 : "100%", fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
         <div className="flex gap-2.5 px-4 pb-2 pt-3.5">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#141414] text-[14px] font-semibold text-white">{company ? "A" : "SP"}</span>
-          <span className="flex min-w-0 flex-col"><span className="text-[14px] font-semibold">{company ? "Antier" : "Shashi Pal"}</span><span className="truncate text-[12px] text-[#5f5f5f]">{company ? "Company page" : "Co-Founder and COO, Antier"}</span></span>
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#141414] text-[14px] font-semibold text-white">{initialsOf(company ? companyOf(ws, "") : fullNameOf(ws, ""))}</span>
+          <span className="flex min-w-0 flex-col"><span className="text-[14px] font-semibold">{who}</span><span className="truncate text-[12px] text-[#5f5f5f]">{company ? "Company page" : ws.headline || "LinkedIn profile"}</span></span>
         </div>
         <div className="whitespace-pre-wrap px-4 pb-3.5 text-[14px] leading-normal">
           {text ? (open || !f.folded ? text : f.shown) : <span className="text-faint">The post appears here as you write.</span>}

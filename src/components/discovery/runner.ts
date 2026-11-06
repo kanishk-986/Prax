@@ -7,11 +7,11 @@ import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { parseEngine, type Engine } from "@/lib/citations";
-import { PILLARS } from "@/lib/campaigns";
 import { type Finding, type PlannedSearch, searchPrompt, parseSearchItems, ruleScore, sourceTypeOf, opportunityOf, scorePrompt, parseScores, linkKey, PACK_LABEL } from "@/lib/discovery";
 import type { Link, LogRow } from "./shared";
 
-type Ctx = { wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[] };
+// pillars, who ("Name, Role at Company"), geos and region come from the profile, see src/lib/persona.ts.
+type Ctx = { wsId: string; today: string; windowDays: number; findings: Finding[]; competitors: string[]; targets: string[]; pillars: string[]; who: string; geos: string[]; region: string };
 const mentions = (text: string, names: string[]) => names.find((n) => n.length > 2 && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) ?? "";
 
 export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => void) {
@@ -31,12 +31,12 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
     try {
       for (let i = 0; i < todo.length; i += 8) {
         const batch = todo.slice(i, i + 8);
-        const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You score news for a B2B fintech founder's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), PILLARS) }, 120000);
-        const got = parseScores(parseJSON(out));
+        const out = await askExtension<string>("ai", { plain: true, kind: "studio", rules: "You score news for a business leader's LinkedIn. Be strict and literal. Never invent facts.", user: scorePrompt(batch.map((f) => ({ id: f.id, title: f.title, publisher: f.publisher, date: f.confirmed ? f.published ?? "" : "", excerpt: f.excerpt })), c.pillars, c.who, c.geos) }, 120000);
+        const got = parseScores(parseJSON(out), c.geos);
         for (const f of batch) {
           const s = got[f.id]; if (!s) continue;
           const orgs = [...new Set([...f.orgs, ...s.orgs])].slice(0, 10);
-          await supabase().from("discovery_findings").update({ scores: s.scores, scored_by: "ai", pillar: PILLARS.includes(s.pillar) ? s.pillar : f.pillar, geo: s.geo || f.geo, service: s.service || f.service, kind: s.kind || f.kind, why: s.why, angle: s.angle, orgs, competitor: f.competitor || mentions(`${f.title} ${orgs.join(" ")}`, c.competitors), target: f.target || !!mentions(orgs.join(" "), c.targets) }).eq("id", f.id);
+          await supabase().from("discovery_findings").update({ scores: s.scores, scored_by: "ai", pillar: c.pillars.includes(s.pillar) ? s.pillar : f.pillar, geo: s.geo || f.geo, service: s.service || f.service, kind: s.kind || f.kind, why: s.why, angle: s.angle, orgs, competitor: f.competitor || mentions(`${f.title} ${orgs.join(" ")}`, c.competitors), target: f.target || !!mentions(orgs.join(" "), c.targets) }).eq("id", f.id);
           n++;
         }
       }
@@ -60,7 +60,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
       const { p, e } = queue[i];
       const row = log[i];
       try {
-        const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine: e, prompt: searchPrompt(p.query, c.windowDays, c.today), country: "" }, 240000);
+        const res = await askExtension<{ model: string; raws: Record<string, unknown>[] }>("search", { engine: e, prompt: searchPrompt(p.query, c.windowDays, c.today, c.region), country: "" }, 240000);
         const parsed = parseEngine(e, res.raws);
         const { returned, items } = parseSearchItems(parsed.answer, parsed.sources);
         row.returned = returned; row.cited = items.length; row.confirmed = 0; row.urls = items.map((x) => x.url);
@@ -75,7 +75,7 @@ export function useRunner(ctx: Ctx, toast: (t: string, undo?: () => void) => voi
           }
           const title = (page.title || it.title || it.url).slice(0, 300), excerpt = [it.summary, page.excerpt].filter(Boolean).join("\n\n").slice(0, 1800);
           const published = page.published || it.date || null, confirmed = !!page.confirmed;
-          const st = sourceTypeOf(it.url), rs = ruleScore({ url: it.url, title, excerpt, published, confirmed, source_type: st }, c.today), opp = opportunityOf(title, excerpt, c.today);
+          const st = sourceTypeOf(it.url), rs = ruleScore({ url: it.url, title, excerpt, published, confirmed, source_type: st }, c.today, c.pillars), opp = opportunityOf(title, excerpt, c.today);
           const orgs = it.orgs;
           const { data, error } = await supabase().from("discovery_findings").insert({
             workspace_id: c.wsId, run_id: run?.id ?? null, url: it.url, title, publisher: it.publisher || page.publisher || "", source_type: st, published, confirmed, excerpt,

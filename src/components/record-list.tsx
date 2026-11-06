@@ -13,13 +13,16 @@ export type Col = { key: string; label: string; render?: (r: any) => React.React
 
 /** A live table of records with an add/edit/delete drawer, role-aware.
  *  groupBy is a column or a function; groups follow groupOrder (unknown ones last) and show groupLabel's name.
- *  Pass adding and onAdding to put the Add button in the section header (AddButton) instead of above the table. */
-export function RecordList({ table, fields, cols, order, asc = true, filter, defaults = {}, empty, groupBy, groupLabel, groupOrder, adding, onAdding }: {
+ *  Pass adding and onAdding to put the Add button in the section header (AddButton) instead of above the table.
+ *  author adds an "Added by" column from the row's created_by and created_at (notes, db/016). */
+export function RecordList({ table, fields, cols: baseCols, order, asc = true, filter, defaults = {}, empty, groupBy, groupLabel, groupOrder, adding, onAdding, author }: {
   table: string; fields: Field[]; cols: Col[]; order?: string; asc?: boolean; filter?: (q: any) => any; defaults?: Record<string, unknown>; empty: string;
-  groupBy?: string | ((r: any) => string); groupLabel?: (g: string) => string; groupOrder?: string[]; adding?: boolean; onAdding?: (v: boolean) => void;
+  groupBy?: string | ((r: any) => string); groupLabel?: (g: string) => string; groupOrder?: string[]; adding?: boolean; onAdding?: (v: boolean) => void; author?: boolean;
 }) {
   const { ws, can } = useWorkspace();
   const { rows, loading } = useLive<any>(table, ws.id, { order, asc, filter });
+  const authorOf = useAuthors();
+  const cols: Col[] = author ? [...baseCols, { key: "created_by", label: "Added by", className: "w-[170px] whitespace-nowrap", render: (r) => <Byline {...authorOf(r)} /> }] : baseCols;
   const [sel, setSel] = useState<any | "new" | null>(null);
   const editable = can("editor");
   const keyOf = (r: any) => (typeof groupBy === "function" ? groupBy(r) : groupBy ? r[groupBy] : "") || "Other";
@@ -49,9 +52,26 @@ export function RecordList({ table, fields, cols, order, asc = true, filter, def
           ))}
         </div>
       )}
-      {open && <Drawer table={table} fields={fields} rec={open === "new" ? null : open} defaults={defaults} onClose={close} />}
+      {open && <Drawer table={table} fields={fields} rec={open === "new" ? null : open} defaults={defaults} onClose={close} byline={author && open !== "new" ? authorOf(open) : undefined} />}
     </>
   );
+}
+
+/** Who added a row and when: the member's name from their email ("you" for the signed-in member), then the time.
+ *  Rows from before db/016 have no created_by and show the time only. */
+export function useAuthors() {
+  const { ws, userId } = useWorkspace();
+  const members = useLive<{ user_id: string; email: string }>("members", ws.id);
+  return (r: { created_by?: string | null; created_at?: string }) => {
+    const m = r.created_by ? members.rows.find((x) => x.user_id === r.created_by) : undefined;
+    const name = !r.created_by ? "" : r.created_by === userId ? "You" : m ? emailName(m.email) : "A former member";
+    return { name, at: r.created_at ? new Date(r.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "" };
+  };
+}
+/** "kanishk.raj@company.com" gives "Kanishk Raj". */
+export const emailName = (email: string) => (email.split("@")[0] || email).split(/[._-]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+function Byline({ name, at }: { name: string; at: string }) {
+  return <span className="flex flex-col leading-tight">{name && <span className="text-[12.5px] font-medium text-ink">{name}</span>}<span className="num text-[11.5px] text-muted">{at}</span></span>;
 }
 
 /** The Add button for a section header, paired with RecordList's adding and onAdding. Hidden for viewers. */
@@ -60,7 +80,7 @@ export function AddButton({ onClick, label = "Add" }: { onClick: () => void; lab
   return can("editor") ? <button className="btn btn-primary h-10 px-4" onClick={onClick}><Plus size={14} /> {label}</button> : null;
 }
 
-function Drawer({ table, fields, rec, defaults, onClose }: { table: string; fields: Field[]; rec: any | null; defaults: Record<string, unknown>; onClose: () => void }) {
+function Drawer({ table, fields, rec, defaults, onClose, byline }: { table: string; fields: Field[]; rec: any | null; defaults: Record<string, unknown>; onClose: () => void; byline?: { name: string; at: string } }) {
   const { ws, can } = useWorkspace();
   const editable = can("editor");
   const [f, setF] = useState<Record<string, any>>(() => ({ ...defaults, ...(rec ?? {}) }));
@@ -89,6 +109,7 @@ function Drawer({ table, fields, rec, defaults, onClose }: { table: string; fiel
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close"><X size={16} /></button>
         </header>
         <div className="flex-1 overflow-auto px-5 py-4">
+          {byline && <p className="m-0 mb-3 text-[12.5px] text-muted">{byline.name ? <>Added by <b className="font-semibold text-ink">{byline.name}</b>, {byline.at}</> : <>Added {byline.at}</>}</p>}
           <fieldset disabled={!editable} className="grid grid-cols-2 gap-3">
             {fields.map((x) => (
               <label key={x.key} className={`flex flex-col gap-1 ${x.wide || x.type === "textarea" ? "col-span-2" : ""} ${x.type === "checkbox" ? "flex-row items-center gap-2" : ""}`}>

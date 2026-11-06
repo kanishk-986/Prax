@@ -1,13 +1,13 @@
-// Content Studio campaigns: objectives, the proposed post plan, Shashi's time budget, balance warnings,
+// Content Studio campaigns: objectives, the proposed post plan, the profile owner's time budget, balance warnings,
 // the mid-campaign check and the end-of-campaign report. Pure functions only, so the page and
 // scripts/test-campaigns.ts run the same code. Dates are YYYY-MM-DD local calendar days.
+// Pillars are per profile (workspaces.pillars, read with pillarsOf in src/lib/persona.ts) and passed in.
 
-export const PILLARS = ["Money That Moves Itself", "The Liquid Balance Sheet", "Regulation-to-Architecture", "Production-Grade or Nothing", "Agentic Finance", "Build, Buy or Partner"];
 export const FORMATS = ["Text post", "Image post", "Carousel", "Video", "Poll", "Article"];
 export const PHASES = ["Open", "Prove", "Deepen", "Ask"] as const;
 export type Phase = (typeof PHASES)[number];
 export const STATUSES = ["Idea", "Drafting", "In review", "Ready", "Posted"] as const;
-export const MEASURES = ["Comments from target segments", "Conversations with target accounts", "Resource requests", "AI tools naming Shashi on this topic", "New followers in target segments"];
+export const MEASURES = ["Comments from target segments", "Conversations with target accounts", "Resource requests", "AI tools naming the profile on this topic", "New followers in target segments"];
 
 /** Each objective sets the plan's defaults: how the phases are weighted, the format mix, cadence and the ask. */
 export type Objective = { key: string; label: string; sub: string; weights: [number, number, number, number]; mix: string[]; ppw: number; weeks: number; cta: string };
@@ -39,9 +39,9 @@ export const daysBetween = (a: string, b: string) => Math.round((D(b).getTime() 
 export const nextMonday = (s: string) => addDays(weekStart(s), 7);
 export const endOf = (b: Brief) => addDays(b.start, b.weeks * 7 - 1);
 
-export function defaultBrief(todayYmd: string, objKey = "authority"): Brief {
+export function defaultBrief(todayYmd: string, objKey = "authority", pillars: string[] = []): Brief {
   const o = objective(objKey);
-  return { objective: o.key, topic: PILLARS[0], keywords: [], segments: [], start: nextMonday(todayYmd), weeks: o.weeks, ppw: o.ppw, mix: [...o.mix], message: "", cta: o.cta, measure: MEASURES[0], minutes: 45, resource: { name: "", link: "" }, colleagues: [] };
+  return { objective: o.key, topic: pillars[0] ?? "", keywords: [], segments: [], start: nextMonday(todayYmd), weeks: o.weeks, ppw: o.ppw, mix: [...o.mix], message: "", cta: o.cta, measure: MEASURES[0], minutes: 45, resource: { name: "", link: "" }, colleagues: [] };
 }
 
 /** Choosing an objective resets the parts it owns (mix, cadence, length, ask) and keeps the rest. */
@@ -76,10 +76,10 @@ const TITLES: Record<Phase, string[]> = {
 export type PlanItem = { title: string; format: string; pillar: string; phase: Phase; date: string; time: string };
 
 /** The deterministic plan used when no AI key is set, and as the date and phase skeleton for the AI plan. */
-export function proposePlan(b: Brief, max = 24): PlanItem[] {
+export function proposePlan(b: Brief, max = 24, pillars: string[] = []): PlanItem[] {
   const dates = slotDates(b.start, b.weeks, b.ppw).slice(0, max);
   const o = objective(b.objective);
-  const words = b.keywords.length ? b.keywords : [b.topic.toLowerCase()];
+  const words = b.keywords.length ? b.keywords : [b.topic.toLowerCase() || "this topic"];
   const mix = b.mix.length ? b.mix : o.mix;
   const count: Record<string, number> = {};
   return dates.map((date, i) => {
@@ -87,21 +87,21 @@ export function proposePlan(b: Brief, max = 24): PlanItem[] {
     const n = (count[phase] = (count[phase] ?? 0) + 1) - 1;
     const k = words[i % words.length];
     const t = TITLES[phase][n % TITLES[phase].length];
-    return { title: t.replace("{k}", k).replace("{K}", k[0].toUpperCase() + k.slice(1)), format: mix[i % mix.length], pillar: PILLARS.includes(b.topic) ? b.topic : PILLARS[i % PILLARS.length], phase, date, time: "09:30" };
+    return { title: t.replace("{k}", k).replace("{K}", k[0].toUpperCase() + k.slice(1)), format: mix[i % mix.length], pillar: !pillars.length || pillars.includes(b.topic) ? b.topic : pillars[i % pillars.length], phase, date, time: "09:30" };
   });
 }
 
 /** Re-plan: ideas not yet written and still in the future are replaced; written posts and past posts stay. */
 export type PostLite = { id: string; status: string; publish_date: string | null; campaign_id?: string | null; pillar?: string; title?: string; format?: string; phase?: string };
-export function replanUnwritten(posts: PostLite[], b: Brief, todayYmd: string) {
+export function replanUnwritten(posts: PostLite[], b: Brief, todayYmd: string, pillars: string[] = []) {
   const remove = posts.filter((p) => p.status === "Idea" && (!p.publish_date || p.publish_date >= todayYmd)).map((p) => p.id);
   const taken = new Set(posts.filter((p) => !remove.includes(p.id) && p.publish_date).map((p) => p.publish_date));
-  const add = proposePlan(b, 60).filter((x) => x.date >= todayYmd && !taken.has(x.date));
+  const add = proposePlan(b, 60, pillars).filter((x) => x.date >= todayYmd && !taken.has(x.date));
   return { remove, add };
 }
 
-// ---------- Shashi's time ----------
-/** Minutes of Shashi's time per item: reading and approving, posting it himself, recording when it is a video. */
+// ---------- the profile owner's time ----------
+/** Minutes of the profile owner's time per item: reading and approving, posting it, recording when it is a video. */
 export const COST = { approve: 4, post: 3, video: 20, article: 10, comment: 4, dm: 3 };
 export const postMinutes = (format: string) => COST.approve + COST.post + (format === "Video" ? COST.video : format === "Article" ? COST.article : 0);
 export function weeklyLoad(b: Brief, commentsPerWeek: number, dmsPerWeek = 0) {
@@ -177,28 +177,30 @@ export type ReportInput = {
   posts: CampPost[]; replies: number; conversations: number; requests: { sent: boolean }[]; stageMoves: number; targets: number; engaged: number;
   citations?: { before: number | null; after: number | null } | null;
 };
-export function report(b: Brief, r: ReportInput) {
+/** first: the profile's first name (firstNameOf in src/lib/persona.ts). */
+export function report(b: Brief, r: ReportInput, first = "the profile") {
   const planned = r.posts.length, posted = r.posts.filter((p) => p.status === "Posted").length;
   const lines = [
     `${posted} of ${planned} planned posts went out over ${b.weeks} weeks.`,
-    `${r.replies} replies came back on Shashi's comments to target accounts, and ${r.engaged} of ${r.targets} target accounts engaged.`,
+    `${r.replies} replies came back on ${first}${/s$/i.test(first) ? "'" : "'s"} comments to target accounts, and ${r.engaged} of ${r.targets} target accounts engaged.`,
     `${r.conversations} new conversations started, and target accounts moved stage ${r.stageMoves} times.`,
     `${r.requests.length} people asked for the resource; ${r.requests.filter((x) => x.sent).length} have been sent it.`,
   ];
   if (r.citations && r.citations.before != null && r.citations.after != null)
-    lines.push(`AI tools named Shashi on this topic in ${r.citations.after} percent of answers, from ${r.citations.before} percent before the campaign.`);
+    lines.push(`AI tools named ${first} on this topic in ${r.citations.after} percent of answers, from ${r.citations.before} percent before the campaign.`);
   else lines.push("AI citation change is not available yet for this topic.");
   return { planned, posted, rate: planned ? Math.round((posted / planned) * 100) : 0, lines };
 }
 
 // ---------- fast response and events ----------
-export function fastBrief(todayYmd: string, link: string, angle: string): Brief {
-  return { ...defaultBrief(todayYmd, "moment"), topic: "Regulation-to-Architecture", start: todayYmd, weeks: 1, ppw: 2, mix: ["Text post", "Carousel"], message: angle, link };
+/** The topic is the profile's regulation or policy pillar when it has one, else its first pillar. */
+export function fastBrief(todayYmd: string, link: string, angle: string, pillars: string[] = []): Brief {
+  return { ...defaultBrief(todayYmd, "moment"), topic: pillars.find((p) => /regulat|policy|rule/i.test(p)) ?? pillars[0] ?? "", start: todayYmd, weeks: 1, ppw: 2, mix: ["Text post", "Carousel"], message: angle, link };
 }
 /** A fast response: a first take for approval within 48 hours, then a deeper post a few days later. */
 export function fastPlan(b: Brief): PlanItem[] {
   return [
-    { title: `First take: ${b.message || "what this means for banks"}`, format: "Text post", pillar: b.topic, phase: "Open", date: addDays(b.start, 2), time: "09:30" },
+    { title: `First take: ${b.message || "what this means"}`, format: "Text post", pillar: b.topic, phase: "Open", date: addDays(b.start, 2), time: "09:30" },
     { title: `What the rule asks institutions to build`, format: "Carousel", pillar: b.topic, phase: "Deepen", date: addDays(b.start, 6), time: "09:30" },
   ];
 }
@@ -223,10 +225,11 @@ export function eventFollowUps(campaignId: string, b: Brief, people: TargetLite[
   return people.map((p) => ({ day, kind: "custom", idx: 3200 + hashIdx(campaignId + p.id, 700), title: `Follow up with ${p.name} after ${b.event!.name}`, link: p.linkedin ?? "", note: `campaign:${campaignId}:event:${p.id}` }));
 }
 
-/** Reshare notes when no AI key is set: a company page version and one short note per colleague. */
-export function reshareFallback(title: string, colleagues: string[]) {
+/** Reshare notes when no AI key is set: a company page version and one short note per colleague.
+ *  who: the profile's full name, first name and role (src/lib/persona.ts). */
+export function reshareFallback(title: string, colleagues: string[], who: { name: string; first: string; role: string }) {
   return {
-    page: `Our Co-Founder and COO Shashi Pal on ${title.toLowerCase()}. Worth a read for anyone building in regulated digital finance.`,
-    notes: colleagues.map((c) => ({ name: c, text: `Sharing Shashi's post on ${title.toLowerCase()}. It matches what we see in delivery every week.` })),
+    page: `${who.role ? `Our ${who.role} ${who.name}` : who.name} on ${title.toLowerCase()}. Worth a read for anyone working on this.`,
+    notes: colleagues.map((c) => ({ name: c, text: `Sharing ${who.first}${/s$/i.test(who.first) ? "'" : "'s"} post on ${title.toLowerCase()}. It matches what we see in our work every week.` })),
   };
 }
