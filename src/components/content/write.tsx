@@ -669,7 +669,7 @@ export function WriteFlow({ posts, campaigns, settings, seed, clearSeed, openPos
         <aside className="flex min-w-0 flex-[2_1_340px] flex-col gap-3">
           <LinkedInPreview text={step === 0 && src === "repurpose" ? rpSrc?.draft ?? "" : body || hook} image={step === 0 && src === "repurpose" ? null : shownImg} company={step === 0 && src === "repurpose" ? rpSrc?.channel === "company" : channel === "company"} device={device} setDevice={setDevice}
             video={video ? <div className="flex aspect-[4/5] flex-col gap-2.5 p-[18px]" style={{ background: script.cover === "red" ? "#d64545" : script.cover === "white" ? "#fff" : "#141414", color: script.cover === "white" ? "#141414" : "#fff" }}><span className="text-meta font-semibold uppercase tracking-wider opacity-80">{byline}</span><span className="text-title font-semibold leading-snug">{script.hook || hook || "The hook appears here"}</span>{script.captions !== "off" && script.beats[0]?.say && <span className="mt-auto self-center rounded-md px-2.5 py-1.5 text-center text-body font-semibold" style={{ background: script.captions === "bold" ? "#141414" : "transparent", color: "#fff" }}>{script.beats[0].say}</span>}</div> : undefined}
-            footer={!video && <> · Human {human.score}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />
+            footer={!video && <>{(body || hook).trim() ? ` · Human ${human.score}` : ""}{draft?.impact ? ` · Impact ${draft.impact}` : ""}</>} />
           {channel === "company" && <p className="m-0 text-center text-meta font-semibold">Company content, not for {possessive(first)} profile</p>}
         </aside>
       </div>
