@@ -5,8 +5,60 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 
 const PRAX = "https://prax-gamma.vercel.app";
 
+// ---------- keeping the Prax bar on LinkedIn tabs ----------
+// Chrome does not put content scripts into tabs that were open before an install, update or reload,
+// and the copy left in such a tab is cut off from the extension. So on install, update and browser
+// start, and whenever a LinkedIn tab finishes loading or changes page (LinkedIn is a single-page
+// app), Prax checks that its bar script answers in that tab and adds it if not. This only adds
+// Prax's own buttons; it reads nothing from LinkedIn and does nothing on the page by itself.
+const LINKEDIN = /^https:\/\/www\.linkedin\.com\//;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function tabSay(tabId, type) {
+  try { const r = await chrome.tabs.sendMessage(tabId, { type }); return r?.ok ? r.data : null; } catch { return null; }
+}
+async function injectBar(tabId) {
+  await chrome.scripting.insertCSS({ target: { tabId }, files: ["content.css"] }).catch(() => {});
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["dom.js", "content.js"] });
+}
+// Returns the bar status in that tab, adding the script first when it does not answer.
+async function ensureBar(tabId, rescan) {
+  let s = await tabSay(tabId, rescan ? "prax:rescan" : "prax:ping");
+  if (!s || !s.alive) {
+    await injectBar(tabId);
+    for (let i = 0; i < 5 && !s?.alive; i++) { await wait(200); s = await tabSay(tabId, "prax:rescan"); }
+  }
+  if (!s) throw new Error("The Prax bar could not start in this tab. Reload the LinkedIn tab (Cmd+R).");
+  return s;
+}
+async function ensureAllTabs() {
+  const tabs = await chrome.tabs.query({ url: "https://www.linkedin.com/*" }).catch(() => []);
+  await Promise.all(tabs.map((t) => (t.discarded ? null : ensureBar(t.id).catch(() => {}))));
+  // The Prax site's bridge, so the Extension page answers without a reload after an update.
+  const web = await chrome.tabs.query({ url: PRAX + "/*" }).catch(() => []);
+  await Promise.all(web.map((t) => chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["bridge.js"] }).catch(() => {})));
+}
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (!LINKEDIN.test(tab.url || info.url || "")) return;
+  if (info.url) tabSay(tabId, "prax:nav").then((s) => { if (!s?.alive) return ensureBar(tabId); }).catch(() => {});
+  // The manifest script runs at document_idle; give it a moment before checking.
+  if (info.status === "complete") wait(1500).then(() => ensureBar(tabId)).catch(() => {});
+});
+
+chrome.runtime.onStartup.addListener(() => { ensureAllTabs(); });
 // First install opens the Extension page in Prax, where all setup happens.
-chrome.runtime.onInstalled.addListener((d) => { if (d.reason === "install") chrome.tabs.create({ url: PRAX + "/extension?welcome=1" }); });
+chrome.runtime.onInstalled.addListener((d) => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  ensureAllTabs();
+  if (d.reason === "install") chrome.tabs.create({ url: PRAX + "/extension?welcome=1" });
+});
+
+// A long AI call can outlast the service worker's 30 second idle timer. While a job runs, a cheap
+// extension call every 20 seconds keeps it awake so the answer is not lost.
+let running = 0, keepAlive = 0;
+function hold() { if (running++ === 0) keepAlive = setInterval(() => chrome.runtime.getPlatformInfo(() => {}), 20000); }
+function release() { if (--running <= 0) { running = 0; clearInterval(keepAlive); } }
 
 const DEFAULT_MODEL = { claude: "claude-opus-5-5", openai: "gpt-5", grok: "grok-4", gemini: "gemini-2.5-pro" };
 let meCache = null;
@@ -16,9 +68,12 @@ async function cfg() { return (await chrome.storage.local.get("cfg")).cfg || {};
 async function prax(action, body = {}) {
   const c = await cfg();
   if (!c.praxUrl || !c.praxToken) throw new Error("Connect this browser in Prax: open Prax, Extension, Connect this browser.");
-  const r = await fetch(c.praxUrl.replace(/\/$/, "") + "/api/ext/" + action, {
-    method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + c.praxToken }, body: JSON.stringify(body),
-  });
+  let r;
+  try {
+    r = await fetch(c.praxUrl.replace(/\/$/, "") + "/api/ext/" + action, {
+      method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + c.praxToken }, body: JSON.stringify(body),
+    });
+  } catch { throw new Error("Prax could not be reached. Check the internet connection and try again."); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Prax returned " + r.status);
   return j;
@@ -182,10 +237,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     clearHistory: async () => { await chrome.storage.local.remove("history"); return []; },
     search: () => search(msg),
     image: () => image(msg),
+    // The side panel's Prax bar status and Fix bars: checks (and if needed adds) the bar in that tab.
+    barStatus: () => ensureBar(msg.tabId, !!msg.rescan),
   };
-  const job = jobs[msg.type];
+  const job = jobs[msg?.type];
   if (!job) return false;
-  job().then((data) => reply({ ok: true, data }), (e) => reply({ ok: false, error: e.message }));
+  hold();
+  Promise.resolve().then(job).then((data) => reply({ ok: true, data }), (e) => reply({ ok: false, error: String(e?.message || e || "Something went wrong") })).finally(release);
   return true;
 });
 

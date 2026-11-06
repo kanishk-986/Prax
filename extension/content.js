@@ -3,8 +3,12 @@
 // and you press LinkedIn's own Post or Send. Prax never clicks, posts, likes, connects or scrolls.
 
 (() => {
-  if (window.__prax) return;
-  window.__prax = true;
+  // Already running in this extension's world (for example injected again from the side panel): rescan and stop.
+  if (window.__prax?.alive?.()) { window.__prax.rescan("reinject"); return; }
+  // A copy left over from before an update can no longer reach the extension. Tell it to remove its bars.
+  document.dispatchEvent(new CustomEvent("prax:takeover"));
+  const D = globalThis.PraxDOM;
+  if (!D) { console.warn("Prax: dom.js did not load"); return; }
 
   const MODES = {
     "Short": "35 to 50 words, two or three complete sentences. Still one real insight, never a one-liner.",
@@ -33,10 +37,35 @@
   const isVip = (name) => { const n = (name || "").toLowerCase().trim(); return !!n && vips.some((v) => n.includes(v) || v.includes(n)); };
 
   let cfg = {};
+  const life = new AbortController(); // removes every page listener when a newer copy takes over
   let pending = null; // { kind, scope, text, ctx } waiting for the user's own Post or Send click
 
   // ---------- plumbing ----------
-  const send = (msg) => new Promise((res, rej) => chrome.runtime.sendMessage(msg, (r) => (r?.ok ? res(r.data) : rej(new Error(r?.error || chrome.runtime.lastError?.message || "Prax is not responding")))));
+  // The background can be asleep or restarting; a message that finds no listener is retried twice.
+  // After an extension update this copy is cut off, and it says so instead of failing silently.
+  const alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
+  const STALE = "Prax was updated. Reload this LinkedIn tab (Cmd+R) to use it.";
+  const TRANSIENT = /receiving end does not exist|could not establish connection|message port closed|no response/i;
+  function sendOnce(msg) {
+    return new Promise((res, rej) => {
+      if (!alive()) return rej(new Error(STALE));
+      try {
+        chrome.runtime.sendMessage(msg, (r) => {
+          const le = chrome.runtime.lastError?.message;
+          if (r?.ok) return res(r.data);
+          const err = new Error(r?.error || le || "Prax is not responding. Try again.");
+          err.transient = !r && TRANSIENT.test(le || "no response");
+          rej(err);
+        });
+      } catch (e) { rej(new Error(/context invalidated/i.test(e.message) ? STALE : e.message)); }
+    });
+  }
+  async function send(msg) {
+    for (let i = 0; ; i++) {
+      try { return await sendOnce(msg); }
+      catch (e) { if (!e.transient || i >= 2) throw e; await new Promise((r) => setTimeout(r, 300 * (i + 1))); }
+    }
+  }
   const clean = (s) => (s || "").replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
   const words = (t) => t.trim().split(/\s+/).filter(Boolean).length;
   const dark = () => document.documentElement.classList.contains("theme--dark") || document.body.classList.contains("theme--dark");
@@ -68,54 +97,12 @@
   const rangeOf = (instr) => { const m = instr.match(/(\d+) to (\d+) words/); return m ? { lo: +m[1], hi: +m[2] } : rules?.length ? { lo: rules.length.lo, hi: rules.length.hi } : null; };
 
   // ---------- reading the page ----------
-    const COMMENT_SEL = "article.comments-comment-entity, article.comments-comment-item";
+  // Post detection and reading live in dom.js (shared with the side panel and the tests).
+  const COMMENT_SEL = D.COMMENT_SEL;
   const nameIn = (root, sels) => clean(root?.querySelector(sels)?.textContent || "").split("\n")[0];
-
-  const label = (b) => (b.getAttribute("aria-label") || b.innerText || "").trim();
-
-  // LinkedIn's class names change often, so posts are found by their action row: the one
-  // block that holds Like or React, Comment and Repost buttons together.
-  function actionRows() {
-    const rows = new Set();
-    document.querySelectorAll("button").forEach((b) => {
-      if (!/repost/i.test(label(b)) || b.closest(".prx-host, .prx-bar")) return;
-      let el = b.parentElement;
-      for (let i = 0; i < 6 && el; i++, el = el.parentElement) {
-        const ls = [...el.querySelectorAll("button")].map(label);
-        if (ls.some((t) => /^comment/i.test(t)) && ls.some((t) => /like|react/i.test(t))) { rows.add(el); break; }
-      }
-    });
-    return [...rows];
-  }
-
-  function postOf(row) {
-    const urn = row.closest("[data-urn*='urn:li:'], [data-id*='urn:li:']");
-    if (urn) return urn;
-    let el = row;
-    for (let i = 0; i < 14 && el.parentElement; i++) {
-      const up = el.parentElement;
-      if ([...up.querySelectorAll("button")].filter((b) => /repost/i.test(label(b))).length > 1) break; // reached the feed list
-      el = up;
-    }
-    return el;
-  }
-
-  function readPost(post, row) {
-    const author = nameIn(post, ".update-components-actor__title span[aria-hidden='true'], .update-components-actor__name, .update-components-actor__title") ||
-      clean([...post.querySelectorAll("a[href*='/in/'], a[href*='/company/']")].map((a) => a.innerText).find((t) => t && t.trim().length > 1) || "").split("\n")[0];
-    const authorUrl = (post.querySelector("a.update-components-actor__meta-link, a.update-components-actor__image, a[href*='/in/'], a[href*='/company/']")?.href || "").split("?")[0];
-    let text = clean(post.querySelector(".update-components-text, .feed-shared-inline-show-more-text, .feed-shared-text")?.textContent || "");
-    if (!text && row) { const r = document.createRange(); r.setStartBefore(post.firstChild || post); r.setEndBefore(row); text = clean(r.toString()); }
-    const urn = post.getAttribute("data-urn") || post.getAttribute("data-id") || post.querySelector("[data-urn]")?.getAttribute("data-urn") || "";
-    const onPost = /^\/(feed\/update|posts)\//.test(location.pathname);
-    const url = onPost ? location.href.split("?")[0] : /urn:li:/.test(urn) ? `https://www.linkedin.com/feed/update/${urn}/` : location.href.split("?")[0];
-    const media = [...post.querySelectorAll(".update-components-article__title, .update-components-document__title, img[alt]")].map((e) => clean(e.getAttribute?.("alt") || e.textContent)).filter((t) => t && t.length > 3).slice(0, 4);
-    const comments = [...post.querySelectorAll(COMMENT_SEL + ", article")].slice(0, 40).map((c) => ({
-      author: nameIn(c, ".comments-comment-meta__description-title, .comments-post-meta__name-text, a[href*='/in/']"),
-      text: clean(c.querySelector(".comments-comment-item__main-content, .update-components-text")?.textContent || c.innerText || "").slice(0, 500),
-    })).filter((c) => c.text);
-    return { author, authorUrl, url, text: text.slice(0, 8000), media, comments };
-  }
+  let rowsNow = [];
+  const postOf = (row) => D.postOf(row, rowsNow.length ? rowsNow : D.findActionRows(document));
+  const readPost = (post, row) => D.readPost(post, row, location);
 
   // ---------- inline panel (shadow DOM so LinkedIn styles do not leak in) ----------
   const CSS = `
@@ -296,7 +283,7 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
         toast(["Logged in Prax", r.ticked ? "today's comment ticked" : "", r.prospect ? `${r.prospect} → Warming` : ""].filter(Boolean).join(" · "));
       }
     } catch (err) { toast("Posted, but not logged: " + err.message); }
-  }, true);
+  }, { capture: true, signal: life.signal });
 
   // ---------- buttons ----------
   function praxButton(label, onClick) {
@@ -310,14 +297,29 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
   const CHIPS = ["Short", "Question", "Agree and add", "Data point", "COO lens", "Board lens", "Partner lens", "Respectful disagree", "Punchy", "Congratulate with substance"];
 
   // The always-visible Prax bar under each post's action row, like a second comment box.
+  // Idempotent per post: a row keeps its bar while the bar is still on the page and the row still
+  // shows the same post. If LinkedIn re-renders and drops the bar, or recycles the row for another
+  // post, the next scan builds a fresh one. Nothing is remembered on LinkedIn's own elements.
+  const barOf = new Map(); // row -> bar
+  const ownBars = new WeakSet();
+  function hasLiveBar(row, key) {
+    const bar = barOf.get(row);
+    if (bar && bar.isConnected && bar.parentElement === row.parentElement && bar.dataset.key === key) return true;
+    if (bar) { bar.remove(); barOf.delete(row); }
+    return false;
+  }
   function decoratePost(row) {
-    if (row.dataset.prx || row.nextElementSibling?.classList.contains("prx-bar")) return;
-    row.dataset.prx = "1";
-    const post = postOf(row);
-    const bar = document.createElement("div");
-    const vip = isVip(readPost(post, row).author);
-    bar.className = "prx-bar" + (vip ? " prx-vip" : "");
+    const post0 = postOf(row);
+    const vip = isVip(D.authorOf(post0));
     const chipNames = studio ? styles().map((x) => x.name) : CHIPS;
+    // The bar is rebuilt when the post, the profile's styles or the VIP mark change.
+    const key = [D.postKey(post0, row), chipNames.join(","), vip ? "vip" : ""].join("|");
+    if (hasLiveBar(row, key)) return false;
+    // A bar left by an earlier copy of the script (before an update) is not ours: replace it.
+    row.parentElement?.querySelectorAll(":scope > .prx-bar").forEach((b) => { if (!ownBars.has(b)) b.remove(); });
+    const bar = document.createElement("div");
+    bar.dataset.key = key; ownBars.add(bar); barOf.set(row, bar);
+    bar.className = "prx-bar" + (vip ? " prx-vip" : "");
     bar.innerHTML = `<button type="button" class="prx-write"><span class="prx-star">✦</span> Write with Prax${vip ? ' <span class="prx-viptag">VIP</span>' : ""}</button>
       <div class="prx-chips">${chipNames.map((m) => `<button type="button" class="prx-chip" data-m="${esc(m)}">${esc(m)}</button>`).join("")}</div>
       <button type="button" class="prx-chip prx-disc" data-disc="1" title="Send this post to Discovery Studio">Send to Discovery</button>
@@ -325,6 +327,8 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     bar.addEventListener("click", async (e) => {
       const b = e.target.closest("button"); if (!b) return;
       e.preventDefault(); e.stopPropagation();
+      // Read the post at click time: LinkedIn may have re-rendered it since the bar was added.
+      const post = row.isConnected ? postOf(row) : post0;
       if (b.dataset.disc) {
         // Only when the user presses it, and only the post already on screen. Nothing else is read.
         const d = readPost(post, row);
@@ -337,6 +341,7 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
       openCommentPanel(post, row, bar, b.dataset.m || null);
     });
     row.insertAdjacentElement("afterend", bar);
+    return true;
   }
 
   function openCommentPanel(post, row, bar, mode) {
@@ -356,15 +361,14 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
 
   function decorateComments(post, row) {
     if (!meName) return;
-    const author = readPost(post, row).author.toLowerCase();
+    const author = D.authorOf(post).toLowerCase();
     if (!author.includes(meName.toLowerCase().split(" ")[0])) return;
     post.querySelectorAll(COMMENT_SEL).forEach((c) => {
-      if (c.dataset.prx) return;
       const who = nameIn(c, ".comments-comment-meta__description-title, .comments-post-meta__name-text");
       if (!who || who.toLowerCase().includes(meName.toLowerCase().split(" ")[0])) return;
       const row = c.querySelector(".comments-comment-social-bar, .comments-comment-item__social-actions, .comments-comment-social-bar--cr");
-      if (!row) return;
-      c.dataset.prx = "1";
+      // Checked against the page itself, so a re-rendered comment gets its button back.
+      if (!row || row.querySelector(":scope > .prx-btn")) return;
       row.appendChild(praxButton("Reply", () => {
         const d = readPost(post);
         const text = clean(c.querySelector(".comments-comment-item__main-content, .update-components-text")?.textContent || "");
@@ -380,8 +384,7 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
 
   function decorateNoteDialog() {
     const box = document.querySelector("div[role='dialog'] textarea[name='message'], div[role='dialog'] textarea#custom-message");
-    if (!box || box.dataset.prx) return;
-    box.dataset.prx = "1";
+    if (!box || box.previousElementSibling?.classList.contains("prx-btn")) return;
     const dialog = box.closest("div[role='dialog']");
     const name = clean(document.querySelector("main h1")?.textContent || "");
     const url = location.pathname.startsWith("/in/") ? location.href.split("?")[0] : "";
@@ -395,37 +398,101 @@ Return only JSON: {"post_type": "...", "mode": "...", "drafts": [{"text": "...",
     box.insertAdjacentElement("beforebegin", btn);
   }
 
+  // ---------- scanning ----------
+  // What the side panel's "Prax bar status" shows for this tab.
+  const VERSION = (() => { try { return chrome.runtime.getManifest().version; } catch { return "?"; } })();
+  const stats = { seen: 0, attached: 0, scans: 0, lastScan: 0, connected: null, workspace: "", error: "" };
+  let stopped = false;
+
   function scan() {
-    if (cfg.quiet) return;
-    actionRows().forEach((row) => { decoratePost(row); decorateComments(postOf(row), row); });
-    decorateNoteDialog();
+    if (stopped || cfg.quiet) return;
+    if (location.href !== lastUrl) lastUrl = location.href; // SPA navigation: the rows are simply found again
+    for (const [row, bar] of barOf) if (!row.isConnected) { bar.remove(); barOf.delete(row); }
+    rowsNow = D.findActionRows(document);
+    for (const row of rowsNow) {
+      try { decoratePost(row); decorateComments(postOf(row), row); }
+      catch (e) { stats.error = "Bar error: " + e.message; }
+    }
+    try { decorateNoteDialog(); } catch (e) { stats.error = "Note box error: " + e.message; }
+    stats.seen = rowsNow.length;
+    stats.attached = rowsNow.filter((r) => barOf.get(r)?.isConnected).length;
+    stats.scans++; stats.lastScan = Date.now();
   }
+
+  // Throttle, not debounce: LinkedIn's feed changes all the time (videos, counters, lazy posts), and a
+  // debounce that waits for a quiet moment can wait forever. A scan runs at most every 250 ms.
+  let timer = 0, lastUrl = location.href;
+  const schedule = () => { if (!timer && !stopped) timer = setTimeout(() => { timer = 0; scan(); }, 250); };
+  const isOurs = (n) => n.nodeType === 1 && (n.matches?.(D.OURS) || !!n.closest?.(D.OURS));
+  const obs = new MutationObserver((recs) => {
+    // Skip changes made only inside Prax's own bars and panels.
+    if (recs.every((r) => isOurs(r.target) || (!r.removedNodes.length && r.addedNodes.length && [...r.addedNodes].every(isOurs)))) return;
+    schedule();
+  });
+  // LinkedIn is a single-page app. Page changes are caught here, by every scan, and by the background (tabs.onUpdated).
+  const onNav = () => { if (location.href !== lastUrl) { lastUrl = location.href; schedule(); setTimeout(schedule, 1200); } };
+  window.addEventListener("popstate", onNav, { signal: life.signal });
+  try { window.navigation?.addEventListener("navigatesuccess", onNav, { signal: life.signal }); } catch { /* older Chrome */ }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) schedule(); }, { signal: life.signal });
+
+  function status() {
+    return { version: VERSION, url: location.href, quiet: !!cfg.quiet, seen: stats.seen, attached: stats.attached, scans: stats.scans, lastScan: stats.lastScan,
+      connected: stats.connected, workspace: stats.workspace, error: stats.error, alive: alive() };
+  }
+
+  // The background (tab updates) and the side panel (status, Fix bars) talk to this copy here.
+  function onMsg(msg, _sender, reply) {
+    if (!msg || typeof msg.type !== "string" || !msg.type.startsWith("prax:")) return false;
+    if (msg.type === "prax:nav") onNav();
+    if (msg.type === "prax:rescan") { if (stats.connected !== true) loadMe(); scan(); }
+    reply({ ok: true, data: status() });
+    return false;
+  }
+  chrome.runtime.onMessage.addListener(onMsg);
 
   // Alt+P opens Prax on the post nearest the middle of the screen.
   document.addEventListener("keydown", (e) => {
     if (cfg.quiet || !e.altKey || e.code !== "KeyP") return;
     const mid = innerHeight / 2;
-    const bar = [...document.querySelectorAll(".prx-bar")].sort((a, b) => Math.abs(a.getBoundingClientRect().top - mid) - Math.abs(b.getBoundingClientRect().top - mid))[0];
-    const row = bar?.previousElementSibling;
-    if (bar && row) { e.preventDefault(); openCommentPanel(postOf(row), row, bar, null); }
-  });
+    const pick = [...barOf].filter(([r, b]) => r.isConnected && b.isConnected)
+      .sort(([, a], [, b]) => Math.abs(a.getBoundingClientRect().top - mid) - Math.abs(b.getBoundingClientRect().top - mid))[0];
+    if (pick) { e.preventDefault(); openCommentPanel(postOf(pick[0]), pick[0], pick[1], null); }
+  }, { signal: life.signal });
 
   // ---------- start ----------
-  let timer;
-  const obs = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(scan, 400); });
-  async function start() {
-    cfg = (await chrome.storage.local.get("cfg")).cfg || {};
-    if (cfg.quiet) { document.querySelectorAll(".prx-btn, .prx-host, .prx-bar").forEach((x) => x.remove()); return; }
+  function removeAll() {
+    for (const [, bar] of barOf) bar.remove();
+    barOf.clear();
+    document.querySelectorAll(".prx-btn, .prx-host, .prx-bar").forEach((x) => x.remove());
+  }
+  function loadMe() {
     send({ type: "me" }).then((m) => {
       meName = m.workspace || ""; studio = m.studio || null; rules = m.rules || null;
+      stats.connected = true; stats.workspace = m.workspace || ""; stats.error = "";
       const sf = studio?.safety || {};
       vips = [...(sf.vips || []), ...(sf.vipProspects === false ? [] : (m.prospects || []).map((x) => x.name))].map((x) => String(x).toLowerCase().trim()).filter((x) => x.length > 2);
-      document.querySelectorAll(".prx-bar").forEach((x) => x.remove()); document.querySelectorAll("[data-prx]").forEach((x) => delete x.dataset.prx);
-      scan();
-    }).catch(() => {});
-    scan();
-    obs.observe(document.body, { childList: true, subtree: true });
+      scan(); // bars whose styles or VIP mark changed are rebuilt; the rest stay
+    }).catch((e) => { stats.connected = false; stats.error = e.message; });
   }
-  chrome.storage.onChanged.addListener((ch) => { if (ch.cfg) { obs.disconnect(); document.querySelectorAll("[data-prx]").forEach((x) => delete x.dataset.prx); document.querySelectorAll(".prx-btn, .prx-host, .prx-bar").forEach((x) => x.remove()); start(); } });
+  async function start() {
+    try { cfg = (await chrome.storage.local.get("cfg")).cfg || {}; }
+    catch { stats.error = STALE; return; }
+    if (stopped) return;
+    if (cfg.quiet) { obs.disconnect(); removeAll(); return; }
+    scan();
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+    loadMe();
+  }
+  function onStore(ch) { if (ch.cfg && !stopped) { obs.disconnect(); removeAll(); start(); } }
+  chrome.storage.onChanged.addListener(onStore);
+
+  // A newer copy of this script (after an update) takes over the page: this one stops and clears its UI.
+  function teardown() {
+    stopped = true; obs.disconnect(); clearTimeout(timer); life.abort(); removeAll();
+    try { chrome.runtime.onMessage.removeListener(onMsg); chrome.storage.onChanged.removeListener(onStore); } catch { /* cut off already */ }
+  }
+  // Only a copy that is already cut off obeys, so the page itself cannot switch off a working bar.
+  document.addEventListener("prax:takeover", () => { if (!alive()) teardown(); }, { signal: life.signal });
+  window.__prax = { alive: () => !stopped && alive(), rescan: () => schedule(), status, stop: teardown };
   start();
 })();

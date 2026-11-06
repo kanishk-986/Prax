@@ -3,7 +3,13 @@
 // here in the browser; it is never sent to the Prax server, and it is never read back.
 
 (() => {
+  // Added again by the background after an update: the newest copy answers, older ones step aside.
+  if (window.__praxBridge) window.__praxBridge.abort();
+  const life = new AbortController();
+  window.__praxBridge = life;
   const VERSION = chrome.runtime.getManifest().version;
+  const STALE = "The Prax extension was updated or reloaded. Reload this page.";
+  const alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
   const out = (msg) => window.postMessage({ praxExt: true, version: VERSION, ...msg }, location.origin);
 
   async function status() {
@@ -23,10 +29,19 @@
   window.addEventListener("message", async (e) => {
     if (e.source !== window || e.origin !== location.origin || !e.data?.praxWeb) return;
     const { id, type, data = {} } = e.data;
+    // A copy cut off by an update cannot reach the extension; the newer copy answers instead.
+    if (!alive()) return;
     if (ASK[type]) {
-      chrome.runtime.sendMessage(ASK[type](data), (r) => out({ id, result: true, ok: !!r?.ok, data: r?.data, error: r?.error || chrome.runtime.lastError?.message }));
+      try {
+        chrome.runtime.sendMessage(ASK[type](data), (r) => out({ id, result: true, ok: !!r?.ok, data: r?.data, error: r?.error || chrome.runtime.lastError?.message || (r ? "" : "The extension did not answer. Try again.") }));
+      } catch (err) { out({ id, result: true, ok: false, error: /invalidated/i.test(err.message) ? STALE : err.message }); }
       return;
     }
+    try { await handle(id, type, data); }
+    catch (err) { out({ id, ok: false, error: /invalidated/i.test(err.message) ? STALE : err.message }); }
+  }, { signal: life.signal });
+
+  async function handle(id, type, data) {
     const c = (await chrome.storage.local.get("cfg")).cfg || {};
     if (type === "connect") Object.assign(c, { praxUrl: location.origin, praxToken: String(data.token || "") });
     if (type === "settings") {
@@ -42,7 +57,7 @@
     if (type === "disconnect") { delete c.praxToken; }
     if (type !== "status") await chrome.storage.local.set({ cfg: c });
     out({ id, ok: true, data: await status() });
-  });
+  }
 
-  status().then((s) => out({ type: "hello", data: s }));
+  status().then((s) => out({ type: "hello", data: s })).catch(() => {});
 })();

@@ -148,7 +148,7 @@ export default function ExtensionPage() {
               <input id="x-model" className="field" placeholder={status?.model || prov?.model} value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></label>
             <div className="flex gap-2">
               <button className="btn btn-primary" onClick={saveAI}>Save</button>
-              {status?.hasKey && <button className="btn btn-ghost hover:text-bad" onClick={() => send("settings", { clearKey: true }).then(() => toast("Key removed from this browser"))}>Remove key</button>}
+              {status?.hasKey && <button className="btn btn-ghost hover:text-bad" onClick={() => send("settings", { clearKey: true }).then(() => toast("Key removed from this browser"), (e: Error) => toast(e.message))}>Remove key</button>}
             </div>
           </fieldset>
         </section>
@@ -159,7 +159,7 @@ export default function ExtensionPage() {
           <h2 className="flex items-center gap-2 text-[14px] font-semibold"><Moon size={15} /> On LinkedIn</h2>
           <p className="mt-1 text-[12px] text-muted">Every post gets a Prax bar with the comment modes, or press Alt+P. Your own posts get Reply on comments, and the connection note box gets Prax note. Prax only suggests; you press Post or Send.</p>
           <label className="mt-3 flex items-center gap-2 text-[13px]">
-            <input id="x-quiet" type="checkbox" disabled={!installed} checked={!!status?.quiet} onChange={(e) => { const on = e.target.checked; send("settings", { quiet: on }).then(() => { haptic(); toast(on ? "Quiet mode on: no bars on LinkedIn" : "Prax bars are back on LinkedIn"); }); }} />
+            <input id="x-quiet" type="checkbox" disabled={!installed} checked={!!status?.quiet} onChange={(e) => { const on = e.target.checked; send("settings", { quiet: on }).then(() => { haptic(); toast(on ? "Quiet mode on: no bars on LinkedIn" : "Prax bars are back on LinkedIn"); }, (err: Error) => toast(err.message)); }} />
             Quiet mode: hide the Prax bars and use the side panel only
           </label>
         </section>
@@ -209,7 +209,7 @@ function SearchKeys({ status, send }: { status: ExtStatus | null; send: (type: s
               <span className={`text-[12px] ${ready ? "text-good" : "text-muted"}`}>{ready ? (extra ? "Search key saved" : "Uses the key above") : "No key"}</span>
               <input type="password" autoComplete="off" aria-label={`${name} key`} className="field ml-auto h-8 w-full sm:w-64" placeholder={extra ? "Saved. Type to replace." : "Paste a key"} value={keys[p] ?? ""} onChange={(e) => setKeys({ ...keys, [p]: e.target.value })} disabled={!status?.installed} />
               <button className="btn h-8" disabled={!keys[p]} onClick={() => save(p)}>Save</button>
-              {extra && <button className="btn btn-ghost h-8 hover:text-bad" onClick={() => send("settings", { clearSearchKey: p }).then(() => toast("Key removed from this browser"))}>Remove</button>}
+              {extra && <button className="btn btn-ghost h-8 hover:text-bad" onClick={() => send("settings", { clearSearchKey: p }).then(() => toast("Key removed from this browser"), (e: Error) => toast(e.message))}>Remove</button>}
             </div>
           );
         })}

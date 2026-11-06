@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- LinkedIn-like single post page (/feed/update/...) with its comment box open and comments loaded.
+     Comments have Like and Reply, the box has a "Comment" submit button: neither may get a Prax bar.
+     Written by hand for the Prax bar tests; not saved from linkedin.com. -->
+<html><head><meta charset="utf-8"><title>Post | LinkedIn</title></head>
+<body>
+<main>
+  <div class="feed-shared-update-v2" data-urn="urn:li:activity:7390000000000000021">
+    <div class="update-components-actor">
+      <a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/shashi-pal/">
+        <span class="update-components-actor__title"><span aria-hidden="true">Shashi Pal</span></span>
+      </a>
+    </div>
+    <div class="update-components-text"><span dir="ltr">Most banks will not build their own chain. They will buy controls.</span></div>
+    <div class="feed-shared-social-action-bar">
+      <button aria-label="React Like"><span>Like</span></button>
+      <button aria-label="Comment"><span>Comment</span></button>
+      <button aria-label="Repost"><span>Repost</span></button>
+      <button aria-label="Send in a private message"><span>Send</span></button>
+    </div>
+    <div class="comments-comment-box">
+      <form class="comments-comment-box__form">
+        <div class="comments-comment-texteditor"><div class="ql-editor" contenteditable="true" role="textbox"></div></div>
+        <button type="button" aria-label="Open emoji keyboard">Emoji</button>
+        <button type="submit" class="comments-comment-box__submit-button">Comment</button>
+      </form>
+    </div>
+    <div class="comments-comments-list">
+      <article class="comments-comment-entity" data-id="urn:li:comment:(activity:7390000000000000021,1)">
+        <span class="comments-comment-meta__description-title">Priya Nair</span>
+        <div class="comments-comment-item__main-content">In my view the controls are the product.</div>
+        <div class="comments-comment-social-bar">
+          <button aria-label="React Like to Priya Nair's comment"><span>Like</span></button>
+          <button aria-label="Reply to Priya Nair's comment"><span>Reply</span></button>
+        </div>
+        <article class="comments-comment-entity">
+          <span class="comments-comment-meta__description-title">Shashi Pal</span>
+          <div class="comments-comment-item__main-content">Agreed, and the audit trail.</div>
+          <div class="comments-comment-social-bar"><button><span>Like</span></button><button><span>Reply</span></button></div>
+        </article>
+      </article>
+      <article class="comments-comment-entity">
+        <span class="comments-comment-meta__description-title">Tom Becker</span>
+        <div class="comments-comment-item__main-content">What about smaller banks?</div>
+        <div class="comments-comment-social-bar"><button><span>Like</span></button><button><span>Reply</span></button></div>
+      </article>
+    </div>
+  </div>
+  <aside><button>Follow</button><button>Message</button></aside>
+</main>
+</body></html>

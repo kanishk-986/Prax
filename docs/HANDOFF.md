@@ -278,3 +278,23 @@ Every section uses `src/components/shell/index.tsx`; the gating and tour maths a
 - Q110: fix every extension feature and error: the bar missing on some posts, needing two or three clicks, not reading every post, and the Live tab options (Capture and the rest) not working. No automation; the user clicks.
 - Q111: notes show their author and time.
 - Q112: a deep audit subagent after the fixes, from every angle: design, UI and UX, views, bugs, placement, the LinkedIn workflow end to end; reports bugs, gaps and what to add or remove.
+
+## Extension 0.9.0: reliability fixes (Q110)
+
+Branch `extension-fixes`. Not deployed; reinstall 0.9.0 from the Extension page after the deploy. No SQL.
+
+Root causes found and fixed:
+
+- **Posts with no bar.** Rows were found only from a Repost button, so posts with Repost turned off got no bar. Rows are now found from the Comment button next to a Like or React button (`extension/dom.js`, shared by the bar, the side panel and the tests), skipping comment threads, the comment box and its submit button, dialogs and Prax's own UI. The post owning a row is a known container only when it holds that row alone, otherwise the largest ancestor that does not reach a second row. The newer layout's `data-view-name` hints, permalinks and "Reaction button state" labels are covered.
+- **Bars that never came back.** A `data-prx` flag on LinkedIn's row stayed after LinkedIn re-rendered and dropped the bar, so it was never re-added. Bars are now tracked in a map from row to bar and checked against the page on every scan; a bar is rebuilt when it is gone, its row is replaced, or the row now shows another post (key from the urn, or a hash of author and text) or different styles.
+- **Late posts missed.** The MutationObserver used a 400 ms debounce, and LinkedIn's feed rarely goes quiet for 400 ms, so scans could wait indefinitely. It is now a 250 ms throttle that ignores Prax's own changes and watches the whole document.
+- **Bars or panel only after a few clicks.** Chrome does not add content scripts to tabs that were open before an install, update or reload, and the copy left in such a tab is cut off from the extension, so its buttons failed silently. The background now checks every LinkedIn tab on install, update and browser start, and again on `tabs.onUpdated` (load and LinkedIn's in-app navigation), and adds the script if it does not answer. A cut-off copy steps aside when a new one arrives and otherwise says "Prax was updated. Reload this LinkedIn tab". Messages to an asleep or restarting service worker are retried twice, and long AI jobs keep the worker awake.
+- **Side panel (Capture and the rest).** It read the page once at open and never refreshed; Read analytics took the first `article` (a banner) before `main` and its number match broke on a percent line; Read this post used old class names; errors were short toasts. The panel now follows tab and setting changes, readers share `dom.js`, analytics parsing is `PraxDOM.parseAnalytics`, and errors stay up longer in red.
+- **Silent failures on the Prax site.** `useExtension().send` resolved even when the bridge failed; Remove key, Quiet mode and Remove search key had no error handler; the bridge did not answer at all when its extension was cut off. All now show the reason.
+- Also fixed: the outer actor title (with LinkedIn's hidden screen-reader copy) won over the visible name, and the post itself was read as one of its comments.
+
+New: **Prax bar status** card at the top of the side panel: extension version, Prax connection, AI key, posts seen and bars attached on this tab, last scan, last error, and **Fix bars on this tab** (adds the bar script again; reads and clicks nothing on LinkedIn).
+
+No new automation. The background only adds Prax's own script to LinkedIn tabs; reading still happens only on a button press.
+
+Tested: `node scripts/test-extension.ts` (fixtures written by hand to match LinkedIn's old and new layouts, not saved pages), and `scripts/e2e-extension.mjs` in Playwright's Chromium with the unpacked extension and the fixtures served at linkedin.com (27 checks: all bars, late posts during constant change, re-renders, SPA navigation, Write with Prax on the first click, Send to Discovery and its error, Quiet mode, the side panel's status, Read this post, Capture, analytics, the bar coming back after its script stops, the bridge handshake). The same run against 0.8.0 misses the post with Repost off and the late post. Not tested: real LinkedIn pages, a real Chrome update of an installed extension (Playwright unloads the extension on reload), and the Prax API against Supabase.
