@@ -10,10 +10,11 @@ import { useWorkspace, today } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON, useExtension } from "@/lib/bridge";
 import { upsertToday } from "@/components/content/shared";
+import { useCitationScope } from "@/lib/citation-profile";
 import { type ReportSnapshot } from "@/components/citations-report";
 import {
   ENGINES, alerts, recommend, lift, shareOfVoice, profileConsistency, starterQuestions, askContext, judgePrompt, parseJudge, factIssues,
-  parseEngine, detect, setRollup, citationGaps, changes, linkedinCited, expiryFrom, owns, EMPTY_FACTS,
+  parseEngine, detect, setRollup, citationGaps, changes, linkedinCited, expiryFrom, owns, EMPTY_FACTS, scoped, withProfile, postProfile,
   type Run, type Question, type Entity, type Facts, type Rec, type Engine,
 } from "@/lib/citations";
 import s from "./citations.module.css";
@@ -116,6 +117,7 @@ async function draftQuestions(n: number, existing: string[], topics: string[], h
 
 export function QuickSetup({ count }: { count: number }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   async function run() {
@@ -123,7 +125,7 @@ export function QuickSetup({ count }: { count: number }) {
     let rows: { question: string; topic: string; region?: string }[] = [], source = "ai";
     try { rows = await draftQuestions(20, [], PILLARS, ws.headline); } catch { /* no key: use the starter list */ }
     if (!rows.length) { rows = starterQuestions("the UAE").map((q) => ({ ...q, region: "UAE" })); source = "starter"; }
-    const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => ({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source, sort: count + i + 1 })));
+    const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => withProfile({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source, sort: count + i + 1 }, scope)));
     setBusy(false);
     if (error) toast(error.message); else { haptic(); toast(`${rows.length} questions drafted. Approve the ones to track.`); }
   }
@@ -137,6 +139,7 @@ export function QuickSetup({ count }: { count: number }) {
 
 export function Suggested({ qs }: { qs: (Question & { sort: number })[] }) {
   const { ws, can } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const sug = qs.filter((q) => q.status === "suggested");
@@ -149,7 +152,7 @@ export function Suggested({ qs }: { qs: (Question & { sort: number })[] }) {
     try {
       const rows = await draftQuestions(8, qs.map((q) => q.question), PILLARS, ws.headline);
       if (!rows.length) throw new Error("No new questions came back. Try again.");
-      const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => ({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source: "ai", sort: qs.length + i + 1 })));
+      const { error } = await supabase().from("citation_questions").insert(rows.map((q, i) => withProfile({ workspace_id: ws.id, question: q.question, topic: q.topic, region: q.region && q.region !== "Global" ? q.region : "", language: "English", status: "suggested", source: "ai", sort: qs.length + i + 1 }, scope)));
       if (error) throw error;
       haptic(); toast(`${rows.length} questions suggested`);
     } catch (e) { toast((e as Error).message); }
@@ -174,13 +177,14 @@ export function Suggested({ qs }: { qs: (Question & { sort: number })[] }) {
 
 export function SetsBar({ sets, qs, runs, self, value, onChange }: { sets: SetRow[]; qs: Question[]; runs: Run[]; self: Entity; value: string; onChange: (v: string) => void }) {
   const { ws, can } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [name, setName] = useState("");
   const [adding, setAdding] = useState(false);
   const active = qs.filter((q) => q.status === "active");
   const chips = [{ id: "all", name: "All questions", r: shareOfVoice(runs, active, self, self) }, ...sets.map((x) => ({ id: x.id, name: x.name, r: setRollup(active, x.id, runs, self) })), { id: "none", name: "No set", r: setRollup(active, null, runs, self) }];
   async function add() {
-    const { error } = await supabase().from("citation_sets").insert({ workspace_id: ws.id, name: name.trim(), sort: sets.length + 1 });
+    const { error } = await supabase().from("citation_sets").insert(withProfile({ workspace_id: ws.id, name: name.trim(), sort: sets.length + 1 }, scope));
     if (error) toast(error.message); else { haptic(); toast("Set added"); setName(""); setAdding(false); }
   }
   return (
@@ -200,6 +204,7 @@ export function SetsBar({ sets, qs, runs, self, value, onChange }: { sets: SetRo
 // ---------------- actions: recommendations with lift ----------------
 export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs: Run[]; qs: Question[]; self: Entity; rivals: Entity[] }) {
   const { ws, can } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const computed = useMemo(() => recommend(runs, qs, self, rivals), [runs, qs, self, rivals]);
@@ -210,17 +215,17 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
     const base = scoreOn(r.question_ids);
     let postId: string | null = null;
     if (r.kind === "profile") {
-      const { data } = await supabase().from("posts").insert({ workspace_id: ws.id, title: r.title.replace(/^Publish a LinkedIn article that answers: /, "LinkedIn article: "), format: "Article", status: "Idea", topic: "AI citations", resource: r.detail }).select("id").single();
+      const { data } = await supabase().from("posts").insert({ workspace_id: ws.id, title: r.title.replace(/^Publish a LinkedIn article that answers: /, "LinkedIn article: "), format: "Article", status: "Idea", topic: "AI citations", resource: r.detail, ...postProfile(scope) }).select("id").single();
       postId = data?.id ?? null;
     } else {
       await upsertToday([{ day: today(), kind: "custom", idx: 3700 + (Math.abs([...r.title].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) % 100), title: r.title, note: "citations:rec" }], ws.id);
     }
     const row = { status: "accepted", baseline: { named: base.named, total: base.total }, accepted_at: new Date().toISOString(), post_id: postId };
-    const { error } = isRow(r) ? await supabase().from("citation_recs").update(row).eq("id", r.id) : await supabase().from("citation_recs").insert({ workspace_id: ws.id, kind: r.kind, title: r.title, detail: r.detail, question_ids: r.question_ids, ...row });
+    const { error } = isRow(r) ? await supabase().from("citation_recs").update(row).eq("id", r.id) : await supabase().from("citation_recs").insert(withProfile({ workspace_id: ws.id, kind: r.kind, title: r.title, detail: r.detail, question_ids: r.question_ids, ...row }, scope));
     if (error) toast(error.message); else { haptic(); toast(r.kind === "profile" ? "Accepted. The idea is in Content Studio, Library." : "Accepted. It is on Today."); }
   }
   async function setStatus(r: Rec | RecRow, status: string) {
-    const { error } = isRow(r) ? await supabase().from("citation_recs").update({ status }).eq("id", r.id) : await supabase().from("citation_recs").insert({ workspace_id: ws.id, kind: r.kind, title: r.title, detail: r.detail, question_ids: r.question_ids, status });
+    const { error } = isRow(r) ? await supabase().from("citation_recs").update({ status }).eq("id", r.id) : await supabase().from("citation_recs").insert(withProfile({ workspace_id: ws.id, kind: r.kind, title: r.title, detail: r.detail, question_ids: r.question_ids, status }, scope));
     if (error) toast(error.message); else { haptic(); toast(status === "done" ? "Marked done" : "Dismissed"); }
   }
   async function more() {
@@ -231,7 +236,7 @@ export function Actions({ recs, runs, qs, self, rivals }: { recs: RecRow[]; runs
       const j = parseJSON<{ recs: { kind: string; title: string; detail: string }[] }>(out);
       const rows = (j?.recs ?? []).filter((x) => x.title && (x.kind === "profile" || x.kind === "elsewhere"));
       if (!rows.length) throw new Error("No recommendations came back. Try again.");
-      const { error } = await supabase().from("citation_recs").insert(rows.map((x) => ({ workspace_id: ws.id, kind: x.kind, title: x.title, detail: x.detail, question_ids: [], status: "open" })));
+      const { error } = await supabase().from("citation_recs").insert(rows.map((x) => withProfile({ workspace_id: ws.id, kind: x.kind, title: x.title, detail: x.detail, question_ids: [], status: "open" }, scope)));
       if (error) throw error;
       haptic(); toast(`${rows.length} recommendations added`);
     } catch (e) { toast((e as Error).message); }
@@ -380,6 +385,7 @@ export function AskPanel({ runs, qs, self, rivals, onClose }: { runs: Run[]; qs:
 // ---------------- facts sheet ----------------
 export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose: () => void }) {
   const { ws, can } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [f, setF] = useState<Facts>({ ...EMPTY_FACTS, ...facts });
   const [side, setSide] = useState<"Shashi" | "Antier">("Shashi");
@@ -389,7 +395,9 @@ export function FactsDrawer({ facts, onClose }: { facts: Partial<Facts>; onClose
   };
   const FIELDS = ALL[side];
   async function save() {
-    const { error } = await supabase().from("citation_facts").upsert({ workspace_id: ws.id, facts: f, updated_at: new Date().toISOString() });
+    // One facts sheet per tracked profile since db/017; one per workspace before it.
+    const row = withProfile({ workspace_id: ws.id, facts: f, updated_at: new Date().toISOString() }, scope);
+    const { error } = await supabase().from("citation_facts").upsert(row, { onConflict: row.profile_id ? "profile_id" : "workspace_id" });
     if (error) toast(error.message); else { haptic(); toast("Facts saved. New checks use them."); onClose(); }
   }
   return (
@@ -427,15 +435,16 @@ export function buildSnapshot(runs: Run[], qs: Question[], self: Entity, rivals:
 type ShareRow = { token_hash: string; expires_at: string; revoked: boolean; created_at: string };
 export function ShareDialog({ snap, onClose }: { snap: ReportSnapshot; onClose: () => void }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const [days, setDays] = useState(7);
   const [link, setLink] = useState("");
   const [rows, setRows] = useState<ShareRow[]>([]);
-  const load = () => supabase().from("citation_shares").select("token_hash,expires_at,revoked,created_at").eq("workspace_id", ws.id).order("created_at", { ascending: false }).then(({ data }: { data: ShareRow[] | null }) => setRows(data ?? []));
+  const load = () => scoped(supabase().from("citation_shares").select("token_hash,expires_at,revoked,created_at").eq("workspace_id", ws.id), scope).order("created_at", { ascending: false }).then(({ data }: { data: ShareRow[] | null }) => setRows(data ?? []));
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   async function create() {
     const raw = hex(crypto.getRandomValues(new Uint8Array(24)));
-    const { error } = await supabase().from("citation_shares").insert({ token_hash: await sha(raw), workspace_id: ws.id, snapshot: snap, expires_at: expiryFrom(days) });
+    const { error } = await supabase().from("citation_shares").insert(withProfile({ token_hash: await sha(raw), workspace_id: ws.id, snapshot: snap, expires_at: expiryFrom(days) }, scope));
     if (error) { toast(error.message); return; }
     const url = `${location.origin}/share/${raw}`;
     setLink(url); try { await navigator.clipboard.writeText(url); } catch {}

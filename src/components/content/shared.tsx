@@ -13,7 +13,7 @@ export type Post = {
   channel?: "shashi" | "company"; newsletter?: boolean; source_kind?: string; source_ref?: string; hook?: string;
   script?: { hook?: string; beats?: { say: string; show: string }[]; close?: string; caption?: string; cover?: string; captions?: string };
   visual?: { mode?: string; layout?: string; prompt?: string; slides?: { title: string; body: string }[] }; claims_ack?: boolean; resource?: string;
-  angle?: string; discovery?: { topic_id?: string; finding_id?: string; rank?: number | null; score?: number; sources?: { via: string; pub: string; url: string }[]; service?: string; angle?: string; campaign?: string; move?: string };
+  angle?: string; citation_profile_id?: string | null; discovery?: { topic_id?: string; finding_id?: string; rank?: number | null; score?: number; sources?: { via: string; pub: string; url: string }[]; service?: string; angle?: string; campaign?: string; move?: string };
 };
 export type Campaign = { id: string; workspace_id: string; name: string; kind: "standard" | "fast" | "event"; brief: Brief; template: boolean; status: string; paused_at: string | null; created_at: string };
 export type Target = { id: string; campaign_id: string; prospect_id: string | null; person_key: string; name: string; company: string; linkedin: string; engaged_at: string | null; engaged_reason: string };

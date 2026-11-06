@@ -6,7 +6,8 @@ import { useWorkspace, fmtDay, today, SEGMENTS, STAGES } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { askExtension, parseJSON } from "@/lib/bridge";
 import { warmPaths, indexPeople, type Person, type ProspectLite } from "@/lib/network";
-import { campaignLift, type Run, type Question, type Entity, type Source } from "@/lib/citations";
+import { campaignLift, scoped, type Run, type Question, type Entity, type Source } from "@/lib/citations";
+import { useCitationProfile } from "@/lib/citation-profile";
 import {
   OBJECTIVES, FORMATS, PILLARS, MEASURES, objective, defaultBrief, applyObjective, proposePlan, replanUnwritten, weeklyLoad, commentsPerWeek, weekCommentTasks,
   midCheck, report, fastBrief, fastPlan, eventPlan, eventFollowUps, endOf, addDays, hashIdx, nextMonday, type Brief, type PlanItem,
@@ -641,9 +642,11 @@ function RequestForm({ c, posts, targets, prospects, onClose }: { c: Campaign; p
 
 function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Campaign; end: string; posts: Post[]; targets: Target[]; requests: Request[]; comments: Comment[]; onClose: () => void }) {
   const { ws } = useWorkspace();
+  const cit = useCitationProfile();
   const [extra, setExtra] = useState<{ conversations: number; moves: number; citations: { before: number | null; after: number | null } | null } | null>(null);
   const ids = targets.map((x) => x.prospect_id).filter(Boolean) as string[];
   useEffect(() => {
+    if (!cit.ready) return;
     (async () => {
       let conversations = 0, moves = 0, citations: { before: number | null; after: number | null } | null = null;
       if (ids.length) {
@@ -651,10 +654,11 @@ function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Ca
         moves = (data ?? []).length; conversations = (data ?? []).filter((a: { label: string }) => /In conversation|Call booked/.test(a.label)).length;
       }
       // AI citations: the campaign's topic and keywords pick the questions; named share before and after the start.
+      // Only the tracked profile in view on AI citations counts.
       const [runsQ, qsQ, entQ] = await Promise.all([
-        supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id).order("run_at", { ascending: false }).limit(3000),
-        supabase().from("citation_questions").select("*").eq("workspace_id", ws.id),
-        supabase().from("citation_entities").select("*").eq("workspace_id", ws.id).eq("kind", "self").limit(1),
+        scoped(supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id), cit.scope).order("run_at", { ascending: false }).limit(3000),
+        scoped(supabase().from("citation_questions").select("*").eq("workspace_id", ws.id), cit.scope),
+        scoped(supabase().from("citation_entities").select("*").eq("workspace_id", ws.id).eq("kind", "self"), cit.scope).limit(1),
       ]);
       const self = (entQ.data as Entity[] | null)?.[0];
       if (!runsQ.error && self && runsQ.data?.length) {
@@ -664,7 +668,7 @@ function Report({ c, end, posts, targets, requests, comments, onClose }: { c: Ca
       }
       setExtra({ conversations, moves, citations });
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cit.ready, cit.scope]); // eslint-disable-line react-hooks/exhaustive-deps
   const replies = comments.filter((x) => x.reply && x.prospect_id && ids.includes(x.prospect_id) && x.day >= c.brief.start && x.day <= end).length;
   const r = report(c.brief, { posts: posts.map((p) => ({ id: p.id, status: statusOf(p.status), publish_date: p.publish_date, format: p.format })), replies, conversations: extra?.conversations ?? 0, requests, stageMoves: extra?.moves ?? 0, targets: targets.length, engaged: targets.filter((x) => x.engaged_at).length, citations: extra?.citations });
   return (

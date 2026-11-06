@@ -1,6 +1,9 @@
 // Checks AI citation parsing, detection and maths against sample responses shaped like each provider's API.
 // Run: node scripts/test-citations.ts
-import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, detectPerson, personContext, audienceOf, subjectShare, keywordStats, weeklyTrend, sameDirection, promptGaps, gapTopic, runWeeks, parsePerplexity, type Entity, type Run, type Question } from "../src/lib/citations.ts";
+import { parseClaude, parseOpenAI, parseGemini, statusOf, findMatches, positionOf, owns, detect, isBranded, shareOfVoice, changes, citationGaps, linkedinCited, promptFor, sentimentOf, parseJudge, factIssues, profileConsistency, latestBatches, aggregate, setRollup, lift, recommend, alerts, shareValid, expiryFrom, starterQuestions, campaignLift, detectPerson, personContext, audienceOf, subjectShare, keywordStats, weeklyTrend, sameDirection, promptGaps, gapTopic, runWeeks, parsePerplexity,
+  liveProfiles, archivedProfiles, currentProfile, profileScope, scoped, withProfile, postProfile, inProfile, profileName, nextSort, deleteConfirmed, migrateRows, NO_PROFILE,
+  type Entity, type Run, type Question, type Profile } from "../src/lib/citations.ts";
+import { readFileSync } from "node:fs";
 import { buildPdf } from "../src/lib/pdf.ts";
 
 let fails = 0;
@@ -223,6 +226,66 @@ const big = pdfText(buildPdf({ ...doc, sections: [{ title: "Long", tables: [{ he
 const pages = (big.match(/\/Type \/Page /g) ?? []).length;
 eq("long tables flow onto more pages, numbered", [pages > 3, big.includes(`Page ${pages} of ${pages}`)], [true, true]);
 eq("PDF text is escaped", pdfText(buildPdf({ ...doc, title: "A (b) c" })).includes("A \\(b\\) c"), true);
+
+// ---------- tracked profiles (db/017) ----------
+const prof = (id: string, sort: number, archived_at: string | null = null, created_at = "2026-11-01T00:00:00Z"): Profile => ({ id, name: `P ${id}`, sort, archived_at, created_at });
+const pset = [prof("b", 1), prof("a", 0), prof("z", 2, "2026-11-05T00:00:00Z"), prof("y", 3, "2026-11-06T00:00:00Z")];
+eq("live profiles in order, archived left out", liveProfiles(pset).map((p) => p.id), ["a", "b"]);
+eq("archived profiles, newest first", archivedProfiles(pset).map((p) => p.id), ["y", "z"]);
+eq("same sort: older first", liveProfiles([prof("n", 0, null, "2026-11-03T00:00:00Z"), prof("o", 0, null, "2026-11-02T00:00:00Z")]).map((p) => p.id), ["o", "n"]);
+eq("the pick wins", currentProfile(pset, "b")?.id, "b");
+eq("no pick: first live", currentProfile(pset, null)?.id, "a");
+eq("archived pick falls back to first live", currentProfile(pset, "z")?.id, "a");
+eq("deleted pick falls back to first live", currentProfile(pset, "gone")?.id, "a");
+eq("all archived: none in view", currentProfile([prof("z", 0, "2026-11-05T00:00:00Z")], "z"), null);
+eq("scope: before db/017 nothing is scoped", profileScope(true, null), null);
+eq("scope: the profile in view", profileScope(false, prof("a", 0)), "a");
+eq("scope: none live matches no row", profileScope(false, null), NO_PROFILE);
+const calls: [string, string][] = [];
+const fakeQ = { eq(col: string, v: string) { calls.push([col, v]); return fakeQ; } };
+scoped(fakeQ, "a"); scoped(fakeQ, null);
+eq("scoped adds one profile filter, none before db/017", calls, [["profile_id", "a"]]);
+eq("inserts carry the profile", withProfile({ workspace_id: "w" }, "a"), { workspace_id: "w", profile_id: "a" });
+eq("inserts before db/017 stay as they were", [withProfile({ workspace_id: "w" }, null), withProfile({ workspace_id: "w" }, NO_PROFILE)], [{ workspace_id: "w" }, { workspace_id: "w" }]);
+eq("Content Studio ideas carry the profile", [postProfile("a"), postProfile(null)], [{ citation_profile_id: "a" }, {}]);
+eq("gap topics: this profile and untagged show, another profile does not",
+  [inProfile({ citation_profile_id: "a" }, "a"), inProfile({ citation_profile_id: null }, "a"), inProfile({ citation_profile_id: "b" }, "a"), inProfile({ citation_profile_id: "b" }, null)], [true, true, false, true]);
+eq("profile name: person and company", profileName(" Jane Doe ", "Acme", "Workspace"), "Jane Doe, Acme");
+eq("profile name: falls back to the workspace", [profileName("", "", "Shashi Pal"), profileName("", "", " ")], ["Shashi Pal", "Tracked profile"]);
+eq("next sort after the highest", [nextSort(pset), nextSort([])], [4, 0]);
+eq("delete needs the name typed", [deleteConfirmed("P a", "P a"), deleteConfirmed(" p A ", "P a"), deleteConfirmed("P", "P a"), deleteConfirmed("", "")], [true, true, false, false]);
+
+// The migration mapping: every row goes to its workspace's default profile, a run to its prompt's profile, rows that
+// already have one are untouched, and no row is dropped.
+type MRow = { workspace_id: string; id?: string; question_id?: string | null; profile_id?: string | null };
+const before: { table: string; row: MRow }[] = [
+  { table: "citation_entities", row: { workspace_id: "w1", id: "e1" } },
+  { table: "citation_questions", row: { workspace_id: "w1", id: "q1" } },
+  { table: "citation_questions", row: { workspace_id: "w1", id: "q2", profile_id: "p9" } },
+  { table: "citation_runs", row: { workspace_id: "w1", id: "r1", question_id: "q1" } },
+  { table: "citation_runs", row: { workspace_id: "w1", id: "r2", question_id: "q2" } },
+  { table: "citation_runs", row: { workspace_id: "w1", id: "r3", question_id: null } },
+  { table: "citation_facts", row: { workspace_id: "w1" } },
+  { table: "citation_recs", row: { workspace_id: "w2", id: "c1" } },
+  { table: "citation_shares", row: { workspace_id: "w2", id: "s1", profile_id: "p8" } },
+];
+const after = migrateRows(before, { w1: "p1", w2: "p2" });
+eq("migration keeps every row", after.length, before.length);
+eq("migration: default profile per workspace, runs follow their prompt", after.map((x) => `${x.row.id ?? x.table}:${x.row.profile_id}`),
+  ["e1:p1", "q1:p1", "q2:p9", "r1:p1", "r2:p9", "r3:p1", "citation_facts:p1", "c1:p2", "s1:p8"]);
+eq("migration is re-runnable: a second pass changes nothing", JSON.stringify(migrateRows(after, { w1: "x", w2: "x" })), JSON.stringify(after));
+
+const sql17 = readFileSync(new URL("../db/017_citation_profiles.sql", import.meta.url), "utf8");
+const scopedTables = ["citation_entities", "citation_questions", "citation_runs", "citation_facts", "citation_recs", "citation_sets", "citation_shares"];
+eq("SQL scopes every citation table", scopedTables.every((t) => sql17.includes(`'${t}'`) && new RegExp(`update ${t}\\b[^;]*profile_id`).test(sql17)), true);
+eq("SQL: runs follow their prompt before the default", sql17.indexOf("from citation_questions q where r.question_id = q.id") > -1 && sql17.indexOf("from citation_questions q where r.question_id = q.id") < sql17.indexOf("update citation_runs set profile_id = citation_default_profile"), true);
+eq("SQL only fills rows without a profile", (sql17.match(/^update citation_\w+ .*$/gm) ?? []).every((l) => /profile_id is null/.test(l)), true);
+eq("SQL deletes only inside the owner-only delete", [...sql17.matchAll(/\bdelete\s+from\s+(\w+)/gi)].map((m) => m[1]), ["citation_profiles"]);
+eq("SQL never drops a table or truncates", /\bdrop\s+table\b|\btruncate\b/i.test(sql17), false);
+eq("SQL delete checks owner and the typed name", /has_role\(p\.workspace_id, 'owner'\)/.test(sql17) && /lower\(trim\(coalesce\(confirm_name/.test(sql17), true);
+eq("SQL uses has_role for RLS", (sql17.match(/has_role\(workspace_id/g) ?? []).length >= 5, true);
+eq("SQL is re-runnable", /create table if not exists citation_profiles/.test(sql17) && /add column if not exists profile_id/.test(sql17) && /drop trigger if exists/.test(sql17), true);
+eq("SQL names the default profile like profileName", /concat_ws\(', '/.test(sql17), true);
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

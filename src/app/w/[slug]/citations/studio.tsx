@@ -8,10 +8,11 @@ import { useLive } from "@/lib/live";
 import { useWorkspace } from "@/lib/workspace";
 import { useToast, haptic } from "@/components/toaster";
 import { useExtension } from "@/lib/bridge";
+import { useCitationScope } from "@/lib/citation-profile";
 import { buildPdf, downloadFile, type PdfDoc, type PdfSection } from "@/lib/pdf";
 import {
   ENGINES, latestBatches, aggregate, shareOfVoice, citationGaps, owns, linkedinCited, changes, factIssues, recommend,
-  subjectShare, detectPerson, weeklyTrend, sameDirection, promptGaps, gapTopic, keywordStats, runWeeks, runsInWeek, shiftWeek, audienceOf, AUDIENCE_LABEL,
+  subjectShare, detectPerson, weeklyTrend, sameDirection, promptGaps, gapTopic, keywordStats, runWeeks, runsInWeek, shiftWeek, audienceOf, AUDIENCE_LABEL, postProfile,
   type Engine, type Entity, type Run, type Question, type Facts, type PromptGap,
 } from "@/lib/citations";
 import s from "./citations.module.css";
@@ -240,17 +241,19 @@ function useSent() {
   const { ws } = useWorkspace();
   return useLive<SentPost>("posts", ws.id, { filter: (q) => q.not("citation_question_id", "is", null) });
 }
-async function sendGap(wsId: string, g: PromptGap) {
+// The idea keeps the tracked profile it came from, so Content Studio lists it with that profile's gap topics.
+async function sendGap(wsId: string, g: PromptGap, scope: string | null) {
   const resource = `From AI citations. Prompt: "${g.question.question}". Named instead: ${g.rivals.join(", ")}. On: ${g.engines.map(engineLabel).join(", ")}.${g.channel === "company" ? " Company content, not for Shashi's profile." : ""}`;
-  return supabase().from("posts").insert({ workspace_id: wsId, title: gapTopic(g), format: g.channel === "company" ? "Article" : "Text post", status: "Idea", topic: "AI citations", pillar: g.question.topic || "", resource, channel: g.channel, citation_question_id: g.question.id }).select("id").single();
+  return supabase().from("posts").insert({ workspace_id: wsId, title: gapTopic(g), format: g.channel === "company" ? "Article" : "Text post", status: "Idea", topic: "AI citations", pillar: g.question.topic || "", resource, channel: g.channel, citation_question_id: g.question.id, ...postProfile(scope) }).select("id").single();
 }
 
 function GapRows({ gaps, sent, editable }: { gaps: PromptGap[]; sent: SentPost[]; editable: boolean }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const isSent = (g: PromptGap) => sent.some((p) => p.citation_question_id === g.question.id);
   async function send(g: PromptGap) {
-    const { data, error } = await sendGap(ws.id, g);
+    const { data, error } = await sendGap(ws.id, g, scope);
     if (error) { toast(error.message); return; }
     haptic(); toast("Sent to Content Studio. It is in Library and Plan as an idea.", async () => { await supabase().from("posts").delete().eq("id", data.id); });
   }
@@ -269,13 +272,14 @@ function GapRows({ gaps, sent, editable }: { gaps: PromptGap[]; sent: SentPost[]
 
 export function Gaps({ c, editable, siteGaps }: { c: Ctx; editable: boolean; siteGaps: React.ReactNode }) {
   const { ws } = useWorkspace();
+  const { scope } = useCitationScope();
   const toast = useToast();
   const sent = useSent();
   const gaps = useMemo(() => promptGaps(c.runs, c.qs, c.person, c.company, c.experts, c.firms, c.ctx), [c]);
   const open = gaps.filter((g) => !sent.rows.some((p) => p.citation_question_id === g.question.id));
   async function sendAll() {
     const ids: string[] = [];
-    for (const g of open) { const { data, error } = await sendGap(ws.id, g); if (error) { toast(error.message); break; } ids.push(data.id); }
+    for (const g of open) { const { data, error } = await sendGap(ws.id, g, scope); if (error) { toast(error.message); break; } ids.push(data.id); }
     if (ids.length) { haptic(); toast(`${ids.length} topics sent to Content Studio`, async () => { await supabase().from("posts").delete().in("id", ids); }); }
   }
   return (
@@ -397,10 +401,11 @@ export function buildWeekReport(c: Ctx, week: string, profile: string, facts: Pa
 
 export function Report({ c, onShare, facts }: { c: Ctx; onShare: () => void; facts: Partial<Facts> }) {
   const { ws } = useWorkspace();
+  const prepared = useCitationScope().current?.name ?? ws.name;
   const weeks = useMemo(() => runWeeks(c.runs), [c.runs]);
   const [week, setWeek] = useState<string>("");
   const wk = week || weeks[0];
-  const doc = useMemo(() => (wk ? buildWeekReport(c, wk, ws.name, facts) : null), [c, wk, ws.name, facts]);
+  const doc = useMemo(() => (wk ? buildWeekReport(c, wk, prepared, facts) : null), [c, wk, prepared, facts]);
   if (!wk || !doc) return <p className={cx(s.box, s.small, "p-6 text-center")}>The first weekly report appears after the first run. A new one is made each week you run your prompts.</p>;
   const file = `ai-citations-week-of-${wk}`;
   const csv = () => { const rows = [["Section", "Item", "Value"], ...doc.sections.flatMap((sc) => (sc.tables ?? []).flatMap((t) => t.rows.map((r) => [sc.title, r[0], r.slice(1).join(" | ")])))]; return rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n"); };

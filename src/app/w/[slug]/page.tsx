@@ -6,11 +6,12 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useLive } from "@/lib/live";
+import { useCitationProfile } from "@/lib/citation-profile";
 import { useWorkspace, today, addDays, weekStart, fmtDay, STAGES, KINDS } from "@/lib/workspace";
 import { Section, KpiTiles, NeedsYou, Activity, Panel, Spark, CountUp, reveal, type TourStep, type Need } from "@/components/shell";
 import { LinkedInMcpButton } from "@/components/linkedin-mcp";
 import { deltaOf, pointsDelta, weekOverWeek, dailySeries, rankNeeds, whenLabel, weekSentence, relTime, daysBetween, collapseActivity, greeting, firstName, type NeedInput } from "@/lib/dashboard";
-import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, type Entity, type Question, type Run } from "@/lib/citations";
+import { personContext, promptGaps, subjectShare, runsInWeek, weekStartOf, shiftWeek, scoped, type Entity, type Question, type Run } from "@/lib/citations";
 
 type Item = { day: string; kind: string; done: boolean };
 type Prospect = { id: string; name: string; company: string; stage: string; next_action: string; next_date: string | null; created_at: string };
@@ -52,8 +53,11 @@ export default function Dashboard() {
   const posts = useLive<Post>("posts", ws.id, { filter: (q) => q.or(`publish_date.gte.${addDays(t, -28)},status.eq."In review"`) });
   const drafts = useLive<{ created_at: string }>("saved_drafts", ws.id, { filter: (q) => q.gte("created_at", lastWk) });
   const logged = useLive<{ day: string }>("comment_log", ws.id, { filter: (q) => q.gte("day", lastWk) });
-  const cq = useLive<Question>("citation_questions", ws.id);
-  const ents = useLive<Entity>("citation_entities", ws.id);
+  // The AI citations tile shows the tracked profile this user has in view there (db/017).
+  const cit0 = useCitationProfile();
+  const citOpts = { key: cit0.scope ?? "", skip: !cit0.ready, filter: (q: any) => scoped(q, cit0.scope) };
+  const cq = useLive<Question>("citation_questions", ws.id, citOpts);
+  const ents = useLive<Entity>("citation_entities", ws.id, citOpts);
   // This week's Digest (db/013_discovery.sql): ranked topics and the ones already sent to Content Studio.
   const topics = useLive<{ id: string; title: string; rank: number | null; rising: boolean; sent_at: string | null }>("discovery_topics", ws.id, { filter: (q) => q.eq("week", wk) });
 
@@ -64,10 +68,11 @@ export default function Dashboard() {
   useEffect(() => { supabase().from("network_people").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).then(({ count, error }: { count: number | null; error: unknown }) => setPeople(error ? null : count ?? 0)); }, [ws.id]);
   const [runs, setRuns] = useState<Run[]>([]);
   useEffect(() => {
+    if (!cit0.ready) return;
     const since = new Date(Date.now() - 28 * 864e5).toISOString();
-    supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id).gte("run_at", since).order("run_at", { ascending: false }).limit(1500)
+    scoped(supabase().from("citation_runs").select("*, citation_sources(url,title,domain,cited,sort)").eq("workspace_id", ws.id), cit0.scope).gte("run_at", since).order("run_at", { ascending: false }).limit(1500)
       .then(({ data }: { data: RunRow[] | null }) => setRuns((data ?? []).map((r) => ({ ...r, sources: [...(r.citation_sources ?? [])].sort((a, b) => a.sort - b.sort) }))));
-  }, [ws.id]);
+  }, [ws.id, cit0.ready, cit0.scope]);
 
   const wkDays = Math.min(5, daysBetween(wk, t) + 1);
   const week = useMemo(() => {
